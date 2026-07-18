@@ -386,6 +386,28 @@
   <div id="listaCaja"></div>
 </div>
 
+<!-- modal identidad del dispositivo -->
+<div class="modal" id="modalQuien">
+  <div class="hoja">
+    <h2>👤 ¿Quién usa este teléfono?</h2>
+    <div style="font-size:.76rem;color:var(--texto2);margin-bottom:14px;line-height:1.5">
+      Con esto la app anota quién hizo cada cosa (tareas, pedidos, cobros). Se pregunta una sola vez por dispositivo.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px" id="quienOpciones"></div>
+  </div>
+</div>
+
+<!-- modal historial de cambios -->
+<div class="modal" id="modalHistorial">
+  <div class="hoja">
+    <h2>📜 Últimos cambios</h2>
+    <div id="listaHistorial" style="max-height:60vh;overflow-y:auto;margin-bottom:10px"></div>
+    <div class="acciones">
+      <button id="cerrarHistorial" class="btn-primario">Listo</button>
+    </div>
+  </div>
+</div>
+
 <!-- modal sincronización dropbox -->
 <div class="modal" id="modalNube">
   <div class="hoja">
@@ -747,6 +769,7 @@ async function cargar(){
       }
       uv = d.uv || {multSin:UV_SEMILLA.multSin, multCon:UV_SEMILLA.multCon, mats:UV_SEMILLA.mats.map(m=>({id:uid()+Math.random().toString(36).slice(2,4), ...m}))};
       movimientos = d.movimientos || [];
+      historial = d.historial || [];
       gastosFijos = d.gastosFijos || GASTOS_SEMILLA.map(g=>({id:uid()+Math.random().toString(36).slice(2,4), ...g}));
       if(d.offset){ offset = d.offset; }
       else{
@@ -783,7 +806,7 @@ async function cargar(){
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -1080,6 +1103,8 @@ function soltarDrag(){
 }
 
 async function borrar(id){
+  const tb = tareas.find(x=>x.id===id);
+  if(tb) registrar('borró la tarea "' + (tb.texto||'').slice(0,50) + '"');
   tareas = tareas.filter(x=>x.id!==id);
   try{ await window.storage.delete('bloques:'+id); }catch(e){}
   render(); renderCalendario(); guardarDatos();
@@ -1160,6 +1185,7 @@ function renderDetVenta(t){
     b.onclick = ()=>{
       const nuevo = {id:uid(), cliente: t.cliente||null, tarea: t.id, items:[], cobro:'pendiente', fact:'no', creado:Date.now()};
       pedidos.unshift(nuevo);
+      registrar('creó una venta desde la tarea "' + (t.texto||'').slice(0,40) + '"');
       guardarDatos();
       cerrarDetalle();
       abrirPedido(nuevo.id);
@@ -1516,6 +1542,7 @@ document.getElementById('guardar').onclick = ()=>{
     fecha: document.getElementById('inFecha').value || null,
     adj:0, orden: minOrden-10, creado: Date.now()
   });
+  registrar('creó la tarea "' + texto.slice(0,50) + '"');
   modal.classList.remove('abierto');
   render(); renderCalendario(); guardarDatos();
 };
@@ -1846,6 +1873,7 @@ function renderPedidos(){
 document.getElementById('btnNuevoPedido').onclick = ()=>{
   const p = {id:uid(), cliente:null, items:[], cobro:'pendiente', fact:'no', creado:Date.now()};
   pedidos.unshift(p);
+  registrar('creó un pedido');
   guardarDatos();
   abrirPedido(p.id);
 };
@@ -2124,7 +2152,7 @@ function renderPedidoEstados(p){
     const b = document.createElement('button');
     b.textContent = nom;
     if(p.cobro===val){ b.style.background=color+'26'; b.style.borderColor=color; b.style.color=color; }
-    b.onclick = ()=>{ p.cobro = val; registrarCobroAuto(p); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
+    b.onclick = ()=>{ p.cobro = val; registrarCobroAuto(p); registrar('marcó "' + nom.replace(/^[^ ]+ /,'') + '" el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ')'); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
     cobro.appendChild(b);
   }
   const fact = document.getElementById('pedFact');
@@ -2133,7 +2161,7 @@ function renderPedidoEstados(p){
     const b = document.createElement('button');
     b.textContent = nom;
     if(p.fact===val){ b.style.background=color+'26'; b.style.borderColor=color; b.style.color=color; }
-    b.onclick = ()=>{ p.fact = val; renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
+    b.onclick = ()=>{ p.fact = val; registrar((val==='si'?'facturó':'desmarcó facturación de')+' el pedido de ' + nombreClienteId(p.cliente)); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
     fact.appendChild(b);
   }
 }
@@ -2164,6 +2192,8 @@ document.getElementById('pedPresu').onclick = ()=>{
 };
 document.getElementById('pedBorrar').onclick = (e)=>{
   dosToques(e.target, '¿Seguro? Tocá de nuevo', ()=>{
+    const pb = pedidos.find(x=>x.id===pedidoAbierto);
+    if(pb) registrar('borró el pedido de ' + nombreClienteId(pb.cliente) + ' (' + plata(totalPedido(pb)) + ')');
     pedidos = pedidos.filter(x=>x.id!==pedidoAbierto);
     modalPedido.classList.remove('abierto');
     guardarDatos(); renderPedidos();
@@ -2283,6 +2313,7 @@ function renderCaja(){
     }
     f.querySelector('.borrarMov').onclick = (e)=>{
       dosToques(e.target, '¿Borrar?', ()=>{
+        registrar('borró un movimiento de '+plata(m.monto)+' ('+(m.concepto||'')+')');
         movimientos = movimientos.filter(x=>x.id!==m.id);
         renderCaja(); guardarDatos();
       });
@@ -2302,6 +2333,11 @@ function setFiltroCaja(f){
 }
 
 /* ---------- sincronización con dropbox ---------- */
+let usuarioActual = null, historial = [];
+function registrar(accion){
+  historial.unshift({t: Date.now(), quien: usuarioActual || '?', accion});
+  if(historial.length > 300) historial.length = 300;
+}
 const DBX_KEY = 'rbr1c0kc48g6ouq';
 const DBX_REDIRECT = 'https://todoletras.github.io/taller/';
 let dbxTokens = null, dbxRev = null, dbxEstado = 'off', dbxUltima = null;
@@ -2408,6 +2444,7 @@ function aplicarDatosRemotos(d){
   productos = d.productos||[]; pedidos = d.pedidos||[];
   uv = d.uv||uv; offset = d.offset||offset;
   movimientos = d.movimientos||[]; gastosFijos = d.gastosFijos||[];
+  historial = d.historial||historial;
   iniciar();
 }
 async function dbxSincronizar(mostrar){
@@ -2454,6 +2491,63 @@ async function dbxSincronizar(mostrar){
   }catch(e){ dbxEstado='error'; pintarNube(); }
 }
 
+/* identidad del dispositivo */
+async function pedirIdentidad(){
+  try{
+    const g = await window.storage.get('usuario-dispositivo').catch(()=>null);
+    if(g && g.value){ usuarioActual = g.value; return; }
+  }catch(e){}
+  const cont = document.getElementById('quienOpciones');
+  cont.innerHTML = '';
+  for(const [nombre, color] of PERSONAS){
+    const b = document.createElement('button');
+    b.textContent = '👤 ' + nombre;
+    b.style.cssText = 'width:100%;border-radius:14px;padding:16px;font-weight:800;font-size:1rem;border:2px solid '+color+';background:'+color+'26;color:'+color;
+    b.onclick = async ()=>{
+      usuarioActual = nombre;
+      try{ await window.storage.set('usuario-dispositivo', nombre); }catch(e){}
+      document.getElementById('modalQuien').classList.remove('abierto');
+      toast('Hola ' + nombre + ' 👋');
+    };
+    cont.appendChild(b);
+  }
+  document.getElementById('modalQuien').classList.add('abierto');
+}
+
+/* historial de cambios */
+function renderHistorial(){
+  const cont = document.getElementById('listaHistorial');
+  cont.innerHTML = '';
+  if(!historial.length){
+    cont.innerHTML = '<div class="vacio">Sin cambios registrados todavía. A partir de ahora, las acciones importantes quedan anotadas con quién las hizo.</div>';
+    return;
+  }
+  let diaActual = null;
+  for(const h of historial.slice(0, 100)){
+    const f = new Date(h.t);
+    const dia = f.toLocaleDateString('es-AR', {day:'numeric', month:'numeric'});
+    if(dia !== diaActual){
+      diaActual = dia;
+      const cab = document.createElement('div');
+      cab.className = 'mov-fecha';
+      cab.textContent = '📅 ' + f.toLocaleDateString('es-AR', {weekday:'short', day:'numeric', month:'numeric'});
+      cont.appendChild(cab);
+    }
+    const fila = document.createElement('div');
+    fila.className = 'mov-fila';
+    const color = colorPersona(h.quien);
+    fila.style.borderLeft = '4px solid ' + color;
+    fila.innerHTML =
+      '<div class="mv-info"><div class="mv-concepto"></div>' +
+      '<div class="mv-quien">' + f.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) + '</div></div>' +
+      '<span class="chip" style="background:'+color+'26;color:'+color+';font-size:.66rem;padding:4px 9px">👤 '+(h.quien||'?')+'</span>';
+    fila.querySelector('.mv-concepto').textContent = h.accion;
+    cont.appendChild(fila);
+  }
+}
+document.getElementById('cerrarHistorial').onclick = ()=> document.getElementById('modalHistorial').classList.remove('abierto');
+document.getElementById('modalHistorial').addEventListener('click', e=>{ if(e.target===document.getElementById('modalHistorial')) e.target.classList.remove('abierto'); });
+
 /* interfaz de la nube */
 const modalNube = document.getElementById('modalNube');
 document.getElementById('btnNube').onclick = ()=>{ renderNube(); modalNube.classList.add('abierto'); };
@@ -2468,6 +2562,8 @@ function renderNube(){
     acc.appendChild(b);
     return b;
   };
+  boton('📜 Últimos cambios (quién hizo qué)', 'background:var(--panel2);color:var(--texto);border:1px solid var(--borde)')
+    .onclick = ()=>{ renderHistorial(); document.getElementById('modalHistorial').classList.add('abierto'); };
   if(!dbxTokens){
     est.style.cssText = 'background:var(--panel2);color:var(--texto2);border:1px solid var(--borde)';
     est.textContent = 'Sin conectar. Cada dispositivo tiene sus propios datos.';
@@ -2507,6 +2603,7 @@ modalNube.addEventListener('click', e=>{ if(e.target===modalNube) modalNube.clas
     if(rv && rv.value) dbxRev = rv.value;
   }catch(e){}
   pintarNube();
+  await pedirIdentidad();
   await dbxProcesarRetorno();
   if(dbxTokens) dbxSincronizar();
   setInterval(()=>{ if(dbxTokens && !document.hidden) dbxSincronizar(); }, 90000);
@@ -2534,7 +2631,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos});
+    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -2560,6 +2657,7 @@ document.getElementById('btnImportar').onclick = (e)=>{
     productos = d.productos||[]; pedidos = d.pedidos||[];
     uv = d.uv||uv; offset = d.offset||offset;
     movimientos = d.movimientos||[]; gastosFijos = d.gastosFijos||[];
+    historial = d.historial||[];
     guardarDatos();
     iniciar();
     modalBackup.classList.remove('abierto');
@@ -2717,7 +2815,7 @@ document.getElementById('btnNuevoMov').onclick = ()=>{
   gastoFijoPagando = null;
   movTipoSel = 'egreso';
   movQuienSel = null;
-  movPersonaSel = null;
+  movPersonaSel = PERSONAS.find(p=>p[0]===usuarioActual) ? usuarioActual : null;
   document.getElementById('movMonto').value = '';
   document.getElementById('movConcepto').value = '';
   document.getElementById('movFecha').value = hoyISO();
@@ -2789,6 +2887,7 @@ document.getElementById('movGuardar').onclick = ()=>{
   if(!movPersonaSel){ toast('Marcá quién lo hizo: Marcos o Gastón'); return; }
   const concepto = document.getElementById('movConcepto').value.trim() ||
     (movTipoSel==='egreso' ? 'Pago a proveedor' : 'Cobro');
+  registrar((movTipoSel==='egreso'?'registró un pago':'registró un cobro')+' de '+plata(monto)+' ('+concepto+')');
   movimientos.push({id:uid(), tipo:movTipoSel, monto, concepto, persona: movPersonaSel,
     quien: movQuienSel, gastoFijo: gastoFijoPagando,
     fecha: document.getElementById('movFecha').value || hoyISO(), creado: Date.now()});
