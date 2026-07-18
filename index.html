@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v4</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -307,6 +307,7 @@
     <label>Ítems</label>
     <div id="pedItems"></div>
     <div class="cats-pick" id="pedAgregarItem" style="margin-top:6px"></div>
+    <div id="pedMO" style="margin-top:8px"></div>
     <div class="ped-total" id="pedTotal"></div>
     <label>Cobro</label>
     <div class="cats-pick" id="pedCobro"></div>
@@ -330,6 +331,10 @@
       <button id="subProdUV">🖨 UV Flaco</button>
     </div>
     <div id="panelCatalogo">
+      <div class="uv-mults" style="margin-bottom:10px">
+        <div>🔧 MO venta $<input id="moVenta" type="number" inputmode="numeric" style="width:74px">/h</div>
+        <div>pago $<input id="moCosto" type="number" inputmode="numeric" style="width:74px">/h</div>
+      </div>
       <input id="buscarProductos" class="buscador-cli" placeholder="🔍 Buscar producto…" style="margin-bottom:10px">
       <div id="listaProductos" style="max-height:42vh;overflow-y:auto;margin-bottom:10px"></div>
       <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -641,6 +646,7 @@ let uv = null, offset = null;
 let movimientos = [], filtroCaja = 'todos', movTipoSel = 'egreso', movQuienSel = null, movPersonaSel = null;
 const PERSONAS = [['Marcos','#ffb020'],['Gastón','#5ab8ff']];
 let gastosFijos = [];
+let mo = {venta:15000, costo:7500};
 let guardadoOK = null; // null = sin probar, true/false según verificación
 function marcarEstadoGuardado(ok){
   const primerFallo = (ok===false && guardadoOK!==false);
@@ -770,6 +776,7 @@ async function cargar(){
       uv = d.uv || {multSin:UV_SEMILLA.multSin, multCon:UV_SEMILLA.multCon, mats:UV_SEMILLA.mats.map(m=>({id:uid()+Math.random().toString(36).slice(2,4), ...m}))};
       movimientos = d.movimientos || [];
       historial = d.historial || [];
+      if(d.mo) mo = d.mo;
       gastosFijos = d.gastosFijos || GASTOS_SEMILLA.map(g=>({id:uid()+Math.random().toString(36).slice(2,4), ...g}));
       if(d.offset){ offset = d.offset; }
       else{
@@ -806,7 +813,7 @@ async function cargar(){
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -1796,7 +1803,7 @@ function textoItem(it){
     return it.nombre + ' (' + plata(it.precio) + '/m²) · Medida: ' + it.base + '×' + it.altura + ' cm' +
       (it.cant>1 ? ' × ' + it.cant + 'u' : '') + ' — ' + plata(subtotalItem(it));
   }
-  return it.nombre + (it.cant>1 ? ' × ' + it.cant + 'u' : '') + ' — ' + plata(subtotalItem(it));
+  return it.nombre + (it.cant>1 ? ' × ' + it.cant + (it.mo?'h':'u') : '') + ' — ' + plata(subtotalItem(it));
 }
 async function copiarItem(it){
   const texto = textoItem(it);
@@ -2047,6 +2054,7 @@ function renderPedidoItems(p){
   });
   actualizarTotal(p);
   renderBuscadorItems(p);
+  renderPedidoMO(p);
 }
 function actualizarTotal(p){
   const g = gananciaPedido(p);
@@ -2180,7 +2188,7 @@ document.getElementById('pedPresu').onclick = ()=>{
     if(it.uv){
       texto += '▪ ' + it.nombre + ' · ' + it.base + '×' + it.altura + ' cm' + (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
     }else{
-      texto += '▪ ' + it.nombre + (it.cant>1 ? ' × '+it.cant : '') + ': ' + plata(sub) + '\n';
+      texto += '▪ ' + it.nombre + (it.cant>1 ? ' × '+it.cant+(it.mo?' h':'') : '') + ': ' + plata(sub) + '\n';
     }
   }
   texto += '\n*TOTAL: ' + plata(totalPedido(p)) + '*\n';
@@ -2445,6 +2453,7 @@ function aplicarDatosRemotos(d){
   uv = d.uv||uv; offset = d.offset||offset;
   movimientos = d.movimientos||[]; gastosFijos = d.gastosFijos||[];
   historial = d.historial||historial;
+  if(d.mo) mo = d.mo;
   iniciar();
 }
 async function dbxSincronizar(mostrar){
@@ -2492,11 +2501,13 @@ async function dbxSincronizar(mostrar){
 }
 
 /* identidad del dispositivo */
-async function pedirIdentidad(){
-  try{
-    const g = await window.storage.get('usuario-dispositivo').catch(()=>null);
-    if(g && g.value){ usuarioActual = g.value; return; }
-  }catch(e){}
+async function pedirIdentidad(forzar){
+  if(!forzar){
+    try{
+      const g = await window.storage.get('usuario-dispositivo').catch(()=>null);
+      if(g && g.value){ usuarioActual = g.value; return; }
+    }catch(e){}
+  }
   const cont = document.getElementById('quienOpciones');
   cont.innerHTML = '';
   for(const [nombre, color] of PERSONAS){
@@ -2562,6 +2573,9 @@ function renderNube(){
     acc.appendChild(b);
     return b;
   };
+  boton('👤 Yo soy: ' + (usuarioActual || 'sin elegir') + '  (tocá para cambiar)',
+    'background:var(--panel2);color:'+(usuarioActual?colorPersona(usuarioActual):'var(--ambar)')+';border:1px solid '+(usuarioActual?'var(--borde)':'var(--ambar)'))
+    .onclick = ()=>{ modalNube.classList.remove('abierto'); pedirIdentidad(true); };
   boton('📜 Últimos cambios (quién hizo qué)', 'background:var(--panel2);color:var(--texto);border:1px solid var(--borde)')
     .onclick = ()=>{ renderHistorial(); document.getElementById('modalHistorial').classList.add('abierto'); };
   if(!dbxTokens){
@@ -2631,7 +2645,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial});
+    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -2658,6 +2672,7 @@ document.getElementById('btnImportar').onclick = (e)=>{
     uv = d.uv||uv; offset = d.offset||offset;
     movimientos = d.movimientos||[]; gastosFijos = d.gastosFijos||[];
     historial = d.historial||[];
+    if(d.mo) mo = d.mo;
     guardarDatos();
     iniciar();
     modalBackup.classList.remove('abierto');
@@ -2812,6 +2827,7 @@ modalGanancias.addEventListener('click', e=>{ if(e.target===modalGanancias) moda
 /* alta manual de movimiento */
 const modalMov = document.getElementById('modalMov');
 document.getElementById('btnNuevoMov').onclick = ()=>{
+  moPagandoPedido = null;
   gastoFijoPagando = null;
   movTipoSel = 'egreso';
   movQuienSel = null;
@@ -2877,6 +2893,21 @@ function renderMovQuien(){
       b.onclick = ()=>{ movQuienSel = c.id; renderMovQuien(); };
       sug.appendChild(b);
     }
+    // crear al vuelo si no existe (típico: la persona a la que le pagás la MO)
+    const texto = inp.value.trim();
+    if(texto && !base.find(c=> normalizarTexto(c.nombre)===normalizarTexto(texto))){
+      const crear = document.createElement('button');
+      crear.className = 'sug-item sug-crear';
+      crear.textContent = '＋ Crear ' + (movTipoSel==='egreso'?'proveedor':'cliente') + ' "' + texto + '"';
+      crear.onclick = ()=>{
+        const c = {id:uid(), nombre:texto, dir:'', mail:'', notas:''};
+        base.push(c);
+        guardarDatos(); renderClientes();
+        movQuienSel = c.id;
+        renderMovQuien();
+      };
+      sug.appendChild(crear);
+    }
   }
   inp.addEventListener('input', filtrar);
   filtrar();
@@ -2891,6 +2922,11 @@ document.getElementById('movGuardar').onclick = ()=>{
   movimientos.push({id:uid(), tipo:movTipoSel, monto, concepto, persona: movPersonaSel,
     quien: movQuienSel, gastoFijo: gastoFijoPagando,
     fecha: document.getElementById('movFecha').value || hoyISO(), creado: Date.now()});
+  if(moPagandoPedido){
+    const pp = pedidos.find(x=>x.id===moPagandoPedido);
+    if(pp){ pp.moPagado = true; renderPedidos(); }
+    moPagandoPedido = null;
+  }
   gastoFijoPagando = null;
   modalMov.classList.remove('abierto');
   renderCaja(); guardarDatos();
@@ -2899,9 +2935,78 @@ document.getElementById('movGuardar').onclick = ()=>{
 document.getElementById('movCancelar').onclick = ()=> modalMov.classList.remove('abierto');
 modalMov.addEventListener('click', e=>{ if(e.target===modalMov) modalMov.classList.remove('abierto'); });
 
+/* ---------- mano de obra ---------- */
+let moPagandoPedido = null;
+function renderPedidoMO(p){
+  const cont = document.getElementById('pedMO');
+  if(!cont) return;
+  cont.innerHTML = '';
+  const it = p.items.find(i=>i.mo);
+  const fila = document.createElement('div');
+  fila.style.cssText = 'display:flex;gap:8px;align-items:stretch';
+  const tog = document.createElement('button');
+  tog.style.cssText = 'flex:1;text-align:left;border-radius:12px;padding:12px;font-weight:700;font-size:.82rem;' +
+    (it ? 'background:rgba(255,176,32,.15);border:1px solid var(--ambar);color:var(--ambar)'
+        : 'background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)');
+  tog.textContent = (it ? '☑' : '☐') + ' Mano de obra (' + plata(mo.venta) + '/h)';
+  tog.onclick = ()=>{
+    if(it){
+      p.items = p.items.filter(x=>!x.mo);
+      p.moPagado = false;
+    }else{
+      p.items.push({mo:true, prod:null, nombre:'Mano de obra (por hora)', cant:1, precio:mo.venta, costoU:mo.costo});
+    }
+    renderPedidoItems(p); guardarDatos(); renderPedidos();
+  };
+  fila.appendChild(tog);
+  if(it){
+    const pagar = document.createElement('button');
+    const pagado = !!p.moPagado;
+    pagar.style.cssText = 'border-radius:12px;padding:12px;font-weight:700;font-size:.74rem;white-space:nowrap;' +
+      (pagado ? 'background:rgba(76,210,125,.12);border:1px solid rgba(76,210,125,.5);color:#4cd27d'
+              : 'background:var(--panel2);border:1px solid var(--borde);color:var(--texto)');
+    pagar.textContent = pagado ? '✓ MO pagada' : '💸 Pagar MO';
+    pagar.onclick = ()=>{
+      if(pagado){ toast('El pago de esta MO ya está registrado en Caja'); return; }
+      abrirPagoMO(p, it);
+    };
+    fila.appendChild(pagar);
+  }
+  cont.appendChild(fila);
+}
+function abrirPagoMO(p, it){
+  modalPedido.classList.remove('abierto');
+  moPagandoPedido = p.id;
+  gastoFijoPagando = null;
+  movTipoSel = 'egreso';
+  movQuienSel = null;
+  movPersonaSel = PERSONAS.find(x=>x[0]===usuarioActual) ? usuarioActual : null;
+  const horas = it.cant || 1;
+  document.getElementById('movMonto').value = horas * mo.costo;
+  document.getElementById('movConcepto').value = 'Mano de obra: ' + nombreClienteId(p.cliente) + ' (' + horas + 'h × ' + plata(mo.costo) + ')';
+  document.getElementById('movFecha').value = hoyISO();
+  renderMovTipo(); renderMovQuien(); renderMovPersona();
+  modalMov.classList.add('abierto');
+}
+
 /* ---------- catálogo de productos ---------- */
 const modalProductos = document.getElementById('modalProductos');
-document.getElementById('btnProductos').onclick = ()=>{ renderProductos(); modalProductos.classList.add('abierto'); };
+document.getElementById('btnProductos').onclick = ()=>{
+  document.getElementById('moVenta').value = mo.venta;
+  document.getElementById('moCosto').value = mo.costo;
+  renderProductos();
+  modalProductos.classList.add('abierto');
+};
+document.getElementById('moVenta').addEventListener('change', e=>{
+  mo.venta = parseFloat(e.target.value)||15000;
+  guardarDatos();
+  toast('Valor de venta de MO actualizado ✓ (los pedidos ya cargados no cambian)');
+});
+document.getElementById('moCosto').addEventListener('change', e=>{
+  mo.costo = parseFloat(e.target.value)||7500;
+  guardarDatos();
+  toast('Valor de pago de MO actualizado ✓');
+});
 function renderProductos(){
   const cont = document.getElementById('listaProductos');
   cont.innerHTML = '';
