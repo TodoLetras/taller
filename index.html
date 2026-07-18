@@ -241,7 +241,10 @@
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
     <h1>SEGUIMIENTO <span>· TODO LETRAS</span></h1>
-    <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
+    <div style="display:flex;gap:6px">
+      <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
+      <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
+    </div>
   </div>
   <div class="vistas">
     <button id="vLista" class="activo">☰ Lista</button>
@@ -381,6 +384,21 @@
     <button id="fCajaEgr">📤 Pagos</button>
   </div>
   <div id="listaCaja"></div>
+</div>
+
+<!-- modal sincronización dropbox -->
+<div class="modal" id="modalNube">
+  <div class="hoja">
+    <h2>☁️ Sincronización compartida</h2>
+    <div id="nubeEstado" style="font-size:.78rem;font-weight:700;margin-bottom:12px;padding:10px 12px;border-radius:10px;line-height:1.5"></div>
+    <div style="font-size:.72rem;color:var(--texto2);margin-bottom:12px;line-height:1.5">
+      Los datos se guardan en el Dropbox de la empresa y se comparten entre todos los que se conecten con esa cuenta. Las fotos, audios y videos de las notas quedan solo en cada dispositivo (no viajan por ahora).
+    </div>
+    <div id="nubeAcciones" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div class="acciones" style="margin-top:12px">
+      <button id="cerrarNube" class="btn-primario">Listo</button>
+    </div>
+  </div>
 </div>
 
 <!-- modal copia de seguridad -->
@@ -700,6 +718,7 @@ async function cargar(){
     const r = await window.storage.get(CLAVE);
     if(r && r.value){
       const d = JSON.parse(r.value);
+      ultimoCambioLocal = d.ultimoGuardado || null;
       cats = d.cats && d.cats.length ? d.cats : CATS_SEMILLA.slice();
       tareas = (d.tareas||[]).map(t=>({adj:0, ...t}));
       clientes = (d.clientes || []).map(c=>({dir:'', mail:'', ...c}));
@@ -763,7 +782,9 @@ async function cargar(){
 }
 async function guardarDatos(){
   try{
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, ultimoGuardado: new Date().toISOString()});
+    ultimoCambioLocal = new Date().toISOString();
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, ultimoGuardado: ultimoCambioLocal});
+    dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
     const check = await window.storage.get(CLAVE);
@@ -2279,6 +2300,220 @@ function setFiltroCaja(f){
   document.getElementById('fCajaEgr').classList.toggle('activo', f==='egreso');
   renderCaja();
 }
+
+/* ---------- sincronización con dropbox ---------- */
+const DBX_KEY = 'rbr1c0kc48g6ouq';
+const DBX_REDIRECT = 'https://todoletras.github.io/taller/';
+let dbxTokens = null, dbxRev = null, dbxEstado = 'off', dbxUltima = null;
+let ultimoCambioLocal = null, dbxTimerSubida = null, dbxSubiendo = false;
+
+function b64url(buf){
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function pintarNube(){
+  const b = document.getElementById('btnNube');
+  if(!b) return;
+  const colores = {off:'var(--texto2)', conectando:'var(--ambar)', ok:'#4cd27d', error:'#ff7a7a'};
+  b.style.color = colores[dbxEstado] || 'var(--texto2)';
+  b.style.borderColor = dbxEstado==='ok' ? 'rgba(76,210,125,.5)' : dbxEstado==='error' ? '#ff7a7a' : 'var(--borde)';
+}
+function dbxProgramarSubida(){
+  if(!dbxTokens) return;
+  clearTimeout(dbxTimerSubida);
+  dbxTimerSubida = setTimeout(()=> dbxSubir(), 4000);
+}
+async function dbxToken(){
+  if(!dbxTokens) return null;
+  if(Date.now() < (dbxTokens.exp||0)) return dbxTokens.access;
+  try{
+    const r = await fetch('https://api.dropboxapi.com/oauth2/token', {method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({grant_type:'refresh_token', refresh_token:dbxTokens.refresh, client_id:DBX_KEY})});
+    const d = await r.json();
+    if(d.access_token){
+      dbxTokens.access = d.access_token;
+      dbxTokens.exp = Date.now() + (d.expires_in-60)*1000;
+      await window.storage.set('dbx-tokens', JSON.stringify(dbxTokens));
+      return d.access_token;
+    }
+  }catch(e){}
+  dbxEstado='error'; pintarNube();
+  return null;
+}
+async function dbxConectar(){
+  if(!location.href.startsWith(DBX_REDIRECT)){
+    toast('La conexión funciona en la app publicada (todoletras.github.io)');
+    return;
+  }
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)).buffer);
+  await window.storage.set('dbx-verifier', verifier);
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  location.href = 'https://www.dropbox.com/oauth2/authorize?client_id='+DBX_KEY+
+    '&response_type=code&token_access_type=offline&code_challenge_method=S256'+
+    '&code_challenge='+challenge+'&redirect_uri='+encodeURIComponent(DBX_REDIRECT);
+}
+async function dbxProcesarRetorno(){
+  const code = new URLSearchParams(location.search).get('code');
+  if(!code) return;
+  history.replaceState(null, '', location.pathname);
+  const v = await window.storage.get('dbx-verifier').catch(()=>null);
+  if(!v || !v.value) return;
+  dbxEstado='conectando'; pintarNube();
+  try{
+    const r = await fetch('https://api.dropboxapi.com/oauth2/token', {method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({code, grant_type:'authorization_code', code_verifier:v.value,
+        client_id:DBX_KEY, redirect_uri:DBX_REDIRECT})});
+    const d = await r.json();
+    if(d.access_token){
+      dbxTokens = {access:d.access_token, refresh:d.refresh_token, exp: Date.now()+(d.expires_in-60)*1000};
+      await window.storage.set('dbx-tokens', JSON.stringify(dbxTokens));
+      dbxEstado='ok'; pintarNube();
+      toast('☁️ Dropbox conectado ✓');
+      dbxSincronizar(true);
+      return;
+    }
+  }catch(e){}
+  dbxEstado='error'; pintarNube();
+  toast('No se pudo conectar con Dropbox');
+}
+async function dbxSubir(){
+  if(dbxSubiendo || !dbxTokens) return false;
+  dbxSubiendo = true;
+  try{
+    const t = await dbxToken();
+    if(!t){ dbxSubiendo=false; return false; }
+    const r = await fetch('https://content.dropboxapi.com/2/files/upload', {method:'POST',
+      headers:{'Authorization':'Bearer '+t,
+        'Dropbox-API-Arg': JSON.stringify({path:'/datos.json', mode:'overwrite', mute:true}),
+        'Content-Type':'application/octet-stream'},
+      body: datosCompletos()});
+    if(r.ok){
+      const m = await r.json();
+      dbxRev = m.rev;
+      await window.storage.set('dbx-rev', m.rev);
+      dbxUltima = Date.now();
+      dbxEstado='ok'; pintarNube();
+      dbxSubiendo=false;
+      return true;
+    }
+  }catch(e){}
+  dbxEstado='error'; pintarNube();
+  dbxSubiendo=false;
+  return false;
+}
+function aplicarDatosRemotos(d){
+  cats = d.cats||cats; tareas = d.tareas||[];
+  clientes = d.clientes||[]; proveedores = d.proveedores||[];
+  productos = d.productos||[]; pedidos = d.pedidos||[];
+  uv = d.uv||uv; offset = d.offset||offset;
+  movimientos = d.movimientos||[]; gastosFijos = d.gastosFijos||[];
+  iniciar();
+}
+async function dbxSincronizar(mostrar){
+  if(!dbxTokens) return;
+  const t = await dbxToken();
+  if(!t) return;
+  try{
+    const rm = await fetch('https://api.dropboxapi.com/2/files/get_metadata', {method:'POST',
+      headers:{'Authorization':'Bearer '+t, 'Content-Type':'application/json'},
+      body: JSON.stringify({path:'/datos.json'})});
+    if(rm.status===409){
+      // no existe todavía en la nube: subir lo local
+      const ok = await dbxSubir();
+      if(mostrar && ok) toast('☁️ Datos subidos a la nube ✓');
+      return;
+    }
+    if(!rm.ok){ dbxEstado='error'; pintarNube(); return; }
+    const meta = await rm.json();
+    if(meta.rev === dbxRev){
+      dbxUltima = Date.now(); dbxEstado='ok'; pintarNube();
+      if(mostrar) toast('☁️ Todo sincronizado ✓');
+      return;
+    }
+    // hay una versión nueva en la nube (cambios del otro dispositivo)
+    const rd = await fetch('https://content.dropboxapi.com/2/files/download', {method:'POST',
+      headers:{'Authorization':'Bearer '+t,
+        'Dropbox-API-Arg': JSON.stringify({path:'/datos.json'})}});
+    if(!rd.ok){ dbxEstado='error'; pintarNube(); return; }
+    const d = JSON.parse(await rd.text());
+    const remoto = Date.parse(d.fecha||0) || 0;
+    const local = Date.parse(ultimoCambioLocal||0) || 0;
+    dbxRev = meta.rev;
+    await window.storage.set('dbx-rev', meta.rev);
+    if(remoto >= local){
+      aplicarDatosRemotos(d);
+      ultimoCambioLocal = d.fecha;
+      guardarDatos();
+      toast('☁️ Datos actualizados desde la nube');
+    }else{
+      await dbxSubir();
+      if(mostrar) toast('☁️ Tus cambios se subieron a la nube');
+    }
+    dbxUltima = Date.now(); dbxEstado='ok'; pintarNube();
+  }catch(e){ dbxEstado='error'; pintarNube(); }
+}
+
+/* interfaz de la nube */
+const modalNube = document.getElementById('modalNube');
+document.getElementById('btnNube').onclick = ()=>{ renderNube(); modalNube.classList.add('abierto'); };
+function renderNube(){
+  const est = document.getElementById('nubeEstado');
+  const acc = document.getElementById('nubeAcciones');
+  acc.innerHTML = '';
+  const boton = (texto, estilo)=>{
+    const b = document.createElement('button');
+    b.textContent = texto;
+    b.style.cssText = 'width:100%;border-radius:12px;padding:13px;font-weight:800;font-size:.85rem;border:none;'+estilo;
+    acc.appendChild(b);
+    return b;
+  };
+  if(!dbxTokens){
+    est.style.cssText = 'background:var(--panel2);color:var(--texto2);border:1px solid var(--borde)';
+    est.textContent = 'Sin conectar. Cada dispositivo tiene sus propios datos.';
+    boton('☁️ Conectar con el Dropbox de la empresa', 'background:var(--ambar);color:#1a1200')
+      .onclick = dbxConectar;
+  }else{
+    if(dbxEstado==='error'){
+      est.style.cssText = 'background:rgba(255,122,122,.12);color:#ff7a7a;border:1px solid #ff7a7a';
+      est.textContent = '✗ Hubo un problema al sincronizar. Probá "Sincronizar ahora"; si sigue, reconectá.';
+    }else{
+      est.style.cssText = 'background:rgba(76,210,125,.1);color:#4cd27d;border:1px solid rgba(76,210,125,.4)';
+      est.textContent = '✓ Conectado. ' + (dbxUltima ? 'Última sincronización: ' + new Date(dbxUltima).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : 'Sincronizando…');
+    }
+    boton('🔄 Sincronizar ahora', 'background:var(--ambar);color:#1a1200')
+      .onclick = async ()=>{ await dbxSincronizar(true); renderNube(); };
+    boton('Desconectar este dispositivo', 'background:var(--panel2);color:#ff7a7a;border:1px solid #ff7a7a')
+      .onclick = async (e)=>{
+        dosToques(e.target, '¿Seguro? Tocá de nuevo', async ()=>{
+          dbxTokens = null; dbxRev = null; dbxEstado='off';
+          await window.storage.delete('dbx-tokens').catch(()=>{});
+          await window.storage.delete('dbx-rev').catch(()=>{});
+          pintarNube(); renderNube();
+          toast('Desconectado. Los datos locales quedan en este dispositivo.');
+        });
+      };
+  }
+}
+document.getElementById('cerrarNube').onclick = ()=> modalNube.classList.remove('abierto');
+modalNube.addEventListener('click', e=>{ if(e.target===modalNube) modalNube.classList.remove('abierto'); });
+
+/* arranque de la sincronización */
+(async ()=>{
+  try{
+    const t = await window.storage.get('dbx-tokens').catch(()=>null);
+    if(t && t.value) dbxTokens = JSON.parse(t.value);
+    const rv = await window.storage.get('dbx-rev').catch(()=>null);
+    if(rv && rv.value) dbxRev = rv.value;
+  }catch(e){}
+  pintarNube();
+  await dbxProcesarRetorno();
+  if(dbxTokens) dbxSincronizar();
+  setInterval(()=>{ if(dbxTokens && !document.hidden) dbxSincronizar(); }, 90000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && dbxTokens) dbxSincronizar();
+  });
+})();
 
 /* ---------- copia de seguridad ---------- */
 const modalBackup = document.getElementById('modalBackup');
