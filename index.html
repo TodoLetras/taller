@@ -471,6 +471,7 @@
     <div class="vistas" style="margin-bottom:10px">
       <button id="subGanVentas" class="activo">Por venta</button>
       <button id="subGanProds">Por producto</button>
+      <button id="subGanFact">🧾 Facturación</button>
     </div>
     <div id="listaGanancias" style="max-height:55vh;overflow-y:auto;margin-bottom:10px"></div>
     <div class="acciones">
@@ -582,6 +583,8 @@
     <h2 id="cliTitulo">👤 Ficha del contacto</h2>
     <label>Nombre</label>
     <input id="cliNombre">
+    <label>CUIT (para facturar)</label>
+    <input id="cliCuit" inputmode="numeric" placeholder="Ej: 30-12345678-9">
     <label>Dirección</label>
     <input id="cliDir" placeholder="Opcional">
     <label>Mail</label>
@@ -647,6 +650,7 @@ let movimientos = [], filtroCaja = 'todos', movTipoSel = 'egreso', movQuienSel =
 const PERSONAS = [['Marcos','#ffb020'],['Gastón','#5ab8ff']];
 let gastosFijos = [];
 let mo = {venta:15000, costo:7500};
+let esquemas = [];
 let guardadoOK = null; // null = sin probar, true/false según verificación
 function marcarEstadoGuardado(ok){
   const primerFallo = (ok===false && guardadoOK!==false);
@@ -777,6 +781,7 @@ async function cargar(){
       movimientos = d.movimientos || [];
       historial = d.historial || [];
       if(d.mo) mo = d.mo;
+      esquemas = d.esquemas || [];
       gastosFijos = d.gastosFijos || GASTOS_SEMILLA.map(g=>({id:uid()+Math.random().toString(36).slice(2,4), ...g}));
       if(d.offset){ offset = d.offset; }
       else{
@@ -813,7 +818,7 @@ async function cargar(){
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -1181,7 +1186,8 @@ function renderDetVenta(t){
   b.style.cssText = 'width:100%;border-radius:12px;padding:12px;font-weight:700;font-size:.85rem;border:1px dashed var(--ambar);background:var(--panel2);color:var(--ambar)';
   if(p){
     const ec = ESTADOS_COBRO.find(e=>e[0]===p.cobro) || ESTADOS_COBRO[0];
-    const ef = ESTADOS_FACT.find(e=>e[0]===p.fact) || ESTADOS_FACT[0];
+    const ef1 = estadoFact(p);
+    const ef = ['x', ef1.label, ef1.color];
     b.style.borderStyle = 'solid';
     b.style.borderColor = ec[2];
     b.style.color = ec[2];
@@ -1758,6 +1764,7 @@ function abrirCliente(id){
   const c = res.c;
   document.getElementById('cliTitulo').textContent = (res.lista==='proveedores'?'🏭 Ficha del proveedor':'👤 Ficha del cliente');
   document.getElementById('cliNombre').value = c.nombre;
+  document.getElementById('cliCuit').value = c.cuit||'';
   document.getElementById('cliDir').value = c.dir||'';
   document.getElementById('cliMail').value = c.mail||'';
   document.getElementById('cliNotas').value = c.notas||'';
@@ -1768,7 +1775,7 @@ function abrirCliente(id){
   for(const t of suyas) tarjetaTarea(t, cont);
   modalCliente.classList.add('abierto');
 }
-for(const [campo, prop] of [['cliNombre','nombre'],['cliDir','dir'],['cliMail','mail'],['cliNotas','notas']]){
+for(const [campo, prop] of [['cliNombre','nombre'],['cliCuit','cuit'],['cliDir','dir'],['cliMail','mail'],['cliNotas','notas']]){
   document.getElementById(campo).addEventListener('input', e=>{
     const res = buscarContacto(clienteAbierto);
     if(!res) return;
@@ -1863,7 +1870,8 @@ function renderPedidos(){
     const f = document.createElement('div');
     f.className = 'pedido-fila';
     const ec = ESTADOS_COBRO.find(e=>e[0]===p.cobro) || ESTADOS_COBRO[0];
-    const ef = ESTADOS_FACT.find(e=>e[0]===p.fact) || ESTADOS_FACT[0];
+    const ef0 = estadoFact(p);
+    const ef = ['x', ef0.label, ef0.color];
     f.style.borderLeftColor = ec[2];
     f.innerHTML =
       '<div class="ped-cab"><span class="ped-cli"></span><span class="ped-monto">'+plata(totalPedido(p))+'</span></div>' +
@@ -2163,15 +2171,262 @@ function renderPedidoEstados(p){
     b.onclick = ()=>{ p.cobro = val; registrarCobroAuto(p); registrar('marcó "' + nom.replace(/^[^ ]+ /,'') + '" el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ')'); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
     cobro.appendChild(b);
   }
-  const fact = document.getElementById('pedFact');
-  fact.innerHTML = '';
-  for(const [val, nom, color] of ESTADOS_FACT){
-    const b = document.createElement('button');
-    b.textContent = nom;
-    if(p.fact===val){ b.style.background=color+'26'; b.style.borderColor=color; b.style.color=color; }
-    b.onclick = ()=>{ p.fact = val; registrar((val==='si'?'facturó':'desmarcó facturación de')+' el pedido de ' + nombreClienteId(p.cliente)); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
-    fact.appendChild(b);
+  renderPedidoFact(p);
+}
+
+/* ---------- facturación con divisiones ---------- */
+function estadoFact(p){
+  if(p.factDiv && p.factDiv.length){
+    const hechas = p.factDiv.filter(x=>x.facturado).length;
+    if(hechas === p.factDiv.length) return {label:'🧾 Facturado ('+hechas+')', color:'#4cd27d'};
+    if(hechas > 0) return {label:'🧾 '+hechas+'/'+p.factDiv.length+' facturado', color:'#ffb020'};
+    return {label:'Sin facturar ('+p.factDiv.length+' partes)', color:'#9aa1b0'};
   }
+  return p.fact==='si' ? {label:'🧾 Facturado', color:'#4cd27d'} : {label:'Sin facturar', color:'#9aa1b0'};
+}
+function renderPedidoFact(p){
+  const cont = document.getElementById('pedFact');
+  cont.innerHTML = '';
+  cont.style.flexDirection = 'column';
+  cont.style.alignItems = 'stretch';
+  const total = totalPedido(p);
+
+  /* --- modo simple (sin divisiones) --- */
+  if(!p.factDiv || !p.factDiv.length){
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    for(const [val, nom, color] of ESTADOS_FACT){
+      const b = document.createElement('button');
+      b.textContent = nom;
+      if(p.fact===val){ b.style.background=color+'26'; b.style.borderColor=color; b.style.color=color; }
+      b.onclick = ()=>{
+        p.fact = val;
+        if(val==='si'){
+          p.factQuien = p.factQuien || usuarioActual || null;
+          p.factFecha = p.factFecha || hoyISO();
+          registrar('facturó el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(total) + ')');
+        }else{
+          registrar('desmarcó facturación del pedido de ' + nombreClienteId(p.cliente));
+        }
+        renderPedidoFact(p); guardarDatos(); renderPedidos();
+      };
+      fila.appendChild(b);
+    }
+    cont.appendChild(fila);
+    if(p.fact==='si'){
+      const quien = document.createElement('div');
+      quien.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:8px;font-size:.74rem;color:var(--texto2)';
+      quien.appendChild(document.createTextNode('Factura: '));
+      for(const [nombre, color] of PERSONAS){
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.textContent = '👤 ' + nombre;
+        b.style.cssText = 'font-size:.68rem;padding:5px 10px;border:1px solid ' +
+          (p.factQuien===nombre ? color+';background:'+color+'26;color:'+color : 'var(--borde);background:var(--panel2);color:var(--texto2)');
+        b.onclick = ()=>{ p.factQuien = nombre; renderPedidoFact(p); guardarDatos(); };
+        quien.appendChild(b);
+      }
+      cont.appendChild(quien);
+    }
+    const dividir = document.createElement('button');
+    dividir.textContent = '👥 Dividir la factura entre empresas';
+    dividir.style.cssText = 'margin-top:8px;border-radius:12px;padding:11px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)';
+    dividir.onclick = ()=>{
+      p.factDiv = [{cliente: p.cliente||null, pct:100, facturado:false, nro:'', quien: usuarioActual||null, fecha:null}];
+      p.fact = 'no';
+      renderPedidoFact(p); guardarDatos(); renderPedidos();
+    };
+    cont.appendChild(dividir);
+    return;
+  }
+
+  /* --- modo dividido --- */
+  // esquemas guardados para aplicar con un toque
+  if(esquemas.length){
+    const eWrap = document.createElement('div');
+    eWrap.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
+    for(const e of esquemas){
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.textContent = '⚡ ' + e.nombre;
+      b.style.cssText = 'font-size:.68rem;padding:6px 10px;background:rgba(90,184,255,.12);border:1px solid #5ab8ff;color:#5ab8ff';
+      b.onclick = ()=>{
+        p.factDiv = e.partes.map(x=>({cliente:x.cliente, pct:x.pct, facturado:false, nro:'', quien:usuarioActual||null, fecha:null}));
+        renderPedidoFact(p); guardarDatos(); renderPedidos();
+        toast('Esquema "'+e.nombre+'" aplicado');
+      };
+      // borrar esquema con doble toque largo: usamos ✕ pequeño
+      eWrap.appendChild(b);
+    }
+    cont.appendChild(eWrap);
+  }
+
+  const sumaPct = p.factDiv.reduce((s,x)=>s+(x.pct||0),0);
+  p.factDiv.forEach((parte, idx)=>{
+    const f = document.createElement('div');
+    f.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-left:4px solid ' +
+      (parte.facturado ? '#4cd27d' : 'var(--borde)') + ';border-radius:10px;padding:9px;margin-bottom:6px';
+
+    // línea 1: empresa + pct + monto + quitar
+    const l1 = document.createElement('div');
+    l1.style.cssText = 'display:flex;gap:6px;align-items:center';
+    const emp = document.createElement('button');
+    const c = clientes.find(x=>x.id===parte.cliente);
+    emp.textContent = c ? c.nombre : '¿Empresa?';
+    emp.style.cssText = 'flex:1;min-width:0;text-align:left;background:none;border:none;font-weight:700;font-size:.8rem;color:' + (c?'var(--texto)':'var(--ambar)') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    emp.onclick = ()=> elegirEmpresaParte(p, parte);
+    l1.appendChild(emp);
+    const pctIn = document.createElement('input');
+    pctIn.type = 'number'; pctIn.inputMode = 'numeric';
+    pctIn.value = parte.pct;
+    pctIn.style.cssText = 'width:52px;margin:0;padding:6px 4px;font-size:14px;text-align:center;background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+    pctIn.addEventListener('input', ()=>{
+      parte.pct = parseFloat(pctIn.value)||0;
+      monto.textContent = plata(total*parte.pct/100);
+      sincronizarPedido();
+      actualizarSumaPct(p);
+    });
+    l1.appendChild(pctIn);
+    const pctTxt = document.createElement('span');
+    pctTxt.textContent = '%';
+    pctTxt.style.cssText = 'font-size:.7rem;color:var(--texto2)';
+    l1.appendChild(pctTxt);
+    const monto = document.createElement('span');
+    monto.textContent = plata(total*parte.pct/100);
+    monto.style.cssText = 'font-weight:800;font-size:.78rem;color:var(--ambar);white-space:nowrap';
+    l1.appendChild(monto);
+    const quitar = document.createElement('button');
+    quitar.textContent = '✕';
+    quitar.style.cssText = 'background:none;border:none;color:var(--texto2);padding:2px 4px';
+    quitar.onclick = (e)=>{
+      dosToques(e.target, '¿Borrar?', ()=>{
+        p.factDiv.splice(idx,1);
+        if(!p.factDiv.length) p.factDiv = null;
+        renderPedidoFact(p); guardarDatos(); renderPedidos();
+      });
+    };
+    l1.appendChild(quitar);
+    f.appendChild(l1);
+
+    // línea 2: quién factura + estado + nro
+    const l2 = document.createElement('div');
+    l2.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:7px;flex-wrap:wrap';
+    for(const [nombre, color] of PERSONAS){
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.textContent = nombre.charAt(0);
+      b.title = 'Factura ' + nombre;
+      b.style.cssText = 'font-size:.66rem;padding:5px 9px;font-weight:800;border:1px solid ' +
+        (parte.quien===nombre ? color+';background:'+color+'26;color:'+color : 'var(--borde);background:var(--fondo);color:var(--texto2)');
+      b.onclick = ()=>{ parte.quien = nombre; renderPedidoFact(p); guardarDatos(); };
+      l2.appendChild(b);
+    }
+    const tog = document.createElement('button');
+    tog.className = 'chip';
+    tog.textContent = parte.facturado ? '✓ Facturada' : 'Marcar facturada';
+    tog.style.cssText = 'font-size:.68rem;padding:5px 10px;font-weight:700;border:1px solid ' +
+      (parte.facturado ? 'rgba(76,210,125,.5);background:rgba(76,210,125,.12);color:#4cd27d' : 'var(--borde);background:var(--fondo);color:var(--texto)');
+    tog.onclick = ()=>{
+      parte.facturado = !parte.facturado;
+      if(parte.facturado){
+        parte.fecha = hoyISO();
+        parte.quien = parte.quien || usuarioActual || null;
+        registrar('facturó ' + plata(total*parte.pct/100) + ' a ' + (clientes.find(x=>x.id===parte.cliente)||{}).nombre + ' (pedido de ' + nombreClienteId(p.cliente) + ')');
+      }
+      renderPedidoFact(p); guardarDatos(); renderPedidos();
+    };
+    l2.appendChild(tog);
+    if(parte.facturado){
+      const nro = document.createElement('input');
+      nro.placeholder = 'N° fact.';
+      nro.value = parte.nro||'';
+      nro.style.cssText = 'width:88px;margin:0;padding:6px;font-size:13px;background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+      nro.addEventListener('input', ()=>{ parte.nro = nro.value.trim(); sincronizarPedido(); });
+      l2.appendChild(nro);
+    }
+    const copiarBtn = document.createElement('button');
+    copiarBtn.textContent = '📋';
+    copiarBtn.title = 'Copiar datos para emitir';
+    copiarBtn.style.cssText = 'background:none;border:none;color:var(--texto2);padding:2px 4px;margin-left:auto';
+    copiarBtn.onclick = async ()=>{
+      const emp2 = clientes.find(x=>x.id===parte.cliente);
+      const texto = 'FACTURAR:\nEmpresa: ' + (emp2?emp2.nombre:'?') +
+        (emp2 && emp2.cuit ? '\nCUIT: ' + emp2.cuit : '') +
+        '\nMonto: ' + plata(total*parte.pct/100) + ' (' + parte.pct + '% del pedido de ' + nombreClienteId(p.cliente) + ')' +
+        '\nConcepto: ' + p.items.map(i=>i.nombre).join(', ').slice(0,120);
+      const ok = await copiar(texto);
+      toast(ok ? 'Datos de factura copiados ✓' : 'No se pudo copiar');
+    };
+    l2.appendChild(copiarBtn);
+    f.appendChild(l2);
+    cont.appendChild(f);
+  });
+
+  // indicador de suma + acciones
+  const suma = document.createElement('div');
+  suma.id = 'sumaPct';
+  suma.style.cssText = 'font-size:.72rem;font-weight:700;text-align:right;margin:2px 2px 8px;color:' + (Math.abs(sumaPct-100)<0.01 ? '#4cd27d' : '#ff7a7a');
+  suma.textContent = 'Suma: ' + sumaPct + '%' + (Math.abs(sumaPct-100)<0.01 ? ' ✓' : ' (tiene que dar 100%)');
+  cont.appendChild(suma);
+
+  const acciones = document.createElement('div');
+  acciones.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+  const agregar = document.createElement('button');
+  agregar.textContent = '＋ Empresa';
+  agregar.style.cssText = 'flex:1;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)';
+  agregar.onclick = ()=>{
+    p.factDiv.push({cliente:null, pct:0, facturado:false, nro:'', quien:usuarioActual||null, fecha:null});
+    renderPedidoFact(p); guardarDatos();
+  };
+  acciones.appendChild(agregar);
+  const guardarEsq = document.createElement('button');
+  guardarEsq.textContent = '💾 Guardar esquema';
+  guardarEsq.style.cssText = 'flex:1;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)';
+  guardarEsq.onclick = ()=>{
+    const partes = p.factDiv.filter(x=>x.cliente).map(x=>({cliente:x.cliente, pct:x.pct}));
+    if(!partes.length){ toast('Elegí las empresas primero'); return; }
+    const nombre = partes.map(x=>{
+      const c2 = clientes.find(y=>y.id===x.cliente);
+      return (c2?c2.nombre.slice(0,10):'?') + ' ' + x.pct + '%';
+    }).join(' / ');
+    esquemas.push({id:uid(), nombre, partes});
+    guardarDatos();
+    renderPedidoFact(p);
+    toast('Esquema guardado ✓ Aparece con ⚡ en los próximos pedidos');
+  };
+  acciones.appendChild(guardarEsq);
+  const volver = document.createElement('button');
+  volver.textContent = '✕ Sin dividir';
+  volver.style.cssText = 'border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)';
+  volver.onclick = (e)=>{
+    dosToques(e.target, '¿Seguro?', ()=>{
+      p.factDiv = null;
+      renderPedidoFact(p); guardarDatos(); renderPedidos();
+    });
+  };
+  acciones.appendChild(volver);
+  cont.appendChild(acciones);
+}
+function actualizarSumaPct(p){
+  const el = document.getElementById('sumaPct');
+  if(!el || !p.factDiv) return;
+  const s = p.factDiv.reduce((x,y)=>x+(y.pct||0),0);
+  el.style.color = Math.abs(s-100)<0.01 ? '#4cd27d' : '#ff7a7a';
+  el.textContent = 'Suma: ' + s + '%' + (Math.abs(s-100)<0.01 ? ' ✓' : ' (tiene que dar 100%)');
+}
+function elegirEmpresaParte(p, parte){
+  // selector con autocompletado reutilizando el picker de clientes en un contenedor temporal
+  const cont = document.getElementById('pedFact');
+  cont.innerHTML = '<div style="font-size:.74rem;color:var(--texto2);margin-bottom:6px">Elegí la empresa para esta parte:</div><div class="cats-pick" id="parteEmpresaPicker"></div>';
+  renderPickerClientes('parteEmpresaPicker', null, (cid)=>{
+    parte.cliente = cid;
+    renderPedidoFact(p); guardarDatos();
+  });
+  const cancelar = document.createElement('button');
+  cancelar.textContent = 'Cancelar';
+  cancelar.style.cssText = 'margin-top:8px;width:100%;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)';
+  cancelar.onclick = ()=> renderPedidoFact(p);
+  cont.appendChild(cancelar);
 }
 document.getElementById('pedPresu').onclick = ()=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
@@ -2454,6 +2709,7 @@ function aplicarDatosRemotos(d){
   movimientos = d.movimientos||[]; gastosFijos = d.gastosFijos||[];
   historial = d.historial||historial;
   if(d.mo) mo = d.mo;
+  esquemas = d.esquemas||esquemas;
   iniciar();
 }
 async function dbxSincronizar(mostrar){
@@ -2645,7 +2901,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo});
+    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -2673,6 +2929,7 @@ document.getElementById('btnImportar').onclick = (e)=>{
     movimientos = d.movimientos||[]; gastosFijos = d.gastosFijos||[];
     historial = d.historial||[];
     if(d.mo) mo = d.mo;
+    esquemas = d.esquemas||[];
     guardarDatos();
     iniciar();
     modalBackup.classList.remove('abierto');
@@ -2763,11 +3020,74 @@ let subGan = 'ventas';
 document.getElementById('btnGanancias').onclick = ()=>{ subGan='ventas'; renderGanancias(); modalGanancias.classList.add('abierto'); };
 document.getElementById('subGanVentas').onclick = ()=>{ subGan='ventas'; renderGanancias(); };
 document.getElementById('subGanProds').onclick = ()=>{ subGan='prods'; renderGanancias(); };
+document.getElementById('subGanFact').onclick = ()=>{ subGan='fact'; renderGanancias(); };
 function renderGanancias(){
   document.getElementById('subGanVentas').classList.toggle('activo', subGan==='ventas');
   document.getElementById('subGanProds').classList.toggle('activo', subGan==='prods');
+  document.getElementById('subGanFact').classList.toggle('activo', subGan==='fact');
   const cont = document.getElementById('listaGanancias');
   cont.innerHTML = '';
+  if(subGan==='fact'){
+    // todas las "facturas": pedidos simples facturados + porciones facturadas
+    const facturas = [];
+    for(const p of pedidos){
+      const total = totalPedido(p);
+      if(p.factDiv && p.factDiv.length){
+        for(const parte of p.factDiv){
+          if(parte.facturado){
+            const c = clientes.find(x=>x.id===parte.cliente);
+            facturas.push({fecha: parte.fecha||hoyISO(), quien: parte.quien||'?',
+              monto: total*parte.pct/100, empresa: c?c.nombre:'?', nro: parte.nro||'', pedido: p.id,
+              origen: nombreClienteId(p.cliente)});
+          }
+        }
+      }else if(p.fact==='si'){
+        facturas.push({fecha: p.factFecha||hoyISO(), quien: p.factQuien||'?',
+          monto: total, empresa: nombreClienteId(p.cliente), nro:'', pedido: p.id, origen:null});
+      }
+    }
+    const hoy = new Date();
+    const mesISO = hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
+    const hace12 = new Date(hoy.getFullYear(), hoy.getMonth()-11, 1).toISOString().slice(0,10);
+    // tarjetas por facturador
+    for(const [nombre, color] of PERSONAS){
+      const suyas = facturas.filter(f=>f.quien===nombre);
+      const mes = suyas.filter(f=>(f.fecha||'').startsWith(mesISO)).reduce((s,f)=>s+f.monto,0);
+      const anio = suyas.filter(f=>(f.fecha||'')>=hace12).reduce((s,f)=>s+f.monto,0);
+      const card = document.createElement('div');
+      card.className = 'caja-card';
+      card.style.cssText += ';margin-bottom:8px;border-left:4px solid '+color;
+      card.innerHTML =
+        '<div class="cc-mes" style="color:'+color+'">👤 '+nombre+'</div>' +
+        '<div class="cc-linea"><span>Este mes</span><b>'+plata(mes)+'</b></div>' +
+        '<div class="cc-linea"><span>Últimos 12 meses</span><b>'+plata(anio)+'</b></div>';
+      cont.appendChild(card);
+    }
+    // listado de facturas
+    if(!facturas.length){
+      const v = document.createElement('div');
+      v.className = 'vacio';
+      v.textContent = 'Sin facturas registradas todavía. Marcá pedidos o porciones como facturadas y aparecen acá.';
+      cont.appendChild(v);
+    }else{
+      facturas.sort((a,b)=> (b.fecha||'').localeCompare(a.fecha||''));
+      for(const fc of facturas.slice(0,60)){
+        const color = colorPersona(fc.quien);
+        const f = document.createElement('div');
+        f.className = 'mov-fila';
+        f.style.borderLeft = '4px solid '+color;
+        f.innerHTML =
+          '<div class="mv-info"><div class="mv-concepto"></div><div class="mv-quien"></div></div>' +
+          '<span class="chip" style="background:'+color+'26;color:'+color+';font-size:.66rem;padding:4px 9px">👤 '+fc.quien+'</span>' +
+          '<span class="mv-monto" style="color:#4cd27d">'+plata(fc.monto)+'</span>';
+        f.querySelector('.mv-concepto').textContent = fc.empresa + (fc.nro ? ' · N° '+fc.nro : '');
+        f.querySelector('.mv-quien').textContent = fechaLinda(fc.fecha) + (fc.origen ? ' · pedido de '+fc.origen : '');
+        f.querySelector('.mv-info').onclick = ()=>{ modalGanancias.classList.remove('abierto'); abrirPedido(fc.pedido); };
+        cont.appendChild(f);
+      }
+    }
+    return;
+  }
   if(subGan==='ventas'){
     if(!pedidos.length){ cont.innerHTML = '<div class="vacio">Sin pedidos todavía.</div>'; return; }
     let totV = 0, totG = 0;
