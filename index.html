@@ -2605,6 +2605,14 @@ const DBX_KEY = 'rbr1c0kc48g6ouq';
 const DBX_REDIRECT = 'https://todoletras.github.io/taller/';
 let dbxTokens = null, dbxRev = null, dbxEstado = 'off', dbxUltima = null;
 let ultimoCambioLocal = null, dbxTimerSubida = null, dbxSubiendo = false;
+let dbxTamRemoto = null;
+function tamanioDatos(d){
+  return (d.tareas||[]).length + (d.clientes||[]).length + (d.proveedores||[]).length +
+         (d.pedidos||[]).length + (d.movimientos||[]).length;
+}
+function tamanioLocal(){
+  return tamanioDatos({tareas, clientes, proveedores, pedidos, movimientos});
+}
 
 function b64url(buf){
   return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -2678,6 +2686,12 @@ async function dbxProcesarRetorno(){
 }
 async function dbxSubir(){
   if(dbxSubiendo || !dbxTokens) return false;
+  // PROTECCIÓN: si este dispositivo tiene muchos menos datos que la nube, no la pisa
+  if(dbxTamRemoto !== null && dbxTamRemoto >= 10 && tamanioLocal() < dbxTamRemoto * 0.5){
+    dbxEstado = 'error'; pintarNube();
+    toast('⚠️ Protección: este dispositivo tiene muchos menos datos que la nube. Tocá ☁️ → Sincronizar ahora para bajarlos.');
+    return false;
+  }
   dbxSubiendo = true;
   try{
     const t = await dbxToken();
@@ -2691,6 +2705,8 @@ async function dbxSubir(){
       const m = await r.json();
       dbxRev = m.rev;
       await window.storage.set('dbx-rev', m.rev);
+      dbxTamRemoto = tamanioLocal();
+      await window.storage.set('dbx-tam', String(dbxTamRemoto)).catch(()=>{});
       dbxUltima = Date.now();
       dbxEstado='ok'; pintarNube();
       dbxSubiendo=false;
@@ -2743,7 +2759,10 @@ async function dbxSincronizar(mostrar){
     const local = Date.parse(ultimoCambioLocal||0) || 0;
     dbxRev = meta.rev;
     await window.storage.set('dbx-rev', meta.rev);
-    if(remoto >= local){
+    dbxTamRemoto = tamanioDatos(d);
+    await window.storage.set('dbx-tam', String(dbxTamRemoto)).catch(()=>{});
+    const localEsChico = dbxTamRemoto >= 10 && tamanioLocal() < dbxTamRemoto * 0.5;
+    if(remoto >= local || localEsChico){
       aplicarDatosRemotos(d);
       ultimoCambioLocal = d.fecha;
       guardarDatos();
@@ -2871,6 +2890,8 @@ modalNube.addEventListener('click', e=>{ if(e.target===modalNube) modalNube.clas
     if(t && t.value) dbxTokens = JSON.parse(t.value);
     const rv = await window.storage.get('dbx-rev').catch(()=>null);
     if(rv && rv.value) dbxRev = rv.value;
+    const tm = await window.storage.get('dbx-tam').catch(()=>null);
+    if(tm && tm.value) dbxTamRemoto = parseInt(tm.value)||null;
   }catch(e){}
   pintarNube();
   await pedirIdentidad();
