@@ -323,7 +323,8 @@
     <div class="cats-pick" id="pedFact"></div>
     <div class="acciones">
       <button id="pedBorrar" class="btn-peligro">🗑</button>
-      <button id="pedPresu" class="btn-secundario">📋 Presupuesto</button>
+      <button id="pedPDF" style="background:var(--panel2);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:13px 10px;font-weight:700;font-size:.85rem">🖼 PDF</button>
+    <button id="pedPresu" class="btn-secundario">📋 Presupuesto</button>
       <button id="pedCerrar" class="btn-primario">Listo</button>
     </div>
   </div>
@@ -1947,12 +1948,21 @@ function renderCuentaContacto(id, esProveedor){
   for(const m of suyos.slice(0, 8)){
     const f = document.createElement('div');
     f.className = 'mov-fila';
-    f.style.borderLeft = '4px solid ' + (m.tipo==='ingreso' ? '#4cd27d' : '#ff7a7a');
+    f.style.borderLeft = '4px solid ' + (m.esAnulacion ? '#ff4d4d' : (m.tipo==='ingreso' ? '#4cd27d' : '#ff7a7a'));
+    if(m.anulado){ f.style.opacity = '.5'; }
+    if(m.esAnulacion){ f.style.background = 'rgba(255,77,77,.06)'; }
     f.innerHTML =
       '<div class="mv-info"><div class="mv-concepto"></div><div class="mv-quien"></div></div>' +
       '<span class="mv-monto" style="color:' + (m.tipo==='ingreso'?'#4cd27d':'#ff7a7a') + '">' +
       (m.tipo==='ingreso'?'+':'−') + ' ' + plata(m.monto) + '</span>';
     f.querySelector('.mv-concepto').textContent = m.concepto || (m.tipo==='ingreso'?'Cobro':'Pago');
+    if(m.anulado){
+      f.querySelector('.mv-concepto').style.textDecoration = 'line-through';
+      f.querySelector('.mv-concepto').textContent += '  · ANULADO por ' + (m.anuladoPor||'?') + ' el ' + fechaLinda(m.anuladoFecha||'');
+    }
+    if(m.esAnulacion && f.querySelector('.mv-monto')){
+      f.querySelector('.mv-monto').style.color = '#ff4d4d';
+    }
     f.querySelector('.mv-quien').textContent = fechaLinda(m.fecha) + (m.persona ? ' · pagó ' + m.persona : '');
     cont.appendChild(f);
   }
@@ -2128,6 +2138,7 @@ async function copiarItem(it){
   document.getElementById('modalResumen').classList.add('abierto');
 }
 function subtotalItem(i){
+  if(i.ventaManual > 0) return i.ventaManual;
   if(i.uv){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);   // demasía en ambos lados
     const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);  // demasía arriba y abajo
@@ -2158,7 +2169,7 @@ function gananciaPedido(p){
     if(c===null){ sinCosto++; continue; }
     ganancia += subtotalItem(i) - c;
   }
-  const gastos = movimientos.filter(m=> m.tipo==='egreso' && m.pedido===p.id && !m.auto)
+  const gastos = movimientos.filter(m=> m.tipo==='egreso' && m.pedido===p.id && !m.auto && !m.anulado && !m.esAnulacion)
     .reduce((s,m)=> s+(m.monto||0), 0);
   ganancia -= gastos;
   return {ganancia, sinCosto, gastos};
@@ -2394,7 +2405,9 @@ function renderPedidoItems(p){
           '<input class="demA" type="number" inputmode="numeric" min="0" title="demasía ancho"><span>cm ancho ·</span>' +
           '<input class="demH" type="number" inputmode="numeric" min="0" title="demasía alto"><span>cm alto</span>' +
         '</div>' +
-        '<div class="pi-medidas"><span class="pi-impresion"></span><span class="pi-sub"></span></div>';
+        '<div class="pi-medidas"><span class="pi-impresion"></span>' +
+          '<input class="ventaMan" type="number" inputmode="numeric" placeholder="venta pactada $" title="Escribí el precio total que pactaste para este ítem; la fórmula queda de lado. Vaciá el campo para volver al cálculo." style="width:130px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--fondo);border:1px dashed #4cd27d;border-radius:8px;color:#4cd27d">' +
+          '<span class="pi-sub"></span></div>';
       d.querySelector('.pi-nombre').textContent = it.nombre + ' (' + plata(it.precio) + '/m²)';
       const inB = d.querySelector('.base'), inA = d.querySelector('.altura'), inC = d.querySelector('.cant');
       const inDA = d.querySelector('.demA'), inDH = d.querySelector('.demH');
@@ -2402,6 +2415,18 @@ function renderPedidoItems(p){
       const imp = d.querySelector('.pi-impresion');
       inB.value = it.base; inA.value = it.altura; inC.value = it.cant;
       inDA.value = it.demAncho||0; inDH.value = it.demAlto||0;
+      const inVM = d.querySelector('.ventaMan');
+      if(inVM){
+        inVM.value = it.ventaManual > 0 ? it.ventaManual : '';
+        inVM.addEventListener('change', ()=>{
+          const v = parseFloat(inVM.value)||0;
+          it.ventaManual = v > 0 ? v : null;
+          sub.textContent = '= ' + plata(subtotalItem(it));
+          sub.style.color = it.ventaManual ? '#4cd27d' : '';
+          actualizarTotal(p); sincronizarPedido(); renderPedidos();
+          if(it.ventaManual) toast('Venta pactada: ' + plata(it.ventaManual) + ' (la fórmula queda de lado)');
+        });
+      }
       const refrescar = ()=>{
         it.base = parseFloat(inB.value)||0;
         it.altura = parseFloat(inA.value)||0;
@@ -2597,6 +2622,7 @@ function renderPedidoEstados(p){
     b.textContent = nom;
     if(p.cobro===val){ b.style.background=color+'26'; b.style.borderColor=color; b.style.color=color; }
     b.onclick = ()=>{ p.cobro = val;
+      registrar('cambió el cobro del pedido de ' + nombreClienteId(p.cliente) + ' a ' + nom);
       if((val==='cobrado' || val==='senado') && p.estadoVenta==='presupuesto'){ p.estadoVenta = 'confirmado'; }
       registrarCobroAuto(p); registrar('marcó "' + nom.replace(/^[^ ]+ /,'') + '" el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ')'); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
     cobro.appendChild(b);
@@ -2977,7 +3003,7 @@ function nombreQuien(id){
   return '';
 }
 function senasDe(p){
-  return movimientos.filter(m=> m.sena && m.pedido===p.id);
+  return movimientos.filter(m=> m.sena && m.pedido===p.id && !m.anulado);
 }
 function totalSenas(p){
   return senasDe(p).reduce((s,m)=> s+(m.monto||0), 0);
@@ -3181,13 +3207,22 @@ function renderCaja(){
     }
     const f = document.createElement('div');
     f.className = 'mov-fila';
-    f.style.borderLeft = '4px solid ' + (m.tipo==='ingreso' ? '#4cd27d' : '#ff7a7a');
+    f.style.borderLeft = '4px solid ' + (m.esAnulacion ? '#ff4d4d' : (m.tipo==='ingreso' ? '#4cd27d' : '#ff7a7a'));
+    if(m.anulado){ f.style.opacity = '.5'; }
+    if(m.esAnulacion){ f.style.background = 'rgba(255,77,77,.06)'; }
     f.innerHTML =
       '<div class="mv-info"><div class="mv-concepto"></div><div class="mv-quien"></div></div>' +
       '<span class="mv-monto" style="color:' + (m.tipo==='ingreso'?'#4cd27d':'#ff7a7a') + '">' +
       (m.tipo==='ingreso'?'+':'−') + ' ' + plata(m.monto) + '</span>' +
       '<button class="mini borrarMov">✕</button>';
     f.querySelector('.mv-concepto').textContent = m.concepto || (m.tipo==='ingreso'?'Cobro':'Pago');
+    if(m.anulado){
+      f.querySelector('.mv-concepto').style.textDecoration = 'line-through';
+      f.querySelector('.mv-concepto').textContent += '  · ANULADO por ' + (m.anuladoPor||'?') + ' el ' + fechaLinda(m.anuladoFecha||'');
+    }
+    if(m.esAnulacion && f.querySelector('.mv-monto')){
+      f.querySelector('.mv-monto').style.color = '#ff4d4d';
+    }
     const q = nombreQuien(m.quien);
     let quienTxt = q + (m.auto ? (q?' · ':'') + 'automático del pedido' : '');
     if(m.pedido && !m.auto){
@@ -3217,13 +3252,38 @@ function renderCaja(){
     if(m.pedido){
       f.querySelector('.mv-info').onclick = ()=>{ const p = pedidos.find(x=>x.id===m.pedido); if(p) abrirPedido(p.id); };
     }
-    f.querySelector('.borrarMov').onclick = (e)=>{
-      dosToques(e.target, '¿Borrar?', ()=>{
-        registrar('borró un movimiento de '+plata(m.monto)+' ('+(m.concepto||'')+')');
-        movimientos = movimientos.filter(x=>x.id!==m.id);
-        renderCaja(); guardarDatos();
-      });
-    };
+    const btnAnular = f.querySelector('.borrarMov');
+    if(m.anulado || m.esAnulacion || m.auto){
+      // los anulados, las anulaciones y los automáticos no se tocan a mano
+      if(btnAnular) btnAnular.remove();
+    }else if(btnAnular){
+      btnAnular.textContent = '🚫';
+      btnAnular.title = 'Anular con contra-asiento (no se borra, queda registrado)';
+      btnAnular.onclick = (e)=>{
+        dosToques(e.target, '¿Anular?', ()=>{
+          const quien = usuarioActual || '?';
+          m.anulado = true;
+          m.anuladoPor = quien;
+          m.anuladoFecha = hoyISO();
+          movimientos.push({
+            id: uid(),
+            tipo: m.tipo==='ingreso' ? 'egreso' : 'ingreso',
+            monto: m.monto,
+            concepto: '🚫 Anulación: ' + (m.concepto||''),
+            persona: m.persona || null,   // neutraliza el balance de la misma persona
+            quien: m.quien || null,       // neutraliza la cuenta del mismo contacto
+            pedido: m.pedido || null,
+            esAnulacion: true,
+            anulaA: m.id,
+            fecha: hoyISO(),
+            creado: Date.now()
+          });
+          registrar('ANULÓ un movimiento de ' + plata(m.monto) + ' (' + (m.concepto||'') + ') con contra-asiento');
+          renderCaja(); guardarDatos();
+          toast('Movimiento anulado con contra-asiento. Queda todo registrado.');
+        });
+      };
+    }
     cont.appendChild(f);
   }
 }
@@ -3617,7 +3677,7 @@ function renderGastos(){
   cont.innerHTML = '';
   const mesISO = hoyISO().slice(0,7);
   for(const g of gastosFijos){
-    const pagado = movimientos.find(m=> m.gastoFijo===g.id && (m.fecha||'').startsWith(mesISO));
+    const pagado = movimientos.find(m=> m.gastoFijo===g.id && (m.fecha||'').startsWith(mesISO) && !m.anulado);
     const f = document.createElement('div');
     f.className = 'prod-fila';
     f.innerHTML =
@@ -4234,7 +4294,21 @@ function actualizarOffDig(){
       'Costo total: <b>' + plata(calc.costo) + '</b>' + (calc.corte.costo ? ' (incluye corte ' + plata(calc.corte.costo) + ')' : '') + '<br>' +
       'Margen: <input id="odMargenIn" type="number" inputmode="numeric" value="' + calc.margen + '" style="width:58px;margin:0;padding:5px;font-size:14px;text-align:center;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--ambar);font-weight:800">% (todo el pedido)<br>' +
       '<span style="font-size:1rem;color:#4cd27d;font-weight:800">VENTA: ' + plata(calc.venta) + '</span>' +
-      (calc.corte.venta ? ' <span style="color:var(--texto2);font-size:.72rem">(corte fijo ' + plata(calc.corte.venta) + ' incluido)</span>' : '');
+      (calc.corte.venta ? ' <span style="color:var(--texto2);font-size:.72rem">(corte fijo ' + plata(calc.corte.venta) + ' incluido)</span>' : '') +
+      '<br><input id="odVentaIn" type="number" inputmode="numeric" placeholder="o escribí la venta que pactaste $" style="width:210px;margin-top:6px;padding:8px;font-size:14px;text-align:right;background:var(--fondo);border:1px dashed #4cd27d;border-radius:8px;color:#4cd27d">';
+    const vIn = document.getElementById('odVentaIn');
+    if(vIn) vIn.addEventListener('change', ()=>{
+      const v = parseFloat(vIn.value)||0;
+      const base = calc.hojas * calc.costoHoja;
+      if(v > 0 && base > 0){
+        const pct = Math.round(((v - calc.corte.venta) / base - 1) * 1000) / 10;
+        odPedido.odMargen = pct;
+        for(const it of odPedido.items){ if(it.odMeta) recalcularItemOD(it); }
+        guardarDatos(); renderPedidos();
+        actualizarOffDig();
+        toast('Margen ajustado a ' + pct + '% para vender a ' + plata(v));
+      }
+    });
     const mIn = document.getElementById('odMargenIn');
     mIn.addEventListener('change', ()=>{
       odPedido.odMargen = parseFloat(mIn.value)||od.margen;
@@ -4284,6 +4358,166 @@ document.getElementById('btnOffDig').onclick = ()=>{
   if(!p) return;
   modalPedido.classList.remove('abierto');
   abrirOffDig(p);
+};
+
+/* ---------- presupuesto PDF con membrete ---------- */
+let pdfLibsListas = false;
+function cargarScript(src){
+  return new Promise((res, rej)=>{
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = res;
+    s.onerror = ()=> rej(new Error('No se pudo cargar ' + src));
+    document.head.appendChild(s);
+  });
+}
+async function prepararPDFLibs(){
+  if(pdfLibsListas) return;
+  await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  await cargarScript('pdf-assets.js');
+  pdfLibsListas = true;
+}
+function cargarImagenDims(dataUrl){
+  return new Promise((res)=>{
+    const im = new Image();
+    im.onload = ()=> res({w: im.naturalWidth, h: im.naturalHeight});
+    im.onerror = ()=> res(null);
+    im.src = dataUrl;
+  });
+}
+async function generarPDFPedido(p){
+  const btn = document.getElementById('pedPDF');
+  const txtOrig = btn.textContent;
+  btn.textContent = '⏳';
+  try{
+    await prepararPDFLibs();
+    const A = window.PDF_ASSETS;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'a4'});
+    doc.addFileToVFS('Fira.ttf', A.firaReg);
+    doc.addFont('Fira.ttf', 'Fira', 'normal');
+    doc.addFileToVFS('FiraB.ttf', A.firaBold);
+    doc.addFont('FiraB.ttf', 'Fira', 'bold');
+
+    const W = doc.internal.pageSize.getWidth();   // 595.28
+    const H = doc.internal.pageSize.getHeight();  // 841.89
+    const margen = 46;
+    const cabAltoPt = W * A.cabAlto / A.cabAncho;
+    const pieAltoPt = W * A.pieAlto / A.pieAncho;
+    const topeInferior = H - pieAltoPt - 24;
+
+    function ponerMembrete(){
+      doc.addImage(A.cabecera, 'JPEG', 0, 0, W, cabAltoPt);
+      doc.addImage(A.pie, 'JPEG', 0, H - pieAltoPt, W, pieAltoPt);
+    }
+    ponerMembrete();
+    let y = cabAltoPt + 34;
+    function saltoSiHaceFalta(alturaNecesaria){
+      if(y + alturaNecesaria > topeInferior){
+        doc.addPage();
+        ponerMembrete();
+        y = cabAltoPt + 34;
+      }
+    }
+
+    // título y fecha
+    doc.setFont('Fira','bold'); doc.setFontSize(19); doc.setTextColor(30,30,30);
+    doc.text('PRESUPUESTO', margen, y);
+    doc.setFont('Fira','normal'); doc.setFontSize(10.5); doc.setTextColor(90,90,90);
+    const hoy = new Date();
+    doc.text('Córdoba, ' + hoy.getDate() + '/' + (hoy.getMonth()+1) + '/' + hoy.getFullYear(), W - margen, y, {align:'right'});
+    y += 24;
+
+    // cliente
+    const cli = nombreClienteId(p.cliente);
+    if(cli && cli !== '(sin cliente)'){
+      doc.setFont('Fira','bold'); doc.setFontSize(12.5); doc.setTextColor(30,30,30);
+      doc.text('Cliente: ' + cli, margen, y);
+      const ancho = doc.getTextWidth('Cliente: ' + cli);
+      doc.setDrawColor(30,30,30); doc.setLineWidth(0.8);
+      doc.line(margen, y + 3, margen + ancho, y + 3);
+      y += 26;
+    }
+
+    // ítems
+    doc.setFontSize(11);
+    const items = p.items.filter(it=> it.conf !== false);
+    for(const it of items){
+      const texto = it.nombre + (it.cant > 1 ? ' × ' + it.cant + (it.mo ? ' h' : '') : '') + (it.abierto ? ' *' : '');
+      const lineas = doc.splitTextToSize(texto, W - margen*2 - 110);
+      const alto = lineas.length * 14 + 10;
+      saltoSiHaceFalta(alto);
+      doc.setFont('Fira','normal'); doc.setTextColor(40,40,40);
+      doc.text(lineas, margen, y);
+      doc.setFont('Fira','bold');
+      doc.text(plata(subtotalItem(it)), W - margen, y, {align:'right'});
+      y += alto;
+      doc.setDrawColor(210,210,210); doc.setLineWidth(0.5);
+      doc.line(margen, y - 7, W - margen, y - 7);
+    }
+
+    // total
+    saltoSiHaceFalta(40);
+    y += 6;
+    doc.setFont('Fira','bold'); doc.setFontSize(14.5); doc.setTextColor(0,0,0);
+    doc.text('TOTAL: ' + plata(totalPedido(p)), W - margen, y, {align:'right'});
+    y += 20;
+    if(items.some(it=>it.abierto)){
+      doc.setFont('Fira','normal'); doc.setFontSize(9); doc.setTextColor(110,110,110);
+      doc.text('(*) Valor estimado por hora de trabajo: se ajusta según las horas reales.', margen, y);
+      y += 16;
+    }
+
+    // fotos de las tareas del trabajo
+    const tareasDelPedido = tareas.filter(t=> t.pedido === p.id);
+    for(const t of tareasDelPedido){
+      let bls = [];
+      try{
+        const r = await window.storage.get('bloques:' + t.id);
+        if(r && r.value) bls = JSON.parse(r.value);
+      }catch(e){}
+      for(const b of bls){
+        if(b.tipo !== 'imagen') continue;
+        const dims = await cargarImagenDims(b.contenido);
+        if(!dims) continue;
+        const maxW = W - margen*2;
+        const maxH = 330;
+        let iw = maxW, ih = iw * dims.h / dims.w;
+        if(ih > maxH){ ih = maxH; iw = ih * dims.w / dims.h; }
+        saltoSiHaceFalta(ih + 16);
+        const fmt = b.contenido.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        try{ doc.addImage(b.contenido, fmt, margen, y, iw, ih); y += ih + 14; }catch(e){}
+      }
+    }
+
+    // salida: compartir en el teléfono, descargar en la compu
+    const nombreArchivo = 'Presupuesto ' + (cli && cli!=='(sin cliente)' ? cli : 'Todo Letras') + '.pdf';
+    const blob = doc.output('blob');
+    const file = new File([blob], nombreArchivo, {type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({files:[file], title: nombreArchivo});
+        registrar('generó el PDF del presupuesto de ' + cli);
+        btn.textContent = txtOrig;
+        return;
+      }catch(e){ /* canceló el share: cae a descarga */ }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nombreArchivo;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=> URL.revokeObjectURL(url), 30000);
+    registrar('generó el PDF del presupuesto de ' + cli);
+  }catch(err){
+    toast('No se pudo generar el PDF: ' + (err.message||'error') + '. ¿Hay internet? (la primera vez lo necesita)');
+  }
+  btn.textContent = txtOrig;
+}
+document.getElementById('pedPDF').onclick = ()=>{
+  const p = pedidos.find(x=>x.id===pedidoAbierto);
+  if(!p) return;
+  if(!p.items.filter(i=>i.conf!==false).length){ toast('El pedido no tiene ítems para presupuestar'); return; }
+  generarPDFPedido(p);
 };
 
 /* ---------- mano de obra ---------- */
