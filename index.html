@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v15</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v16</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -921,6 +921,58 @@ async function cargar(){
       lotes = d.lotes || [];
       recetas = d.recetas || [];
       if(!lotes.length && !recetas.length) SEMILLA_RECETAS();
+      // variantes derivadas del fly banner recto (se crean una sola vez)
+      try{
+        const base = recetas.find(r=> /fly ?banner recto \(68/i.test(r.nombre));
+        const loteDe = (frag)=> lotes.find(l=> l.nombre.toLowerCase().includes(frag));
+        if(base && !recetas.some(r=> r.nombre.toLowerCase().includes('gota'))){
+          const g = JSON.parse(JSON.stringify(base));
+          g.id = uid(); g.nombre = 'Flybanner Gota';
+          const cord = loteDe('cordura'), flis = loteDe('fliselina');
+          for(const ln of g.lineas){
+            if(ln.tipo==='insumo' && cord && ln.lote===cord.id) ln.cant = 1.2;
+            if(ln.tipo==='insumo' && flis && ln.lote===flis.id) ln.cant = 0.5;
+            if(ln.tipo==='servicio' && /costura/i.test(ln.nombre)) ln.costo = 3000;
+          }
+          recetas.push(g);
+        }
+        if(base && !recetas.some(r=> r.nombre.includes('90'))){
+          const n = JSON.parse(JSON.stringify(base));
+          n.id = uid(); n.nombre = 'Flybanner Recto 90°';
+          const fibra = loteDe('fibra');
+          const canoL = lotes.find(l=> l.nombre.includes('15,85'));
+          n.lineas = n.lineas.filter(ln=> !(ln.tipo==='insumo' && fibra && ln.lote===fibra.id));
+          if(canoL) n.lineas.push({tipo:'insumo', lote:canoL.id, cant:0.65, grupo:'estructura'});
+          recetas.push(n);
+        }
+      }catch(e){}
+      // variantes del fly banner: se crean una sola vez, clonadas del recto
+      (function(){
+        const base = recetas.find(r=> normalizarTexto(r.nombre).includes('fly banner recto') && !normalizarTexto(r.nombre).includes('90'));
+        if(!base) return;
+        const buscarLote = (frag)=> (lotes.find(l=> normalizarTexto(l.nombre).includes(frag))||{}).id;
+        const clonar = ()=> JSON.parse(JSON.stringify(base.lineas));
+
+        if(!recetas.find(r=> normalizarTexto(r.nombre).includes('gota'))){
+          const lineas = clonar();
+          const idCordura = buscarLote('cordura'), idFli = buscarLote('fliselina');
+          for(const ln of lineas){
+            if(ln.tipo==='insumo' && ln.lote===idCordura) ln.cant = 1.2;
+            if(ln.tipo==='insumo' && ln.lote===idFli) ln.cant = 0.5;
+            if(ln.tipo==='servicio' && normalizarTexto(ln.nombre).includes('costura')) ln.costo = 3000;
+          }
+          recetas.push({id:uid(), nombre:'Fly Banner Gota', lineas, ventas: {...base.ventas}});
+        }
+
+        if(!recetas.find(r=> normalizarTexto(r.nombre).includes('90'))){
+          const idFibra = buscarLote('fibra'), idCano = buscarLote('15,85');
+          let lineas = clonar().filter(ln=> !(ln.tipo==='insumo' && ln.lote===idFibra));
+          if(idCano) lineas.push({tipo:'insumo', lote:idCano, cant:0.65, grupo:'estructura'});
+          lineas.push({tipo:'servicio', nombre:'Conector', costo:500, grupo:'estructura'});
+          lineas.push({tipo:'servicio', nombre:'Herrería (conector)', costo:1000, grupo:'estructura'});
+          recetas.push({id:uid(), nombre:'Fly Banner Recto 90 grados', lineas, ventas: {...base.ventas}});
+        }
+      })();
       cajaInicial = d.cajaInicial || 0;
       ajusteSocios = d.ajusteSocios || 0;
       od = d.od || JSON.parse(JSON.stringify(OD_SEMILLA));
