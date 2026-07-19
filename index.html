@@ -1889,10 +1889,10 @@ function renderCuentaContacto(id, esProveedor){
   const arrastre = contacto ? (contacto.inicial||0) : 0;
   if(!suyos.length && !arrastre && !contacto) return;
   const anioISO = String(new Date().getFullYear());
-  const pagado = arrastre*(esProveedor?1:0) + suyos.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0);
-  const pagadoAnio = suyos.filter(m=>m.tipo==='egreso' && (m.fecha||'').startsWith(anioISO)).reduce((s,m)=>s+(m.monto||0),0);
-  const cobrado = arrastre*(esProveedor?0:1) + suyos.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+(m.monto||0),0);
-  const cobradoAnio = suyos.filter(m=>m.tipo==='ingreso' && (m.fecha||'').startsWith(anioISO)).reduce((s,m)=>s+(m.monto||0),0);
+  const pagado = arrastre*(esProveedor?1:0) + suyos.filter(m=>m.tipo==='egreso' && movReal(m)).reduce((s,m)=>s+(m.monto||0),0);
+  const pagadoAnio = suyos.filter(m=>m.tipo==='egreso' && movReal(m) && (m.fecha||'').startsWith(anioISO)).reduce((s,m)=>s+(m.monto||0),0);
+  const cobrado = arrastre*(esProveedor?0:1) + suyos.filter(m=>m.tipo==='ingreso' && movReal(m)).reduce((s,m)=>s+(m.monto||0),0);
+  const cobradoAnio = suyos.filter(m=>m.tipo==='ingreso' && movReal(m) && (m.fecha||'').startsWith(anioISO)).reduce((s,m)=>s+(m.monto||0),0);
 
   if(!suyos.length && !arrastre){
     // sin movimientos ni arrastre: ofrecer cargarlo con un botón discreto
@@ -1958,7 +1958,7 @@ function renderCuentaContacto(id, esProveedor){
     f.querySelector('.mv-concepto').textContent = m.concepto || (m.tipo==='ingreso'?'Cobro':'Pago');
     if(m.anulado){
       f.querySelector('.mv-concepto').style.textDecoration = 'line-through';
-      f.querySelector('.mv-concepto').textContent += '  · ANULADO por ' + (m.anuladoPor||'?') + ' el ' + fechaLinda(m.anuladoFecha||'');
+      f.querySelector('.mv-concepto').textContent += '  · ANULADO por ' + (m.anuladoPor||'?') + ' (' + fechaLinda(m.anuladoFecha||'') + ')';
     }
     if(m.esAnulacion && f.querySelector('.mv-monto')){
       f.querySelector('.mv-monto').style.color = '#ff4d4d';
@@ -1994,7 +1994,7 @@ function renderCuentaOD(id, cont){
   const contacto = proveedores.find(x=>x.id===id);
   const deudaIni = contacto ? (contacto.deudaInicial||0) : 0;
   const deudaTrabajos = trabajos.reduce((s,t)=>s+(t.it.costoU||0),0);
-  const pagos = movimientos.filter(m=>m.quien===id && m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0)
+  const pagos = movimientos.filter(m=>m.quien===id && m.tipo==='egreso' && movReal(m)).reduce((s,m)=>s+(m.monto||0),0)
     + (contacto ? (contacto.inicial||0) : 0);
   const saldo = deudaIni + deudaTrabajos - pagos;
 
@@ -3002,6 +3002,7 @@ function nombreQuien(id){
   if(pr) return '🏭 ' + pr.nombre;
   return '';
 }
+function movReal(m){ return !m.anulado && !m.esAnulacion; }
 function senasDe(p){
   return movimientos.filter(m=> m.sena && m.pedido===p.id && !m.anulado);
 }
@@ -3038,12 +3039,12 @@ function renderCaja(){
   const hoy = new Date();
   const mesISO = hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
   const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const delMes = movimientos.filter(m=> (m.fecha||'').startsWith(mesISO));
+  const delMes = movimientos.filter(m=> (m.fecha||'').startsWith(mesISO) && movReal(m));
   const ing = delMes.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+(m.monto||0),0);
   const egr = delMes.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0);
   const res = document.getElementById('cajaResumen');
-  const totIng = movimientos.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+(m.monto||0),0);
-  const totEgr = movimientos.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0);
+  const totIng = movimientos.filter(m=>m.tipo==='ingreso' && movReal(m)).reduce((s,m)=>s+(m.monto||0),0);
+  const totEgr = movimientos.filter(m=>m.tipo==='egreso' && movReal(m)).reduce((s,m)=>s+(m.monto||0),0);
   const saldoActual = cajaInicial + totIng - totEgr;
   res.innerHTML =
     '<div class="caja-card" style="margin-bottom:8px">' +
@@ -3056,7 +3057,7 @@ function renderCaja(){
     (function(){
       const [nomA, colorA] = PERSONAS[0], [nomB, colorB] = PERSONAS[1];
       const neto = (nombre)=>{
-        const s = movimientos.filter(m=>m.persona===nombre);
+        const s = movimientos.filter(m=>m.persona===nombre && movReal(m));
         const i = s.filter(m=>m.tipo==='ingreso').reduce((x,m)=>x+(m.monto||0),0);
         const e = s.filter(m=>m.tipo==='egreso').reduce((x,m)=>x+(m.monto||0),0);
         return {i, e, n: i-e};
@@ -3218,7 +3219,7 @@ function renderCaja(){
     f.querySelector('.mv-concepto').textContent = m.concepto || (m.tipo==='ingreso'?'Cobro':'Pago');
     if(m.anulado){
       f.querySelector('.mv-concepto').style.textDecoration = 'line-through';
-      f.querySelector('.mv-concepto').textContent += '  · ANULADO por ' + (m.anuladoPor||'?') + ' el ' + fechaLinda(m.anuladoFecha||'');
+      f.querySelector('.mv-concepto').textContent += '  · ANULADO por ' + (m.anuladoPor||'?') + ' (' + fechaLinda(m.anuladoFecha||'') + ')';
     }
     if(m.esAnulacion && f.querySelector('.mv-monto')){
       f.querySelector('.mv-monto').style.color = '#ff4d4d';
@@ -4490,23 +4491,43 @@ async function generarPDFPedido(p){
       }
     }
 
-    // salida: compartir en el teléfono, descargar en la compu
+    // salida: el usuario elige qué hacer con el PDF
     const nombreArchivo = 'Presupuesto ' + (cli && cli!=='(sin cliente)' ? cli : 'Todo Letras') + '.pdf';
     const blob = doc.output('blob');
-    const file = new File([blob], nombreArchivo, {type:'application/pdf'});
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      try{
-        await navigator.share({files:[file], title: nombreArchivo});
-        registrar('generó el PDF del presupuesto de ' + cli);
-        btn.textContent = txtOrig;
-        return;
-      }catch(e){ /* canceló el share: cae a descarga */ }
-    }
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = nombreArchivo;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=> URL.revokeObjectURL(url), 30000);
+    const file = new File([blob], nombreArchivo, {type:'application/pdf'});
+    const puedeCompartir = navigator.canShare && navigator.canShare({files:[file]});
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px';
+    const hoja = document.createElement('div');
+    hoja.style.cssText = 'background:var(--panel);border:1px solid var(--borde);border-radius:16px;padding:18px;max-width:340px;width:100%';
+    hoja.innerHTML = '<div style="font-weight:800;font-size:.9rem;margin-bottom:4px">🖼 ' + nombreArchivo + '</div>' +
+      '<div style="font-size:.72rem;color:var(--texto2);margin-bottom:14px">¿Qué querés hacer?</div>';
+    const mkBtn = (txt, fn, destacado)=>{
+      const b = document.createElement('button');
+      b.textContent = txt;
+      b.style.cssText = 'width:100%;margin-bottom:8px;border-radius:12px;padding:13px;font-weight:700;font-size:.85rem;' +
+        (destacado ? 'background:var(--ambar);color:#1a1200;border:none' : 'background:var(--panel2);border:1px solid var(--borde);color:var(--texto)');
+      b.onclick = fn;
+      hoja.appendChild(b);
+      return b;
+    };
+    mkBtn('👁 Abrir para verlo', ()=>{ window.open(url, '_blank'); }, true);
+    mkBtn('⬇ Descargar', ()=>{
+      const a = document.createElement('a');
+      a.href = url; a.download = nombreArchivo;
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+    if(puedeCompartir){
+      mkBtn('📤 Compartir (WhatsApp, mail…)', async ()=>{
+        try{ await navigator.share({files:[file], title: nombreArchivo}); }catch(e){}
+      });
+    }
+    mkBtn('Cerrar', ()=>{ overlay.remove(); setTimeout(()=> URL.revokeObjectURL(url), 5000); });
+    overlay.appendChild(hoja);
+    overlay.addEventListener('click', e=>{ if(e.target===overlay){ overlay.remove(); setTimeout(()=> URL.revokeObjectURL(url), 5000); } });
+    document.body.appendChild(overlay);
     registrar('generó el PDF del presupuesto de ' + cli);
   }catch(err){
     toast('No se pudo generar el PDF: ' + (err.message||'error') + '. ¿Hay internet? (la primera vez lo necesita)');
