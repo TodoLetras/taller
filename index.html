@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v16</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v17</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -257,6 +257,7 @@
 
 <div class="filtros" id="filtros"></div>
 <div id="buscadorTareasWrap" style="padding:0 16px 6px">
+  <div id="noLeidos"></div>
   <input id="buscarTareas" class="buscador-cli" placeholder="🔍 Buscar tarea o cliente…">
 </div>
 <div id="lista"></div>
@@ -829,6 +830,51 @@ let diaSel = null;
 // ficha de detalle
 let detId = null;        // tarea abierta
 let bloques = [];        // bloques de la tarea abierta
+let leidosNotas = {};    // por dispositivo: hasta cuándo leí las notas de cada tarea
+(async ()=>{
+  try{
+    const r = await window.storage.get('leidos-notas');
+    if(r && r.value) leidosNotas = JSON.parse(r.value);
+  }catch(e){}
+})();
+function marcarNotasLeidas(id){
+  leidosNotas[id] = Date.now();
+  window.storage.set('leidos-notas', JSON.stringify(leidosNotas)).catch(()=>{});
+  renderNoLeidos();
+}
+function tareasConNoLeidos(){
+  return tareas.filter(t=> t.ultNota && t.ultNota.quien && usuarioActual &&
+    t.ultNota.quien !== usuarioActual && t.ultNota.t > (leidosNotas[t.id]||0));
+}
+function renderNoLeidos(){
+  const cont = document.getElementById('noLeidos');
+  if(!cont) return;
+  cont.innerHTML = '';
+  const pend = tareasConNoLeidos();
+  if(!pend.length) return;
+  const btn = document.createElement('button');
+  btn.style.cssText = 'width:100%;margin-bottom:10px;border-radius:12px;padding:12px;font-weight:800;font-size:.82rem;background:rgba(255,77,77,.14);border:1px solid #ff4d4d;color:#ff6b6b';
+  btn.textContent = '💬 ' + pend.length + ' nota(s) sin leer para ' + usuarioActual;
+  btn.onclick = ()=>{
+    let lista = cont.querySelector('.lista-noleidos');
+    if(lista){ lista.remove(); return; }
+    lista = document.createElement('div');
+    lista.className = 'lista-noleidos';
+    lista.style.marginBottom = '10px';
+    for(const t of pend){
+      const f = document.createElement('div');
+      f.className = 'mov-fila';
+      f.style.cssText += ';cursor:pointer;border-left:4px solid ' + colorPersona(t.ultNota.quien);
+      f.innerHTML = '<div class="mv-info"><div class="mv-concepto"></div><div class="mv-quien"></div></div><span style="color:#ff6b6b">●</span>';
+      f.querySelector('.mv-concepto').textContent = t.texto;
+      f.querySelector('.mv-quien').textContent = t.ultNota.quien + ' escribió · ' + fechaLinda(new Date(t.ultNota.t).toISOString().slice(0,10)) + ' ' + horaLinda(t.ultNota.t);
+      f.onclick = ()=> abrirDetalle(t.id);
+      lista.appendChild(f);
+    }
+    cont.appendChild(lista);
+  };
+  cont.appendChild(btn);
+}
 let grabador = null;     // MediaRecorder activo
 
 const CATS_SEMILLA = [
@@ -1145,6 +1191,7 @@ function tarjetaTarea(t, contenedor){
 }
 
 function render(){
+  renderNoLeidos();
   const cont = document.getElementById('lista');
   cont.innerHTML = '';
   let visibles = tareas.filter(t => filtro==='todas' ? true : t.cat===filtro);
@@ -1388,7 +1435,20 @@ async function abrirDetalle(id){
     const r = await window.storage.get('bloques:'+id);
     if(r && r.value) bloques = JSON.parse(r.value);
   }catch(e){ bloques = []; }
+  bloques.forEach((b,i)=>{ if(!b.id) b.id = uid(); if(b.ord===undefined) b.ord = b.t || i*1000; });
   renderBloques();
+  marcarNotasLeidas(id);
+  // fusionar con la copia de la nube (fotos/audios compartidos entre dispositivos)
+  dbxBajarBloques(id).then(remotos=>{
+    if(!remotos || detId !== id) return;
+    const fusion = fusionarBloques(bloques, remotos);
+    if(JSON.stringify(fusion) !== JSON.stringify(bloques)){
+      bloques = fusion;
+      renderBloques();
+      guardarBloques(false);
+    }
+    marcarNotasLeidas(id);
+  });
   document.getElementById('estadoGuardado').textContent = '';
   const ct = document.getElementById('compTexto');
   ct.value=''; ct.style.height='auto';
@@ -1493,9 +1553,17 @@ function renderBloques(){
     cont.innerHTML = '<div class="vacio-chat">Sin notas todavía.<br>Escribí abajo, pegá una imagen, o usá 📎 y 🎤.</div>';
     return;
   }
-  bloques.forEach((b,i)=>{
+  const visibles = bloques.filter(b=> !b.borrado);
+  if(!visibles.length){
+    cont.innerHTML = '<div class="vacio-chat">Sin notas todavía.<br>Escribí abajo, pegá una imagen, o usá 📎 y 🎤.</div>';
+    return;
+  }
+  visibles.forEach((b)=>{
     const d = document.createElement('div');
     d.className = 'burbuja' + (b.tipo!=='texto' ? ' media' : '');
+    if(b.quien && b.quien !== usuarioActual){
+      d.style.borderLeft = '3px solid ' + colorPersona(b.quien);
+    }
     if(b.tipo==='texto'){
       const c = document.createElement('div');
       c.className='contenido';
@@ -1503,28 +1571,101 @@ function renderBloques(){
       c.onclick = ()=> editarBurbuja(d, c, b);
       d.appendChild(c);
     }else if(b.tipo==='imagen'){
-      const img = document.createElement('img'); img.src=b.contenido; d.appendChild(img);
+      const img = document.createElement('img'); img.src=b.contenido;
+      img.style.cursor = 'zoom-in';
+      img.onclick = ()=> abrirVisorFoto(b.contenido);
+      d.appendChild(img);
     }else if(b.tipo==='video'){
       const v = document.createElement('video'); v.src=b.contenido; v.controls=true; v.playsInline=true; d.appendChild(v);
     }else if(b.tipo==='audio'){
       const a = document.createElement('audio'); a.src=b.contenido; a.controls=true; d.appendChild(a);
     }
     const h = document.createElement('div');
-    h.className='hora'; h.textContent = horaLinda(b.t);
+    h.className='hora';
+    if(b.quien){
+      const autor = document.createElement('span');
+      autor.style.cssText = 'color:'+colorPersona(b.quien)+';font-weight:700';
+      autor.textContent = b.quien + ' · ';
+      h.appendChild(autor);
+    }
+    h.appendChild(document.createTextNode(horaLinda(b.t) + (b.mod && b.mod - b.t > 60000 ? ' (editado)' : '')));
     d.appendChild(h);
+    // mover ↑↓ para ordenar (la descripción junto a su foto)
+    const idxVis = visibles.indexOf(b);
+    const mover = document.createElement('div');
+    mover.className = 'mover-bloque';
+    mover.style.cssText = 'position:absolute;left:-26px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;opacity:.35';
+    for(const [flecha, dir] of [['▲',-1],['▼',1]]){
+      const mb = document.createElement('button');
+      mb.textContent = flecha;
+      mb.style.cssText = 'background:none;border:none;color:var(--texto2);font-size:.6rem;padding:2px 4px';
+      const destinoVis = idxVis + dir;
+      if(destinoVis < 0 || destinoVis >= visibles.length){ mb.style.visibility = 'hidden'; }
+      mb.onclick = (e)=>{
+        e.stopPropagation();
+        const otro = visibles[destinoVis];
+        const oa = b.ord, ob = otro.ord;
+        b.ord = ob; otro.ord = oa;
+        b.mod = Date.now(); otro.mod = Date.now();
+        bloques.sort((x,y)=> (x.ord||x.t||0) - (y.ord||y.t||0));
+        renderBloques(); guardarBloques(true);
+      };
+      mover.appendChild(mb);
+    }
+    d.style.position = 'relative';
+    d.appendChild(mover);
     const q = document.createElement('button');
     q.className='quitar'; q.textContent='✕';
     q.onclick = (e)=>{
       e.stopPropagation();
       dosToques(q, '¿Borrar?', ()=>{
-        bloques.splice(i,1);
-        renderBloques(); guardarBloques();
+        b.borrado = true; b.contenido = ''; b.mod = Date.now();
+        renderBloques(); guardarBloques(true);
       });
     };
     d.appendChild(q);
     cont.appendChild(d);
   });
   cont.scrollTop = cont.scrollHeight;
+}
+
+/* ---------- visor de fotos estilo whatsapp ---------- */
+function abrirVisorFoto(src){
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none';
+  const img = document.createElement('img');
+  img.src = src;
+  img.style.cssText = 'max-width:96vw;max-height:92vh;transition:transform .18s;transform-origin:center center;user-select:none;-webkit-user-drag:none';
+  let zoom = 1, px = 0, py = 0;
+  const aplicar = ()=>{ img.style.transform = 'translate('+px+'px,'+py+'px) scale('+zoom+')'; };
+  const toggleZoom = ()=>{ zoom = zoom > 1 ? 1 : 2.5; if(zoom===1){ px=0; py=0; } aplicar(); };
+  img.addEventListener('dblclick', toggleZoom);
+  let ultimoTap = 0;
+  img.addEventListener('touchend', (e)=>{
+    const ahora = Date.now();
+    if(ahora - ultimoTap < 300){ toggleZoom(); e.preventDefault(); }
+    ultimoTap = ahora;
+  });
+  // arrastre cuando está ampliada
+  let arrastrando = false, ax = 0, ay = 0;
+  const bajar = (x,y)=>{ if(zoom>1){ arrastrando = true; ax = x - px; ay = y - py; img.style.transition = 'none'; } };
+  const moverP = (x,y)=>{ if(arrastrando){ px = x - ax; py = y - ay; aplicar(); } };
+  const soltar = ()=>{ arrastrando = false; img.style.transition = 'transform .18s'; };
+  img.addEventListener('mousedown', e=>{ bajar(e.clientX, e.clientY); e.preventDefault(); });
+  window.addEventListener('mousemove', e=> moverP(e.clientX, e.clientY));
+  window.addEventListener('mouseup', soltar);
+  img.addEventListener('touchstart', e=>{ if(e.touches.length===1) bajar(e.touches[0].clientX, e.touches[0].clientY); }, {passive:true});
+  img.addEventListener('touchmove', e=>{ if(e.touches.length===1) moverP(e.touches[0].clientX, e.touches[0].clientY); }, {passive:true});
+  img.addEventListener('touchend', soltar);
+  ov.addEventListener('wheel', e=>{ e.preventDefault(); zoom = Math.min(5, Math.max(1, zoom - Math.sign(e.deltaY)*0.5)); if(zoom===1){ px=0; py=0; } aplicar(); }, {passive:false});
+  const cerrar = document.createElement('button');
+  cerrar.textContent = '✕';
+  cerrar.style.cssText = 'position:fixed;top:14px;right:16px;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:1.2rem;border-radius:50%;width:42px;height:42px;z-index:2';
+  cerrar.onclick = ()=> ov.remove();
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+  ov.appendChild(img);
+  ov.appendChild(cerrar);
+  document.body.appendChild(ov);
 }
 
 /* tocar una burbuja de texto para editarla */
@@ -1539,14 +1680,16 @@ function editarBurbuja(burbuja, contenidoDiv, b){
   ta.addEventListener('input', ()=>{ ta.style.height='auto'; ta.style.height=(ta.scrollHeight+2)+'px'; });
   ta.addEventListener('blur', ()=>{
     b.contenido = ta.value.trim();
-    if(!b.contenido){ bloques.splice(bloques.indexOf(b),1); }
-    renderBloques(); guardarBloques();
+    b.mod = Date.now();
+    if(!b.contenido){ b.borrado = true; }
+    renderBloques(); guardarBloques(true);
   });
 }
 
-let timerBloques=null;
-function guardarBloquesSuave(){ clearTimeout(timerBloques); timerBloques=setTimeout(guardarBloques, 700); }
-async function guardarBloques(){
+let timerBloques=null, timerBloquesDbx=null;
+function guardarBloquesSuave(){ clearTimeout(timerBloques); timerBloques=setTimeout(()=>guardarBloques(true), 700); }
+async function guardarBloques(accionLocal){
+  if(accionLocal === undefined) accionLocal = true;
   if(!detId) return;
   const json = JSON.stringify(bloques);
   const mb = json.length/1024/1024;
@@ -1561,9 +1704,68 @@ async function guardarBloques(){
   }catch(e){
     est.textContent = '⚠️ No se pudo guardar. Probá quitando el último archivo.';
   }
-  // actualizar contador de adjuntos en la tarjeta
+  // actualizar contador de adjuntos y última nota en la tarjeta
   const t = tareas.find(x=>x.id===detId);
-  if(t){ t.adj = bloques.filter(b=>b.tipo!=='texto').length; guardarDatos(); }
+  if(t){
+    t.adj = bloques.filter(b=> b.tipo!=='texto' && !b.borrado).length;
+    if(accionLocal){
+      t.ultNota = {t: Date.now(), quien: usuarioActual || null};
+      marcarNotasLeidas(detId);
+    }
+    guardarDatos();
+  }
+  // subir a la nube (con debounce) para que se vea en el otro dispositivo
+  clearTimeout(timerBloquesDbx);
+  const idSubida = detId, jsonSubida = json;
+  timerBloquesDbx = setTimeout(()=> dbxSubirBloques(idSubida, jsonSubida), 3000);
+}
+
+/* ---------- notas en la nube: subir, bajar y fusionar ---------- */
+async function dbxSubirBloques(id, json){
+  if(!dbxTokens) return;
+  try{
+    const tk = await dbxToken();
+    if(!tk) return;
+    await fetch('https://content.dropboxapi.com/2/files/upload', {
+      method:'POST',
+      headers:{
+        'Authorization':'Bearer '+tk,
+        'Dropbox-API-Arg': JSON.stringify({path:'/bloques/'+id+'.json', mode:'overwrite', mute:true}),
+        'Content-Type':'application/octet-stream'
+      },
+      body: json
+    });
+  }catch(e){}
+}
+async function dbxBajarBloques(id){
+  if(!dbxTokens) return null;
+  try{
+    const tk = await dbxToken();
+    if(!tk) return null;
+    const r = await fetch('https://content.dropboxapi.com/2/files/download', {
+      method:'POST',
+      headers:{
+        'Authorization':'Bearer '+tk,
+        'Dropbox-API-Arg': JSON.stringify({path:'/bloques/'+id+'.json'})
+      }
+    });
+    if(!r.ok) return null;
+    const arr = JSON.parse(await r.text());
+    return Array.isArray(arr) ? arr : null;
+  }catch(e){ return null; }
+}
+function fusionarBloques(locales, remotos){
+  // mismo elemento (id) editado distinto: gana el último · elementos distintos: se suman · borrados: lápida gana si es más nueva
+  const mapa = new Map();
+  const clave = (b)=> b.id || (b.tipo + '|' + (b.t||0) + '|' + String(b.contenido||'').slice(0,40));
+  for(const b of locales) mapa.set(clave(b), b);
+  for(const rb of remotos){
+    const k = clave(rb);
+    const ex = mapa.get(k);
+    if(!ex) mapa.set(k, rb);
+    else if((rb.mod||rb.t||0) > (ex.mod||ex.t||0)) mapa.set(k, rb);
+  }
+  return [...mapa.values()].sort((a,b)=> (a.ord||a.t||0) - (b.ord||b.t||0));
 }
 
 /* ---------- compositor estilo WhatsApp ---------- */
@@ -1572,8 +1774,10 @@ const btnMicEnviar = document.getElementById('btnMicEnviar');
 const menuAdjuntar = document.getElementById('menuAdjuntar');
 
 function agregarBloque(tipo, contenido){
-  bloques.push({tipo, contenido, t: Date.now()});
-  renderBloques(); guardarBloques();
+  bloques.push({id: uid(), tipo, contenido, t: Date.now(), mod: Date.now(),
+    ord: (bloques.length ? Math.max(...bloques.map(b=>b.ord||b.t||0)) : 0) + 1000,
+    quien: usuarioActual || null});
+  renderBloques(); guardarBloques(true);
 }
 
 compTexto.addEventListener('input', ()=>{
