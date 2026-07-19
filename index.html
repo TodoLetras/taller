@@ -291,7 +291,8 @@
 <div id="vistaPedidos" style="padding:8px 16px;display:none">
   <div style="display:flex;gap:8px;margin-bottom:12px">
     <button id="btnNuevoPedido" style="flex:1.3;background:var(--ambar);color:#1a1200;border:none;border-radius:12px;padding:12px;font-weight:800;font-size:.85rem">＋ Nuevo pedido</button>
-    <button id="btnProductos" style="flex:1;background:var(--panel);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:12px;font-weight:700;font-size:.85rem">📦 Productos</button>
+    <button id="btnProductos" style="flex:1;background:var(--panel);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:12px;font-weight:700;font-size:.78rem">📦 Productos</button>
+    <button id="btnCotizador" style="flex:1;background:var(--panel);border:1px solid #ffa730;color:#ffa730;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem">🔤 Corpóreas</button>
   </div>
   <div id="listaPedidos"></div>
 </div>
@@ -308,6 +309,7 @@
     <div id="pedItems"></div>
     <div class="cats-pick" id="pedAgregarItem" style="margin-top:6px"></div>
     <div id="pedMO" style="margin-top:8px"></div>
+    <button id="btnOffDig" style="width:100%;margin-top:8px;border-radius:12px;padding:12px;font-weight:700;font-size:.82rem;background:var(--panel2);border:1px dashed #5ab8ff;color:#5ab8ff">🖨 Agregar impresión offset digital</button>
     <div class="ped-total" id="pedTotal"></div>
     <label>Cobro</label>
     <div class="cats-pick" id="pedCobro"></div>
@@ -443,6 +445,48 @@
     <div class="acciones">
       <button id="cerrarBackup" class="btn-secundario">Cerrar</button>
       <button id="btnImportar" class="btn-peligro">⚠️ Restaurar (pisa lo actual)</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal armador offset digital -->
+<div class="modal" id="modalOffDig">
+  <div class="hoja">
+    <h2>🖨 Offset digital</h2>
+    <div id="odProvZona" style="margin-bottom:10px"></div>
+    <label>Impresión</label>
+    <div class="cats-pick" id="odModo"></div>
+    <label>Papel</label>
+    <div style="display:flex;gap:8px">
+      <select id="odPapel" style="flex:1;margin:0;padding:11px;font-size:15px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
+    </div>
+    <label>Cantidad</label>
+    <div class="vistas" style="margin-bottom:8px">
+      <button id="odModoHojas" class="activo">Por hojas</button>
+      <button id="odModoPieza">Por pieza (calcula posado)</button>
+    </div>
+    <div id="odZonaHojas">
+      <input id="odHojas" type="number" inputmode="numeric" min="1" placeholder="Cantidad de hojas">
+    </div>
+    <div id="odZonaPieza" style="display:none">
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="odPzAncho" type="number" inputmode="decimal" step="0.1" placeholder="Ancho cm" style="flex:1;margin:0">
+        <span style="color:var(--texto2)">×</span>
+        <input id="odPzAlto" type="number" inputmode="decimal" step="0.1" placeholder="Alto cm" style="flex:1;margin:0">
+        <input id="odPzCant" type="number" inputmode="numeric" placeholder="Piezas" style="flex:1;margin:0">
+      </div>
+      <div id="odPosado" style="font-size:.74rem;color:#5ab8ff;font-weight:700;margin-top:8px;line-height:1.5"></div>
+    </div>
+    <label>Descripción (para el presupuesto)</label>
+    <input id="odDesc" placeholder="Ej: folletos promo, etiquetas vino…">
+    <label>Terminaciones</label>
+    <div class="cats-pick" id="odTerms"></div>
+    <label>Corte a guillotina (precio fijo)</label>
+    <div class="cats-pick" id="odCorte"></div>
+    <div id="odResumen" style="background:var(--panel2);border:1px solid var(--borde);border-radius:12px;padding:12px;margin-top:10px;font-size:.8rem;line-height:1.7"></div>
+    <div class="acciones">
+      <button id="odCancelar" class="btn-secundario">Cancelar</button>
+      <button id="odAgregar" class="btn-primario">＋ Agregar</button>
     </div>
   </div>
 </div>
@@ -593,6 +637,7 @@
     <textarea id="cliNotas" placeholder="Datos de facturación, horarios, referencias…"></textarea>
     <div class="divisor">📋 Tareas de este cliente</div>
     <div id="cliTareas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+    <div id="cliCuenta" style="margin-bottom:10px"></div>
     <button id="cliNuevaTarea" style="width:100%;background:var(--panel);border:1px dashed var(--ambar);color:var(--ambar);border-radius:12px;padding:12px;font-weight:700;font-size:.85rem;margin-bottom:12px">＋ Tarea para este cliente</button>
     <div class="acciones">
       <button id="cliBorrar" class="btn-peligro">🗑 Borrar cliente</button>
@@ -651,6 +696,26 @@ const PERSONAS = [['Marcos','#ffb020'],['Gastón','#5ab8ff']];
 let gastosFijos = [];
 let mo = {venta:15000, costo:7500};
 let esquemas = [];
+let cajaInicial = 0;
+let ajusteSocios = 0;
+let od = null;
+const OD_SEMILLA = {
+  hojaW: 31.3, hojaH: 46.3,           // cm imprimibles
+  autoExtra: 50,                       // autoadhesivo = 350g + $50
+  plast: 400,                          // plastificado por lado por hoja
+  mc: 400,                             // medio corte por hoja (solo autoadhesivo)
+  cc: 800,                             // corte completo por hoja
+  corte: { h15:{costo:4000, venta:6000}, m15:{costo:6000, venta:8000} },
+  margen: 80,                          // % por defecto sobre hoja+terminaciones
+  tabla: {                             // costo por hoja: gramaje → [1/0, 1/1, 4/0, 4/1, 4/4]
+    '70':[400,720,560,810,1010], '80':[405,725,565,815,1015], '90':[410,730,570,820,1020],
+    '115':[425,745,585,835,1035], '120':[430,750,590,840,1040], '130':[435,755,595,845,1045],
+    '150':[445,765,605,855,1055], '170':[455,775,615,865,1065], '180':[460,780,620,870,1070],
+    '210':[510,835,675,925,1115], '240':[535,855,700,950,1135], '250':[550,870,710,960,1145],
+    '300':[570,890,730,980,1170], '350':[600,920,760,1010,1200]
+  }
+};
+const OD_MODOS = [['1/0','Frente ByN'],['1/1','Frente y dorso ByN'],['4/0','Frente color'],['4/1','Frente color + dorso ByN'],['4/4','Frente y dorso color']];
 let guardadoOK = null; // null = sin probar, true/false según verificación
 function marcarEstadoGuardado(ok){
   const primerFallo = (ok===false && guardadoOK!==false);
@@ -782,6 +847,17 @@ async function cargar(){
       historial = d.historial || [];
       if(d.mo) mo = d.mo;
       esquemas = d.esquemas || [];
+      cajaInicial = d.cajaInicial || 0;
+      ajusteSocios = d.ajusteSocios || 0;
+      od = d.od || JSON.parse(JSON.stringify(OD_SEMILLA));
+      if(od && !od.proveedor){
+        let pablo = proveedores.find(x=> normalizarTexto(x.nombre)==='pablo');
+        if(!pablo){
+          pablo = {id:uid(), nombre:'Pablo', dir:'', mail:'', notas:'Proveedor de impresión offset digital'};
+          proveedores.push(pablo);
+        }
+        od.proveedor = pablo.id;
+      }
       gastosFijos = d.gastosFijos || GASTOS_SEMILLA.map(g=>({id:uid()+Math.random().toString(36).slice(2,4), ...g}));
       if(d.offset){ offset = d.offset; }
       else{
@@ -813,12 +889,16 @@ async function cargar(){
   uv = {multSin:UV_SEMILLA.multSin, multCon:UV_SEMILLA.multCon, mats:UV_SEMILLA.mats.map(m=>({id:uid()+Math.random().toString(36).slice(2,4), ...m}))};
   offset = {pct:OFFSET_SEMILLA.pct, mats:OFFSET_SEMILLA.mats.map(m=>({id:uid()+Math.random().toString(36).slice(2,4), ...m}))};
   productos = productos.filter(p=> p.rubro!=='Estándar Offset');
+  od = JSON.parse(JSON.stringify(OD_SEMILLA));
+  const pabloIni = {id:uid(), nombre:'Pablo', dir:'', mail:'', notas:'Proveedor de impresión offset digital'};
+  proveedores.push(pabloIni);
+  od.proveedor = pabloIni.id;
   iniciar(); guardarDatos();
 }
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -1773,7 +1853,210 @@ function abrirCliente(id){
   const suyas = tareas.filter(t=>t.cliente===id).sort((a,b)=>(a.orden||0)-(b.orden||0));
   if(!suyas.length) cont.innerHTML = '<div class="vacio" style="padding:10px">Sin tareas para este cliente.</div>';
   for(const t of suyas) tarjetaTarea(t, cont);
+  renderCuentaContacto(id, res.lista==='proveedores');
   modalCliente.classList.add('abierto');
+}
+function renderCuentaContacto(id, esProveedor){
+  const cont = document.getElementById('cliCuenta');
+  cont.innerHTML = '';
+  const suyos = movimientos.filter(m=>m.quien===id)
+    .sort((a,b)=> (b.fecha||'').localeCompare(a.fecha||'') || (b.creado||0)-(a.creado||0));
+  const res2 = buscarContacto(id);
+  const contacto = res2 ? res2.c : null;
+  const arrastre = contacto ? (contacto.inicial||0) : 0;
+  if(!suyos.length && !arrastre && !contacto) return;
+  const anioISO = String(new Date().getFullYear());
+  const pagado = arrastre*(esProveedor?1:0) + suyos.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0);
+  const pagadoAnio = suyos.filter(m=>m.tipo==='egreso' && (m.fecha||'').startsWith(anioISO)).reduce((s,m)=>s+(m.monto||0),0);
+  const cobrado = arrastre*(esProveedor?0:1) + suyos.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+(m.monto||0),0);
+  const cobradoAnio = suyos.filter(m=>m.tipo==='ingreso' && (m.fecha||'').startsWith(anioISO)).reduce((s,m)=>s+(m.monto||0),0);
+
+  if(!suyos.length && !arrastre){
+    // sin movimientos ni arrastre: ofrecer cargarlo con un botón discreto
+    const tit0 = document.createElement('div');
+    tit0.className = 'divisor';
+    tit0.textContent = '💵 Cuenta';
+    cont.appendChild(tit0);
+    const b0 = document.createElement('button');
+    b0.textContent = '＋ Cargar arrastre anterior a la app';
+    b0.style.cssText = 'width:100%;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)';
+    b0.onclick = ()=>{
+      if(contacto){ contacto.inicial = 0.01; renderCuentaContacto(id, esProveedor); setTimeout(()=>{ const e2=document.getElementById('editArrastre'); if(e2) e2.click(); },50); }
+    };
+    cont.appendChild(b0);
+    return;
+  }
+  const tit = document.createElement('div');
+  tit.className = 'divisor';
+  tit.textContent = '💵 Cuenta';
+  cont.appendChild(tit);
+
+  const resumen = document.createElement('div');
+  resumen.className = 'caja-card';
+  resumen.style.marginBottom = '8px';
+  let filas = '';
+  if(pagado) filas += '<div class="cc-linea"><span>📤 Pagado (total)</span><b style="color:#ff7a7a">' + plata(pagado) + '</b></div>' +
+    '<div class="cc-linea" style="font-size:.74rem;color:var(--texto2)"><span>Este año</span><span>' + plata(pagadoAnio) + '</span></div>';
+  if(cobrado) filas += '<div class="cc-linea"><span>💰 Cobrado (total)</span><b style="color:#4cd27d">' + plata(cobrado) + '</b></div>' +
+    '<div class="cc-linea" style="font-size:.74rem;color:var(--texto2)"><span>Este año</span><span>' + plata(cobradoAnio) + '</span></div>';
+  filas += '<div class="cc-linea" style="font-size:.72rem;color:var(--texto2)"><span>Arrastre anterior a la app <button id="editArrastre" style="background:none;border:none;color:var(--ambar);font-size:.7rem;padding:0 4px">✏️</button></span><span>' + plata(arrastre) + '</span></div>';
+  resumen.innerHTML = filas;
+  cont.appendChild(resumen);
+  const btnArr = resumen.querySelector('#editArrastre');
+  if(btnArr && contacto) btnArr.onclick = ()=>{
+    const linea = btnArr.closest('.cc-linea');
+    linea.innerHTML = '<span>Arrastre anterior</span>';
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.inputMode = 'numeric';
+    inp.value = arrastre;
+    inp.style.cssText = 'width:120px;margin:0;padding:7px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+    linea.appendChild(inp);
+    inp.focus(); inp.select();
+    const g = ()=>{
+      contacto.inicial = parseFloat(inp.value)||0;
+      registrar('ajustó el arrastre inicial de ' + contacto.nombre + ' a ' + plata(contacto.inicial));
+      guardarDatos();
+      renderCuentaContacto(id, esProveedor);
+    };
+    inp.addEventListener('blur', g);
+    inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+  };
+
+  for(const m of suyos.slice(0, 8)){
+    const f = document.createElement('div');
+    f.className = 'mov-fila';
+    f.style.borderLeft = '4px solid ' + (m.tipo==='ingreso' ? '#4cd27d' : '#ff7a7a');
+    f.innerHTML =
+      '<div class="mv-info"><div class="mv-concepto"></div><div class="mv-quien"></div></div>' +
+      '<span class="mv-monto" style="color:' + (m.tipo==='ingreso'?'#4cd27d':'#ff7a7a') + '">' +
+      (m.tipo==='ingreso'?'+':'−') + ' ' + plata(m.monto) + '</span>';
+    f.querySelector('.mv-concepto').textContent = m.concepto || (m.tipo==='ingreso'?'Cobro':'Pago');
+    f.querySelector('.mv-quien').textContent = fechaLinda(m.fecha) + (m.persona ? ' · pagó ' + m.persona : '');
+    cont.appendChild(f);
+  }
+  if(suyos.length > 8){
+    const mas = document.createElement('div');
+    mas.style.cssText = 'font-size:.7rem;color:var(--texto2);text-align:center;padding:4px';
+    mas.textContent = '… y ' + (suyos.length-8) + ' movimiento(s) más en la Caja';
+    cont.appendChild(mas);
+  }
+  renderCuentaOD(id, cont);
+}
+function renderCuentaOD(id, cont){
+  if(!od || od.proveedor !== id) return;
+  // juntar todos los trabajos de offset digital de todos los pedidos
+  const trabajos = [];
+  for(const p of pedidos){
+    (p.items||[]).forEach((it, idx)=>{
+      if(it.odMeta){
+        trabajos.push({p, it, idx, fecha: p.creado||0});
+      }
+    });
+  }
+  const tit = document.createElement('div');
+  tit.className = 'divisor';
+  tit.textContent = '🖨 Cuenta offset digital';
+  cont.appendChild(tit);
+
+  const contacto = proveedores.find(x=>x.id===id);
+  const deudaIni = contacto ? (contacto.deudaInicial||0) : 0;
+  const deudaTrabajos = trabajos.reduce((s,t)=>s+(t.it.costoU||0),0);
+  const pagos = movimientos.filter(m=>m.quien===id && m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0)
+    + (contacto ? (contacto.inicial||0) : 0);
+  const saldo = deudaIni + deudaTrabajos - pagos;
+
+  const card = document.createElement('div');
+  card.className = 'caja-card';
+  card.style.marginBottom = '8px';
+  card.innerHTML =
+    '<div class="cc-linea" style="font-size:.74rem;color:var(--texto2)"><span>Deuda inicial <button id="editDeudaIni" style="background:none;border:none;color:var(--ambar);font-size:.7rem;padding:0 4px">✏️</button></span><span>' + plata(deudaIni) + '</span></div>' +
+    '<div class="cc-linea"><span>Trabajos cargados (' + trabajos.length + ')</span><b>' + plata(deudaTrabajos) + '</b></div>' +
+    '<div class="cc-linea"><span>Pagado</span><b style="color:#4cd27d">' + plata(pagos) + '</b></div>' +
+    '<div class="cc-linea cc-saldo"><span>Saldo a pagar</span><b style="color:' + (saldo>0.5?'#ff7a7a':'#4cd27d') + '">' + plata(saldo) + '</b></div>';
+  cont.appendChild(card);
+  const btnD = card.querySelector('#editDeudaIni');
+  if(btnD && contacto) btnD.onclick = ()=>{
+    const linea = btnD.closest('.cc-linea');
+    linea.innerHTML = '<span style="font-size:.72rem;color:var(--texto2)">Deuda inicial</span>';
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.inputMode = 'numeric';
+    inp.value = deudaIni;
+    inp.style.cssText = 'width:120px;margin:0;padding:7px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+    linea.appendChild(inp);
+    inp.focus(); inp.select();
+    const g = ()=>{
+      contacto.deudaInicial = parseFloat(inp.value)||0;
+      registrar('ajustó la deuda inicial con ' + contacto.nombre + ' a ' + plata(contacto.deudaInicial));
+      guardarDatos();
+      document.getElementById('cliCuenta').innerHTML='';
+      renderCuentaContacto(id, true);
+    };
+    inp.addEventListener('blur', g);
+    inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+  };
+
+  if(trabajos.length){
+    const nota = document.createElement('div');
+    nota.style.cssText = 'font-size:.68rem;color:var(--texto2);margin-bottom:6px';
+    nota.textContent = 'Cotejo: ☐ marca el trabajo como verificado · tocá el monto para corregirlo al valor real que cobró.';
+    cont.appendChild(nota);
+    trabajos.sort((a,b)=> b.fecha - a.fecha);
+    for(const t of trabajos.slice(0, 25)){
+      const f = document.createElement('div');
+      f.className = 'mov-fila';
+      f.style.borderLeft = '4px solid ' + (t.it.odConc ? '#4cd27d' : '#5ab8ff');
+      f.innerHTML =
+        '<button class="conc" style="background:none;border:none;font-size:1rem;padding:2px 6px">' + (t.it.odConc ? '☑' : '☐') + '</button>' +
+        '<div class="mv-info"><div class="mv-concepto" style="font-size:.74rem"></div><div class="mv-quien"></div></div>' +
+        '<button class="odMonto" style="background:none;border:1px dashed ' + (t.it.odAjustado?'#4cd27d':'var(--borde)') + ';border-radius:8px;padding:5px 8px;font-weight:800;font-size:.78rem;color:' + (t.it.odAjustado?'#4cd27d':'#5ab8ff') + ';white-space:nowrap">' + plata(t.it.costoU||0) + '</button>';
+      f.querySelector('.mv-concepto').textContent = t.it.nombre;
+      f.querySelector('.mv-quien').textContent = fechaLinda(new Date(t.fecha).toISOString().slice(0,10)) + ' · pedido de ' + nombreClienteId(t.p.cliente) +
+        (t.it.odAjustado && t.it.odCostoEst ? ' · estimado era ' + plata(t.it.odCostoEst) : '');
+      f.querySelector('.odMonto').onclick = (ev)=>{
+        ev.stopPropagation();
+        const btn = ev.target;
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.inputMode = 'numeric';
+        inp.value = t.it.costoU||0;
+        inp.style.cssText = 'width:100px;margin:0;padding:6px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+        btn.replaceWith(inp);
+        inp.focus(); inp.select();
+        const g = ()=>{
+          const nuevo = parseFloat(inp.value)||0;
+          if(nuevo > 0 && nuevo !== t.it.costoU){
+            if(t.it.odCostoEst === undefined) t.it.odCostoEst = t.it.costoU;
+            t.it.costoU = nuevo;
+            t.it.odAjustado = true;
+            registrar('corrigió el costo real de un trabajo de offset digital: ' + plata(t.it.odCostoEst) + ' → ' + plata(nuevo));
+            guardarDatos();
+          }
+          document.getElementById('cliCuenta').innerHTML='';
+          renderCuentaContacto(id, true);
+        };
+        inp.addEventListener('blur', g);
+        inp.addEventListener('keydown', e2=>{ if(e2.key==='Enter') inp.blur(); });
+      };
+      f.querySelector('.conc').onclick = ()=>{
+        t.it.odConc = !t.it.odConc;
+        registrar((t.it.odConc?'cotejó':'descotejó') + ' un trabajo de offset digital (' + plata(t.it.costoU||0) + ')');
+        guardarDatos();
+        document.getElementById('cliCuenta').innerHTML='';
+        renderCuentaContacto(id, true);
+      };
+      f.querySelector('.mv-info').onclick = ()=>{
+        modalCliente.classList.remove('abierto');
+        abrirPedido(t.p.id);
+      };
+      cont.appendChild(f);
+    }
+    const sinCotejar = trabajos.filter(t=>!t.it.odConc).length;
+    if(sinCotejar){
+      const aviso = document.createElement('div');
+      aviso.style.cssText = 'font-size:.7rem;color:var(--ambar);text-align:center;padding:4px;font-weight:700';
+      aviso.textContent = sinCotejar + ' trabajo(s) sin cotejar';
+      cont.appendChild(aviso);
+    }
+  }
 }
 for(const [campo, prop] of [['cliNombre','nombre'],['cliCuit','cuit'],['cliDir','dir'],['cliMail','mail'],['cliNotas','notas']]){
   document.getElementById(campo).addEventListener('input', e=>{
@@ -1885,6 +2168,30 @@ function renderPedidos(){
     cont.appendChild(f);
   }
 }
+document.getElementById('btnCotizador').onclick = ()=>{ location.href = 'cotizador.html'; };
+async function procesarBandejaCotizador(){
+  try{
+    const g = await window.storage.get('pedidos-entrantes').catch(()=>null);
+    if(!g || !g.value) return;
+    const bandeja = JSON.parse(g.value);
+    if(!Array.isArray(bandeja) || !bandeja.length) return;
+    for(const e of bandeja){
+      pedidos.unshift({
+        id: uid(), cliente: null, tarea: null,
+        items: [{prod:null, nombre: 'Letras corpóreas' + (e.desc ? ' — ' + e.desc : ''),
+          cant: 1, precio: e.venta||0, costoU: e.costo||0}],
+        cobro: 'pendiente', fact: 'no', creado: e.fecha || Date.now()
+      });
+      registrar('creó un pedido desde el cotizador de corpóreas (' + plata(e.venta||0) + ')');
+    }
+    await window.storage.delete('pedidos-entrantes').catch(()=>{});
+    guardarDatos();
+    renderPedidos();
+    toast('🔤 ' + bandeja.length + ' presupuesto(s) del cotizador cargado(s) como pedido. Asignale el cliente.');
+  }catch(err){}
+}
+setTimeout(procesarBandejaCotizador, 1500);
+
 document.getElementById('btnNuevoPedido').onclick = ()=>{
   const p = {id:uid(), cliente:null, items:[], cobro:'pendiente', fact:'no', creado:Date.now()};
   pedidos.unshift(p);
@@ -1994,9 +2301,22 @@ function renderPedidoItems(p){
     cont.innerHTML = '<div class="vacio" style="padding:8px">Sin ítems. Buscá un producto abajo.</div>';
   }
   p.items.forEach((it,idx)=>{
+    if(it.mo) return; // la mano de obra tiene su propia fila abajo
     const d = document.createElement('div');
-    d.className = 'ped-item' + (it.uv ? ' uv' : '');
-    if(it.uv){
+    d.className = 'ped-item' + ((it.uv || it.od) ? ' uv' : '');
+    if(it.od){
+      d.innerHTML =
+        '<div class="pi-cab"><div class="pi-nombre"></div>' +
+        '<button class="editar-od" title="Editar">✎</button>' +
+        '<button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
+        '<div class="pi-medidas"><span style="color:#5ab8ff">🖨 offset digital</span><span class="pi-sub">= ' + plata(subtotalItem(it)) + '</span></div>';
+      d.querySelector('.pi-nombre').textContent = it.nombre;
+      d.querySelector('.editar-od').style.cssText = 'background:none;border:none;color:#5ab8ff;font-size:.9rem;padding:2px 4px';
+      d.querySelector('.editar-od').onclick = ()=>{
+        modalPedido.classList.remove('abierto');
+        abrirOffDig(p, idx);
+      };
+    }else if(it.uv){
       d.innerHTML =
         '<div class="pi-cab"><div class="pi-nombre"></div><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
         '<div class="pi-medidas">' +
@@ -2500,7 +2820,45 @@ function renderCaja(){
   const ing = delMes.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+(m.monto||0),0);
   const egr = delMes.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0);
   const res = document.getElementById('cajaResumen');
+  const totIng = movimientos.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+(m.monto||0),0);
+  const totEgr = movimientos.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0);
+  const saldoActual = cajaInicial + totIng - totEgr;
   res.innerHTML =
+    '<div class="caja-card" style="margin-bottom:8px">' +
+    '<div class="cc-mes">💼 Caja</div>' +
+    '<div class="cc-linea"><span>Saldo inicial <button id="editSaldoIni" style="background:none;border:none;color:var(--ambar);font-size:.72rem;padding:0 4px">✏️ editar</button></span><b>' + plata(cajaInicial) + '</b></div>' +
+    '<div class="cc-linea" style="font-size:.74rem;color:var(--texto2)"><span>+ cobrado histórico</span><span>' + plata(totIng) + '</span></div>' +
+    '<div class="cc-linea" style="font-size:.74rem;color:var(--texto2)"><span>− pagado histórico</span><span>' + plata(totEgr) + '</span></div>' +
+    '<div class="cc-linea cc-saldo"><span>Saldo actual</span><b style="color:' + (saldoActual>=0?'#4cd27d':'#ff7a7a') + '">' + plata(saldoActual) + '</b></div>' +
+    '</div>' +
+    (function(){
+      const [nomA, colorA] = PERSONAS[0], [nomB, colorB] = PERSONAS[1];
+      const neto = (nombre)=>{
+        const s = movimientos.filter(m=>m.persona===nombre);
+        const i = s.filter(m=>m.tipo==='ingreso').reduce((x,m)=>x+(m.monto||0),0);
+        const e = s.filter(m=>m.tipo==='egreso').reduce((x,m)=>x+(m.monto||0),0);
+        return {i, e, n: i-e};
+      };
+      const a = neto(nomA), b = neto(nomB);
+      const dif = (a.n - b.n) + ajusteSocios; // positivo = A (Marcos) arriba
+      const arriba = dif>=0 ? nomA : nomB;
+      const abajo = dif>=0 ? nomB : nomA;
+      const abs = Math.abs(dif);
+      let h = '<div class="caja-card" style="margin-bottom:8px">' +
+        '<div class="cc-mes">⚖️ Entre socios</div>' +
+        '<div class="cc-linea" style="font-size:.78rem"><span style="color:'+colorA+'">👤 '+nomA+'</span><span>cobró '+plata(a.i)+' · pagó '+plata(a.e)+'</span></div>' +
+        '<div class="cc-linea" style="font-size:.78rem"><span style="color:'+colorB+'">👤 '+nomB+'</span><span>cobró '+plata(b.i)+' · pagó '+plata(b.e)+'</span></div>' +
+        '<div class="cc-linea" style="font-size:.72rem;color:var(--texto2)"><span>Ajuste inicial <button id="editAjusteSocios" style="background:none;border:none;color:var(--ambar);font-size:.7rem;padding:0 4px">✏️</button></span><span>' +
+          (ajusteSocios===0 ? 'sin ajuste' : (ajusteSocios>0?nomA:nomB)+' venía '+plata(Math.abs(ajusteSocios))+' arriba') + '</span></div>';
+      if(abs < 1){
+        h += '<div class="cc-linea cc-saldo"><span>Balance</span><b style="color:#4cd27d">Empatados ✓</b></div>';
+      }else{
+        h += '<div class="cc-linea cc-saldo"><span>Balance</span><b style="color:'+colorPersona(arriba)+'">'+arriba+' va '+plata(abs)+' arriba</b></div>' +
+          '<div style="font-size:.72rem;color:var(--texto2);margin-top:4px;line-height:1.5">Para emparejar: <b>'+abajo+'</b> cobra los próximos '+plata(abs)+', o <b>'+arriba+'</b> le pasa '+plata(abs/2)+'.</div>';
+      }
+      h += '<div id="zonaCompensar" style="margin-top:8px"></div></div>';
+      return h;
+    })() +
     '<div class="caja-card">' +
     '<div class="cc-mes">' + MESES[hoy.getMonth()] + ' ' + hoy.getFullYear() + '</div>' +
     '<div class="cc-linea"><span>💰 Cobrado</span><b style="color:#4cd27d">' + plata(ing) + '</b></div>' +
@@ -2520,6 +2878,90 @@ function renderCaja(){
       return '<div class="cc-linea" style="font-size:.76rem;color:var(--texto2)"><span>👤 <b style="color:'+color+'">'+nombre+'</b></span><span>cobró '+plata(ci)+' · pagó '+plata(cp)+'</span></div>';
     }).join('') +
     '</div>';
+
+  const btnIni = document.getElementById('editSaldoIni');
+  if(btnIni) btnIni.onclick = ()=>{
+    const linea = btnIni.closest('.cc-linea');
+    linea.innerHTML = '<span>Saldo inicial</span>';
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.inputMode = 'numeric';
+    inp.value = cajaInicial;
+    inp.style.cssText = 'width:130px;margin:0;padding:7px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+    linea.appendChild(inp);
+    inp.focus(); inp.select();
+    const g = ()=>{
+      cajaInicial = parseFloat(inp.value)||0;
+      registrar('ajustó el saldo inicial de caja a ' + plata(cajaInicial));
+      guardarDatos(); renderCaja();
+    };
+    inp.addEventListener('blur', g);
+    inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+  };
+
+  const btnAj = document.getElementById('editAjusteSocios');
+  if(btnAj) btnAj.onclick = ()=>{
+    const linea = btnAj.closest('.cc-linea');
+    linea.innerHTML = '<span style="font-size:.72rem;color:var(--texto2)">Ajuste (+ Marcos arriba, − Gastón arriba)</span>';
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.inputMode = 'numeric';
+    inp.value = ajusteSocios;
+    inp.style.cssText = 'width:130px;margin:0;padding:7px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+    linea.appendChild(inp);
+    inp.focus(); inp.select();
+    const g = ()=>{
+      ajusteSocios = parseFloat(inp.value)||0;
+      registrar('ajustó el balance inicial entre socios: ' + (ajusteSocios===0?'sin ajuste':(ajusteSocios>0?'Marcos':'Gastón')+' arriba por '+plata(Math.abs(ajusteSocios))));
+      guardarDatos(); renderCaja();
+    };
+    inp.addEventListener('blur', g);
+    inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+  };
+  const zonaComp = document.getElementById('zonaCompensar');
+  if(zonaComp){
+    const btnC = document.createElement('button');
+    btnC.textContent = '🤝 Registrar compensación entre socios';
+    btnC.style.cssText = 'width:100%;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)';
+    btnC.onclick = ()=>{
+      zonaComp.innerHTML = '';
+      const form = document.createElement('div');
+      form.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:.74rem;color:var(--texto2)';
+      const sel = document.createElement('select');
+      sel.style.cssText = 'margin:0;padding:9px 6px;font-size:14px;background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+      for(const [de, para] of [['Marcos','Gastón'],['Gastón','Marcos']]){
+        const o = document.createElement('option');
+        o.value = de + '|' + para;
+        o.textContent = de + ' → ' + para;
+        sel.appendChild(o);
+      }
+      const inpM = document.createElement('input');
+      inpM.type = 'number'; inpM.inputMode = 'numeric'; inpM.placeholder = '$';
+      inpM.style.cssText = 'width:110px;margin:0;padding:9px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+      const ok = document.createElement('button');
+      ok.textContent = '✓';
+      ok.style.cssText = 'background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:9px 14px;font-weight:800';
+      ok.onclick = ()=>{
+        const monto = parseFloat(inpM.value)||0;
+        if(monto<=0){ inpM.focus(); return; }
+        const [de, para] = sel.value.split('|');
+        const hoy = hoyISO();
+        movimientos.push({id:uid(), tipo:'egreso', monto, persona:de, quien:null,
+          concepto:'🤝 Compensación a '+para, fecha:hoy, creado:Date.now()});
+        movimientos.push({id:uid(), tipo:'ingreso', monto, persona:para, quien:null,
+          concepto:'🤝 Compensación de '+de, fecha:hoy, creado:Date.now()+1});
+        registrar('registró compensación: '+de+' le pasó '+plata(monto)+' a '+para);
+        guardarDatos(); renderCaja();
+        toast('Compensación registrada ✓ El balance se actualizó');
+      };
+      const canc = document.createElement('button');
+      canc.textContent = '✕';
+      canc.style.cssText = 'background:none;border:none;color:var(--texto2);padding:9px 6px';
+      canc.onclick = ()=> renderCaja();
+      form.appendChild(sel); form.appendChild(inpM); form.appendChild(ok); form.appendChild(canc);
+      zonaComp.appendChild(form);
+      inpM.focus();
+    };
+    zonaComp.appendChild(btnC);
+  }
 
   // listado agrupado por fecha
   const cont = document.getElementById('listaCaja');
@@ -2726,6 +3168,9 @@ function aplicarDatosRemotos(d){
   historial = d.historial||historial;
   if(d.mo) mo = d.mo;
   esquemas = d.esquemas||esquemas;
+  if(d.cajaInicial!==undefined) cajaInicial = d.cajaInicial;
+  if(d.ajusteSocios!==undefined) ajusteSocios = d.ajusteSocios;
+  if(d.od) od = d.od;
   iniciar();
 }
 async function dbxSincronizar(mostrar){
@@ -2922,7 +3367,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas});
+    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -2951,6 +3396,9 @@ document.getElementById('btnImportar').onclick = (e)=>{
     historial = d.historial||[];
     if(d.mo) mo = d.mo;
     esquemas = d.esquemas||[];
+    cajaInicial = d.cajaInicial||0;
+    ajusteSocios = d.ajusteSocios||0;
+    if(d.od) od = d.od;
     guardarDatos();
     iniciar();
     modalBackup.classList.remove('abierto');
@@ -3276,6 +3724,296 @@ document.getElementById('movGuardar').onclick = ()=>{
 document.getElementById('movCancelar').onclick = ()=> modalMov.classList.remove('abierto');
 modalMov.addEventListener('click', e=>{ if(e.target===modalMov) modalMov.classList.remove('abierto'); });
 
+/* ---------- offset digital ---------- */
+let odMeta = null, odPedido = null, odItemIdx = null;
+const modalOffDig = document.getElementById('modalOffDig');
+
+function odCostoHoja(meta){
+  const col = OD_MODOS.findIndex(m=>m[0]===meta.modo);
+  if(meta.papel === 'auto') return od.tabla['350'][col] + od.autoExtra;
+  return od.tabla[meta.papel][col];
+}
+function odTermPorHoja(meta){
+  return (meta.plastF ? od.plast : 0) + (meta.plastD ? od.plast : 0) +
+         (meta.mc ? od.mc : 0) + (meta.cc ? od.cc : 0);
+}
+function odPosado(pw, ph){
+  const W = od.hojaW, H = od.hojaH;
+  if(pw<=0 || ph<=0 || pw>Math.max(W,H) && ph>Math.max(W,H)) return null;
+  function orientacion(a, b){
+    const c = Math.floor(W/a), f = Math.floor(H/b);
+    if(c<1 || f<1) return {n:0};
+    let n = c*f, extra = 0, detalle = c+'×'+f;
+    // franja sobrante a lo ancho: piezas rotadas
+    const sobraW = W - c*a;
+    const eW = Math.floor(sobraW/b) * Math.floor(H/a);
+    // franja sobrante a lo alto
+    const sobraH = H - f*b;
+    const eH = Math.floor(W/b) * Math.floor(sobraH/a);
+    if(eW >= eH && eW > 0){ extra = eW; detalle += ' + '+eW+' rotadas'; }
+    else if(eH > 0){ extra = eH; detalle += ' + '+eH+' rotadas'; }
+    // bajadas estimadas de la grilla principal
+    const bajadas = (c+1) + (f+1);
+    return {n: n+extra, detalle, bajadas, c, f};
+  }
+  const o1 = orientacion(pw, ph);
+  const o2 = orientacion(ph, pw);
+  if(!o1.n && !o2.n) return null;
+  const mejor = (o2.n > o1.n) ? {...o2, rot:true} : {...o1, rot:false};
+  return mejor;
+}
+function odCalcular(meta){
+  const costoHoja = odCostoHoja(meta) + odTermPorHoja(meta);
+  let hojasBase = 0, posado = null;
+  if(meta.porPieza){
+    posado = odPosado(meta.pzAncho, meta.pzAlto);
+    if(posado && posado.n > 0) hojasBase = Math.ceil((meta.pzCant||0) / posado.n);
+  }else{
+    hojasBase = meta.hojas || 0;
+  }
+  const hojas = hojasBase > 0 ? hojasBase + 1 : 0; // +1 por armado de archivo
+  const corte = meta.corte==='h15' ? od.corte.h15 : meta.corte==='m15' ? od.corte.m15 : {costo:0, venta:0};
+  const margen = (odPedido && odPedido.odMargen !== undefined) ? odPedido.odMargen : od.margen;
+  const costo = hojas * costoHoja + corte.costo;
+  const venta = Math.round(hojas * costoHoja * (1 + margen/100)) + corte.venta;
+  return {hojas, hojasBase, costoHoja, costo, venta, corte, posado, margen};
+}
+function odNombre(meta, calc){
+  const papel = meta.papel==='auto' ? 'Autoadhesivo brillante' : 'Papel ' + meta.papel + 'g';
+  const modo = (OD_MODOS.find(m=>m[0]===meta.modo)||['',''])[1];
+  let n = (meta.desc ? meta.desc + ' · ' : '') + 'Offset digital · ' + modo + ' · ' + papel;
+  if(meta.porPieza) n += ' · ' + meta.pzCant + ' piezas de ' + meta.pzAncho + '×' + meta.pzAlto + 'cm';
+  n += ' · ' + calc.hojas + ' hojas';
+  const t = [];
+  if(meta.plastF) t.push('plastificado frente');
+  if(meta.plastD) t.push('plastificado dorso');
+  if(meta.mc) t.push('medio corte');
+  if(meta.cc) t.push('corte completo');
+  if(meta.corte==='h15') t.push('corte guillotina');
+  if(meta.corte==='m15') t.push('corte guillotina (+15 bajadas)');
+  if(t.length) n += ' · ' + t.join(', ');
+  return n;
+}
+function recalcularItemOD(it){
+  const meta = it.odMeta;
+  const calc = odCalcular(meta);
+  it.nombre = odNombre(meta, calc);
+  it.cant = 1;
+  it.precio = calc.venta;
+  it.costoU = calc.costo;
+  delete it.odAjustado;
+  delete it.odCostoEst;
+}
+function abrirOffDig(p, idx){
+  odPedido = p;
+  odItemIdx = (idx===undefined ? null : idx);
+  if(odItemIdx !== null && p.items[odItemIdx] && p.items[odItemIdx].odMeta){
+    odMeta = JSON.parse(JSON.stringify(p.items[odItemIdx].odMeta));
+  }else{
+    odMeta = {modo:'4/0', papel:'150', porPieza:false, hojas:null,
+      pzAncho:null, pzAlto:null, pzCant:null, desc:'',
+      plastF:false, plastD:false, mc:false, cc:false, corte:'no'};
+  }
+  if(p.odMargen === undefined) p.odMargen = od.margen;
+  renderOffDig();
+  modalOffDig.classList.add('abierto');
+}
+function renderOffDig(){
+  renderOdProveedor();
+  // modalidades
+  const modos = document.getElementById('odModo');
+  modos.innerHTML = '';
+  for(const [val, nom] of OD_MODOS){
+    const b = document.createElement('button');
+    b.textContent = nom;
+    if(odMeta.modo===val){ b.style.background='rgba(90,184,255,.15)'; b.style.borderColor='#5ab8ff'; b.style.color='#5ab8ff'; }
+    b.onclick = ()=>{ odMeta.modo = val; renderOffDig(); };
+    modos.appendChild(b);
+  }
+  // papeles
+  const sel = document.getElementById('odPapel');
+  sel.innerHTML = '';
+  for(const g of Object.keys(od.tabla)){
+    const o = document.createElement('option');
+    o.value = g;
+    o.textContent = 'Papel ' + g + ' g — ' + plata(odCostoHoja({modo:odMeta.modo, papel:g})) + '/hoja';
+    sel.appendChild(o);
+  }
+  const oa = document.createElement('option');
+  oa.value = 'auto';
+  oa.textContent = 'Autoadhesivo brillante — ' + plata(odCostoHoja({modo:odMeta.modo, papel:'auto'})) + '/hoja';
+  sel.appendChild(oa);
+  sel.value = odMeta.papel;
+  sel.onchange = ()=>{ odMeta.papel = sel.value; if(odMeta.papel!=='auto') odMeta.mc = false; renderOffDig(); };
+  // modo de cantidad
+  document.getElementById('odModoHojas').classList.toggle('activo', !odMeta.porPieza);
+  document.getElementById('odModoPieza').classList.toggle('activo', !!odMeta.porPieza);
+  document.getElementById('odZonaHojas').style.display = odMeta.porPieza ? 'none' : 'block';
+  document.getElementById('odZonaPieza').style.display = odMeta.porPieza ? 'block' : 'none';
+  document.getElementById('odHojas').value = odMeta.hojas || '';
+  document.getElementById('odPzAncho').value = odMeta.pzAncho || '';
+  document.getElementById('odPzAlto').value = odMeta.pzAlto || '';
+  document.getElementById('odPzCant').value = odMeta.pzCant || '';
+  document.getElementById('odDesc').value = odMeta.desc || '';
+  // terminaciones
+  const terms = document.getElementById('odTerms');
+  terms.innerHTML = '';
+  const opciones = [
+    ['plastF', 'Plastificado frente (' + plata(od.plast) + '/hoja)', true],
+    ['plastD', 'Plastificado dorso (' + plata(od.plast) + '/hoja)', true],
+    ['mc', 'Medio corte (' + plata(od.mc) + '/hoja)', odMeta.papel==='auto'],
+    ['cc', 'Corte completo (' + plata(od.cc) + '/hoja)', true],
+  ];
+  for(const [prop, nom, habil] of opciones){
+    const b = document.createElement('button');
+    b.textContent = (odMeta[prop] ? '☑ ' : '☐ ') + nom;
+    b.style.fontSize = '.72rem';
+    if(!habil){ b.style.opacity = '.4'; b.title = 'Solo para autoadhesivo'; }
+    if(odMeta[prop]){ b.style.background='rgba(90,184,255,.15)'; b.style.borderColor='#5ab8ff'; b.style.color='#5ab8ff'; }
+    b.onclick = ()=>{ if(!habil){ toast('El medio corte es solo para autoadhesivo'); return; } odMeta[prop] = !odMeta[prop]; renderOffDig(); };
+    terms.appendChild(b);
+  }
+  // corte guillotina
+  const corte = document.getElementById('odCorte');
+  corte.innerHTML = '';
+  for(const [val, nom] of [['no','Sin corte'],['h15','Hasta 15 bajadas · venta '+plata(od.corte.h15.venta)],['m15','Más de 15 · venta '+plata(od.corte.m15.venta)]]){
+    const b = document.createElement('button');
+    b.textContent = nom;
+    b.style.fontSize = '.72rem';
+    if(odMeta.corte===val){ b.style.background='rgba(255,176,32,.15)'; b.style.borderColor='var(--ambar)'; b.style.color='var(--ambar)'; }
+    b.onclick = ()=>{ odMeta.corte = val; renderOffDig(); };
+    corte.appendChild(b);
+  }
+  actualizarOffDig();
+}
+function renderOdProveedor(){
+  const zona = document.getElementById('odProvZona');
+  zona.innerHTML = '';
+  const prov = proveedores.find(x=>x.id===od.proveedor);
+  const fila = document.createElement('div');
+  fila.style.cssText = 'display:flex;gap:8px;align-items:center;font-size:.74rem;color:var(--texto2)';
+  fila.appendChild(document.createTextNode('Proveedor:'));
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:1;margin:0;padding:9px;font-size:14px;background:var(--panel2);border:1px solid ' + (prov?'var(--borde)':'#ff7a7a') + ';border-radius:10px;color:var(--texto)';
+  const o0 = document.createElement('option');
+  o0.value = ''; o0.textContent = prov ? '(cambiar)' : '⚠️ Elegir proveedor…';
+  sel.appendChild(o0);
+  for(const pr of proveedores.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre))){
+    const o = document.createElement('option');
+    o.value = pr.id; o.textContent = pr.nombre;
+    if(pr.id===od.proveedor) o.selected = true;
+    sel.appendChild(o);
+  }
+  const oN = document.createElement('option');
+  oN.value = '__nuevo__'; oN.textContent = '➕ Crear proveedor nuevo…';
+  sel.appendChild(oN);
+  sel.onchange = ()=>{
+    if(sel.value === '__nuevo__'){
+      const inp = document.createElement('input');
+      inp.placeholder = 'Nombre del proveedor';
+      inp.style.cssText = 'flex:1;margin:0;padding:9px;font-size:15px';
+      sel.replaceWith(inp);
+      inp.focus();
+      const crear = ()=>{
+        const n = inp.value.trim();
+        if(n){
+          const pr = {id:uid(), nombre:n, dir:'', mail:'', notas:''};
+          proveedores.push(pr);
+          od.proveedor = pr.id;
+          guardarDatos(); renderClientes();
+        }
+        renderOdProveedor();
+      };
+      inp.addEventListener('blur', crear);
+      inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+    }else if(sel.value){
+      od.proveedor = sel.value;
+      guardarDatos();
+      renderOdProveedor();
+    }
+  };
+  fila.appendChild(sel);
+  zona.appendChild(fila);
+  if(prov){
+    const nota = document.createElement('div');
+    nota.style.cssText = 'font-size:.68rem;color:var(--texto2);margin-top:4px';
+    nota.textContent = 'Cada trabajo suma deuda a su cuenta. Vela en su ficha (👥 → 🏭).';
+    zona.appendChild(nota);
+  }
+}
+function actualizarOffDig(){
+  const calc = odCalcular(odMeta);
+  // posado
+  const pos = document.getElementById('odPosado');
+  if(odMeta.porPieza){
+    if(calc.posado && calc.posado.n > 0){
+      pos.innerHTML = '📐 Entran <b>' + calc.posado.n + ' piezas por hoja</b> (' + calc.posado.detalle +
+        (calc.posado.rot ? ', pieza rotada' : '') + ') → ' + calc.hojasBase + ' hojas' +
+        (calc.posado.bajadas ? ' · ~' + calc.posado.bajadas + ' bajadas de cuchilla' : '');
+      // sugerencia de corte
+      if(odMeta.corte==='no' && calc.posado.bajadas){
+        pos.innerHTML += '<br>💡 Sugerencia: corte ' + (calc.posado.bajadas<=15 ? 'hasta 15 bajadas' : 'de más de 15 bajadas');
+      }
+    }else if(odMeta.pzAncho && odMeta.pzAlto){
+      pos.innerHTML = '⚠️ La pieza no entra en la hoja de ' + od.hojaW + '×' + od.hojaH + ' cm';
+    }else{
+      pos.innerHTML = 'Poné la medida de la pieza y la cantidad.';
+    }
+  }
+  // resumen
+  const r = document.getElementById('odResumen');
+  if(calc.hojas > 0){
+    r.innerHTML =
+      'Hojas: <b>' + calc.hojas + '</b> (' + calc.hojasBase + ' + 1 de armado) × ' + plata(calc.costoHoja) + '<br>' +
+      'Costo total: <b>' + plata(calc.costo) + '</b>' + (calc.corte.costo ? ' (incluye corte ' + plata(calc.corte.costo) + ')' : '') + '<br>' +
+      'Margen: <input id="odMargenIn" type="number" inputmode="numeric" value="' + calc.margen + '" style="width:58px;margin:0;padding:5px;font-size:14px;text-align:center;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--ambar);font-weight:800">% (todo el pedido)<br>' +
+      '<span style="font-size:1rem;color:#4cd27d;font-weight:800">VENTA: ' + plata(calc.venta) + '</span>' +
+      (calc.corte.venta ? ' <span style="color:var(--texto2);font-size:.72rem">(corte fijo ' + plata(calc.corte.venta) + ' incluido)</span>' : '');
+    const mIn = document.getElementById('odMargenIn');
+    mIn.addEventListener('change', ()=>{
+      odPedido.odMargen = parseFloat(mIn.value)||od.margen;
+      // recalcular los ítems OD que ya estén en el pedido
+      for(const it of odPedido.items){ if(it.odMeta) recalcularItemOD(it); }
+      guardarDatos(); renderPedidos();
+      actualizarOffDig();
+      toast('Margen del pedido: ' + odPedido.odMargen + '% ✓');
+    });
+  }else{
+    r.innerHTML = 'Completá la cantidad para ver el precio.';
+  }
+}
+// entradas del armador
+document.getElementById('odHojas').addEventListener('input', e=>{ odMeta.hojas = parseInt(e.target.value)||null; actualizarOffDig(); });
+document.getElementById('odPzAncho').addEventListener('input', e=>{ odMeta.pzAncho = parseFloat(e.target.value)||null; actualizarOffDig(); });
+document.getElementById('odPzAlto').addEventListener('input', e=>{ odMeta.pzAlto = parseFloat(e.target.value)||null; actualizarOffDig(); });
+document.getElementById('odPzCant').addEventListener('input', e=>{ odMeta.pzCant = parseInt(e.target.value)||null; actualizarOffDig(); });
+document.getElementById('odDesc').addEventListener('input', e=>{ odMeta.desc = e.target.value.trim(); });
+document.getElementById('odModoHojas').onclick = ()=>{ odMeta.porPieza = false; renderOffDig(); };
+document.getElementById('odModoPieza').onclick = ()=>{ odMeta.porPieza = true; renderOffDig(); };
+document.getElementById('odCancelar').onclick = ()=>{ modalOffDig.classList.remove('abierto'); if(odPedido) abrirPedido(odPedido.id); };
+document.getElementById('odAgregar').onclick = ()=>{
+  const calc = odCalcular(odMeta);
+  if(calc.hojas <= 0){ toast('Falta la cantidad'); return; }
+  const item = {od:true, prod:null, odMeta: JSON.parse(JSON.stringify(odMeta)), cant:1, precio:0, costoU:0};
+  recalcularItemOD(item);
+  if(odItemIdx !== null && odPedido.items[odItemIdx]){
+    odPedido.items[odItemIdx] = item;
+  }else{
+    odPedido.items.push(item);
+  }
+  registrar('cargó offset digital en el pedido de ' + nombreClienteId(odPedido.cliente) + ' (' + plata(item.precio) + ')');
+  guardarDatos(); renderPedidos();
+  modalOffDig.classList.remove('abierto');
+  abrirPedido(odPedido.id);
+};
+modalOffDig.addEventListener('click', e=>{ if(e.target===modalOffDig){ modalOffDig.classList.remove('abierto'); if(odPedido) abrirPedido(odPedido.id); } });
+document.getElementById('btnOffDig').onclick = ()=>{
+  const p = pedidos.find(x=>x.id===pedidoAbierto);
+  if(!p) return;
+  modalPedido.classList.remove('abierto');
+  abrirOffDig(p);
+};
+
 /* ---------- mano de obra ---------- */
 let moPagandoPedido = null;
 function renderPedidoMO(p){
@@ -3289,7 +4027,7 @@ function renderPedidoMO(p){
   tog.style.cssText = 'flex:1;text-align:left;border-radius:12px;padding:12px;font-weight:700;font-size:.82rem;' +
     (it ? 'background:rgba(255,176,32,.15);border:1px solid var(--ambar);color:var(--ambar)'
         : 'background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)');
-  tog.textContent = (it ? '☑' : '☐') + ' Mano de obra (' + plata(mo.venta) + '/h)';
+  tog.textContent = (it ? '☑ Mano de obra' : '☐ Mano de obra (' + plata(mo.venta) + '/h)');
   tog.onclick = ()=>{
     if(it){
       p.items = p.items.filter(x=>!x.mo);
@@ -3314,6 +4052,37 @@ function renderPedidoMO(p){
     fila.appendChild(pagar);
   }
   cont.appendChild(fila);
+
+  // fila de horas: cantidad de horas × precio por hora = subtotal
+  if(it){
+    const horas = document.createElement('div');
+    horas.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:7px;font-size:.74rem;color:var(--texto2);flex-wrap:wrap';
+    horas.innerHTML =
+      '<span>Horas:</span>' +
+      '<input class="moHoras" type="number" inputmode="decimal" step="0.5" min="0.5" ' +
+        'style="width:64px;margin:0;padding:8px 6px;font-size:15px;text-align:center;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)">' +
+      '<span>h ×  $</span>' +
+      '<input class="moPrecio" type="number" inputmode="numeric" ' +
+        'style="width:84px;margin:0;padding:8px 6px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)">' +
+      '<span>/h</span>' +
+      '<span class="moSub" style="margin-left:auto;font-weight:800;color:var(--ambar);font-size:.85rem"></span>';
+    const inH = horas.querySelector('.moHoras');
+    const inP = horas.querySelector('.moPrecio');
+    const sub = horas.querySelector('.moSub');
+    inH.value = it.cant;
+    inP.value = it.precio;
+    sub.textContent = '= ' + plata(subtotalItem(it));
+    const refrescar = ()=>{
+      it.cant = parseFloat(inH.value) || 1;
+      it.precio = parseFloat(inP.value) || mo.venta;
+      sub.textContent = '= ' + plata(subtotalItem(it));
+      actualizarTotal(p);
+      sincronizarPedido();
+    };
+    inH.addEventListener('input', refrescar);
+    inP.addEventListener('input', refrescar);
+    cont.appendChild(horas);
+  }
 }
 function abrirPagoMO(p, it){
   modalPedido.classList.remove('abierto');
