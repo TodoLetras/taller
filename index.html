@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v4</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v6</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -321,6 +321,7 @@
     <div id="pedSenas"></div>
     <label>Facturación</label>
     <div class="cats-pick" id="pedFact"></div>
+    <div id="pedCierre"></div>
     <div class="acciones">
       <button id="pedBorrar" class="btn-peligro">🗑</button>
       <button id="pedPDF" style="background:var(--panel2);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:13px 10px;font-weight:700;font-size:.85rem">🖼 PDF</button>
@@ -2183,6 +2184,14 @@ function renderPedidos(){
   const cont = document.getElementById('listaPedidos');
   if(!cont) return;
   cont.innerHTML = '';
+  const enCalle = pedidos.filter(p=> p.estadoVenta!=='presupuesto' && p.cobro!=='cobrado')
+    .reduce((s,p)=> s + Math.max(0, totalPedido(p) - totalSenas(p)), 0);
+  if(enCalle > 0.5){
+    const bar = document.createElement('div');
+    bar.style.cssText = 'font-size:.74rem;font-weight:700;color:var(--ambar);text-align:center;padding:6px;background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.3);border-radius:10px;margin-bottom:8px';
+    bar.textContent = '💰 Por cobrar: ' + plata(enCalle);
+    cont.appendChild(bar);
+  }
   if(!pedidos.length){
     cont.innerHTML = '<div class="vacio">Sin pedidos todavía. Creá el primero con ＋.</div>';
     return;
@@ -2629,6 +2638,51 @@ function renderPedidoEstados(p){
   }
   renderSenas(p);
   renderPedidoFact(p);
+  renderCierre(p);
+}
+function renderCierre(p){
+  const cont = document.getElementById('pedCierre');
+  if(!cont) return;
+  cont.innerHTML = '';
+  if(p.estadoVenta === 'presupuesto') return; // los presupuestos no se cierran
+  const tieneMO = p.items.some(i=>i.mo && i.conf!==false);
+  const odItems = p.items.filter(i=>i.odMeta && i.conf!==false);
+  const condiciones = [
+    ['Venta confirmada', p.estadoVenta === 'confirmado' || p.estadoVenta === 'parcial'],
+    ['Cobrado completo', p.cobro === 'cobrado'],
+  ];
+  if(tieneMO) condiciones.push(['Mano de obra resuelta', !!p.moPagado || !!p.moNC]);
+  if(odItems.length) condiciones.push(['Offset digital cotejado con Pablo', odItems.every(i=>i.odConc)]);
+  condiciones.push(['WhatsApp de pagos enviado', !!p.waPagos, 'manual']);
+
+  const caja = document.createElement('div');
+  caja.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;padding:10px;margin-top:10px';
+  const tit = document.createElement('div');
+  tit.style.cssText = 'font-size:.68rem;font-weight:800;letter-spacing:.06em;color:var(--texto2);margin-bottom:6px';
+  tit.textContent = '📦 CIERRE DEL TRABAJO';
+  caja.appendChild(tit);
+  let completas = 0;
+  for(const [nombre, ok, manual] of condiciones){
+    if(ok) completas++;
+    const f = document.createElement(manual ? 'button' : 'div');
+    f.style.cssText = 'display:flex;gap:8px;align-items:center;font-size:.76rem;padding:3px 0;width:100%;background:none;border:none;text-align:left;color:' + (ok ? '#4cd27d' : 'var(--texto2)');
+    f.textContent = (ok ? '☑ ' : '☐ ') + nombre + (manual && !ok ? '  (tocá para tildar)' : '');
+    if(manual){
+      f.onclick = ()=>{
+        p.waPagos = !p.waPagos;
+        registrar((p.waPagos?'tildó':'destildó') + ' el WhatsApp de pagos del pedido de ' + nombreClienteId(p.cliente));
+        guardarDatos(); renderCierre(p);
+      };
+    }
+    caja.appendChild(f);
+  }
+  if(completas === condiciones.length){
+    const listo = document.createElement('div');
+    listo.style.cssText = 'margin-top:8px;text-align:center;font-weight:800;font-size:.8rem;color:#4cd27d;background:rgba(76,210,125,.1);border:1px solid rgba(76,210,125,.4);border-radius:10px;padding:9px';
+    listo.textContent = '✓ LISTO PARA ARCHIVAR (mové la carpeta en Dropbox)';
+    caja.appendChild(listo);
+  }
+  cont.appendChild(caja);
 }
 function renderSenas(p){
   const cont = document.getElementById('pedSenas');
@@ -3082,7 +3136,41 @@ function renderCaja(){
       h += '<div id="zonaCompensar" style="margin-top:8px"></div></div>';
       return h;
     })() +
+    (function(){
+      const pend = pedidos
+        .filter(p=> p.estadoVenta !== 'presupuesto' && p.cobro !== 'cobrado')
+        .map(p=> ({p, m: totalPedido(p) - totalSenas(p)}))
+        .filter(x=> x.m > 0.5);
+      const tot = pend.reduce((s,x)=> s+x.m, 0);
+      let h = '<div class="caja-card" style="margin-bottom:8px">' +
+        '<div class="cc-linea cc-saldo"><span>💰 Por cobrar</span><b style="color:' + (tot>0 ? 'var(--ambar)' : '#4cd27d') + '">' + plata(tot) + '</b></div>';
+      if(pend.length){
+        h += '<button id="pcToggle" style="width:100%;margin-top:6px;border-radius:10px;padding:9px;font-weight:700;font-size:.72rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)">Ver los ' + pend.length + ' trabajo(s) en la calle</button>' +
+          '<div id="pcLista" style="margin-top:6px"></div>';
+      }else{
+        h += '<div style="font-size:.72rem;color:var(--texto2)">Nada pendiente de cobro ✓</div>';
+      }
+      h += '</div>';
+      return h;
+    })() +
     '<div class="caja-card">' +
+(function(){
+      const deudores = pedidos
+        .filter(p=> p.estadoVenta !== 'presupuesto' && p.cobro !== 'cobrado' && totalPedido(p) > 0)
+        .map(p=> ({p, saldo: totalPedido(p) - totalSenas(p)}))
+        .filter(x=> x.saldo > 0.5)
+        .sort((a,b)=> b.saldo - a.saldo);
+      if(!deudores.length) return '';
+      const total = deudores.reduce((s,x)=>s+x.saldo,0);
+      let h = '<div class="caja-card" style="margin-bottom:8px;border-left:4px solid var(--ambar)">' +
+        '<div class="cc-mes">💰 Por cobrar (en la calle)</div>' +
+        '<div class="cc-linea cc-saldo"><span>' + deudores.length + ' trabajo(s)</span><b style="color:var(--ambar)">' + plata(total) + '</b></div>';
+      for(const x of deudores.slice(0,5)){
+        h += '<div class="cc-linea pcAbrir" data-id="' + x.p.id + '" style="font-size:.76rem;color:var(--texto2);cursor:pointer"><span>› ' + nombreClienteId(x.p.cliente) + (totalSenas(x.p)>0?' (señado)':'') + '</span><span>' + plata(x.saldo) + '</span></div>';
+      }
+      if(deudores.length > 5) h += '<div style="font-size:.68rem;color:var(--texto2);text-align:center">… y ' + (deudores.length-5) + ' más</div>';
+      return h + '</div>';
+    })() +
     '<div class="cc-mes">' + MESES[hoy.getMonth()] + ' ' + hoy.getFullYear() + '</div>' +
     '<div class="cc-linea"><span>💰 Cobrado</span><b style="color:#4cd27d">' + plata(ing) + '</b></div>' +
     '<div class="cc-linea"><span>📤 Pagado</span><b style="color:#ff7a7a">' + plata(egr) + '</b></div>' +
@@ -3121,6 +3209,35 @@ function renderCaja(){
     inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
   };
 
+  document.querySelectorAll('.pcAbrir').forEach(el=>{
+    el.onclick = ()=> abrirPedido(el.dataset.id);
+  });
+  const pcT = document.getElementById('pcToggle');
+  if(pcT) pcT.onclick = ()=>{
+    const l = document.getElementById('pcLista');
+    if(l.children.length){ l.innerHTML = ''; pcT.textContent = pcT.textContent.replace('Ocultar','Ver los'); return; }
+    const pend = pedidos
+      .filter(p=> p.estadoVenta !== 'presupuesto' && p.cobro !== 'cobrado')
+      .map(p=> ({p, m: totalPedido(p) - totalSenas(p)}))
+      .filter(x=> x.m > 0.5)
+      .sort((a,b)=> b.m - a.m);
+    for(const x of pend){
+      const f = document.createElement('div');
+      f.className = 'mov-fila';
+      f.style.borderLeft = '4px solid var(--ambar)';
+      const senado = totalSenas(x.p);
+      f.innerHTML = '<div class="mv-info"><div class="mv-concepto"></div><div class="mv-quien"></div></div>' +
+        '<span class="mv-monto" style="color:var(--ambar)">' + plata(x.m) + '</span>';
+      f.querySelector('.mv-concepto').textContent = nombreClienteId(x.p.cliente);
+      f.querySelector('.mv-quien').textContent = (x.p.cobro==='senado' && senado ? 'señado ' + plata(senado) + ' · ' : '') +
+        (x.p.estadoVenta==='parcial' ? 'confirmado parcial · ' : '') +
+        'desde ' + fechaLinda(new Date(x.p.creado||Date.now()).toISOString().slice(0,10));
+      f.querySelector('.mv-info').onclick = ()=> abrirPedido(x.p.id);
+      f.style.cursor = 'pointer';
+      l.appendChild(f);
+    }
+    pcT.textContent = 'Ocultar';
+  };
   const btnAj = document.getElementById('editAjusteSocios');
   if(btnAj) btnAj.onclick = ()=>{
     const linea = btnAj.closest('.cc-linea');
@@ -4589,6 +4706,14 @@ function renderPedidoMO(p){
       abrirPagoMO(p, it);
     };
     fila.appendChild(pagar);
+    if(!pagado){
+      const nc = document.createElement('button');
+      nc.textContent = '∅';
+      nc.title = 'No corresponde pagarla (la hacemos nosotros)';
+      nc.style.cssText = 'border-radius:12px;padding:12px 10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)';
+      nc.onclick = ()=>{ p.moNC = true; renderPedidoItems(p); guardarDatos(); toast('MO marcada como propia: no queda pendiente de pago'); };
+      fila.appendChild(nc);
+    }
   }
   cont.appendChild(fila);
 
