@@ -1967,7 +1967,7 @@ function renderCuentaOD(id, cont){
   for(const p of pedidos){
     if(p.estadoVenta === 'presupuesto') continue; // cotizado pero no vendido: Pablo no imprimió nada
     (p.items||[]).forEach((it, idx)=>{
-      if(it.odMeta){
+      if(it.odMeta && it.conf!==false){
         trabajos.push({p, it, idx, fecha: p.creado||0});
       }
     });
@@ -2135,7 +2135,8 @@ function subtotalItem(i){
 function medidaImpresion(i){
   return ((i.base||0)+2*(i.demAncho||0)) + '×' + ((i.altura||0)+2*(i.demAlto||0)) + 'cm';
 }
-function totalPedido(p){ return p.items.reduce((s,i)=> s + subtotalItem(i), 0); }
+function totalPedido(p){ return p.items.reduce((s,i)=> s + (i.conf===false ? 0 : subtotalItem(i)), 0); }
+function totalPresupuestado(p){ return p.items.reduce((s,i)=> s + subtotalItem(i), 0); }
 function costoItem(i){
   if(i.uv && i.costoM2){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);
@@ -2148,6 +2149,7 @@ function costoItem(i){
 function gananciaPedido(p){
   let ganancia = 0, sinCosto = 0;
   for(const i of p.items){
+    if(i.conf===false) continue;
     const c = costoItem(i);
     if(c===null){ sinCosto++; continue; }
     ganancia += subtotalItem(i) - c;
@@ -2179,6 +2181,7 @@ function renderPedidos(){
     const ef0 = estadoFact(p);
     const ef = ['x', ef0.label, ef0.color];
     f.style.borderLeftColor = (p.estadoVenta==='presupuesto') ? ev[2] : ec[2];
+    if(p.estadoVenta==='presupuesto') f.style.opacity = '.75';
     f.innerHTML =
       '<div class="ped-cab"><span class="ped-cli"></span><span class="ped-monto">'+plata(totalPedido(p))+'</span></div>' +
       '<div class="ped-det">'+p.items.length+' ítem(s) · '+horaLinda(p.creado).replace(/^(..):(..)$/,'hoy $1:$2')+'</div>' +
@@ -2414,6 +2417,29 @@ function renderPedidoItems(p){
         actualizarTotal(p); sincronizarPedido();
       });
     }
+    // confirmación por ítem: visible en modo parcial, o si el ítem quedó descartado
+    if(p.estadoVenta==='parcial' || it.conf===false){
+      const tg = document.createElement('button');
+      const activo = it.conf!==false;
+      tg.textContent = activo ? '✓' : '✗';
+      tg.title = activo ? 'El cliente lo confirmó (tocá para descartarlo)' : 'Descartado (tocá para reincorporarlo)';
+      tg.style.cssText = 'border-radius:8px;padding:4px 10px;font-weight:800;font-size:.85rem;border:1px solid ' +
+        (activo ? 'rgba(76,210,125,.5);background:rgba(76,210,125,.12);color:#4cd27d' : '#ff7a7a;background:rgba(255,122,122,.1);color:#ff7a7a');
+      tg.onclick = (ev)=>{
+        ev.stopPropagation();
+        it.conf = (it.conf===false) ? true : false;
+        registrar((it.conf===false?'descartó':'reincorporó') + ' el ítem "' + it.nombre.slice(0,40) + '" del pedido de ' + nombreClienteId(p.cliente));
+        renderPedidoItems(p); guardarDatos(); renderPedidos();
+      };
+      const cab = d.querySelector('.pi-cab');
+      if(cab) cab.insertBefore(tg, cab.firstChild);
+      else d.insertBefore(tg, d.firstChild);
+    }
+    if(it.conf===false){
+      d.style.opacity = '.5';
+      const nom = d.querySelector('.pi-nombre');
+      if(nom) nom.style.textDecoration = 'line-through';
+    }
     d.querySelector('.copiar-item').onclick = ()=> copiarItem(it);
     d.querySelector('.quitar-item').onclick = (e)=>{
       dosToques(e.target, '¿Borrar?', ()=>{
@@ -2437,7 +2463,12 @@ function actualizarTotal(p){
       (g.gastos ? ' <span style="color:#ff7a7a">· gastos asignados −' + plata(g.gastos) + '</span>' : '') +
       (g.sinCosto ? ' <span style="color:var(--texto2)">· ' + g.sinCosto + ' ítem(s) sin costo</span>' : '') + '</div>';
   }
-  document.getElementById('pedTotal').innerHTML = extra + 'Total: ' + plata(totalPedido(p));
+  const totConf = totalPedido(p), totPres = totalPresupuestado(p);
+  let lineaTotal = 'Total: ' + plata(totConf);
+  if(totPres > totConf){
+    lineaTotal = 'Confirmado: ' + plata(totConf) + ' <span style="font-size:.72rem;color:var(--texto2);font-weight:400">(presupuestado ' + plata(totPres) + ')</span>';
+  }
+  document.getElementById('pedTotal').innerHTML = extra + lineaTotal;
 }
 let timerPedido = null;
 function sincronizarPedido(){
@@ -2547,7 +2578,9 @@ function renderPedidoEstados(p){
     const b = document.createElement('button');
     b.textContent = nom;
     if(p.cobro===val){ b.style.background=color+'26'; b.style.borderColor=color; b.style.color=color; }
-    b.onclick = ()=>{ p.cobro = val; registrarCobroAuto(p); registrar('marcó "' + nom.replace(/^[^ ]+ /,'') + '" el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ')'); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
+    b.onclick = ()=>{ p.cobro = val;
+      if((val==='cobrado' || val==='senado') && p.estadoVenta==='presupuesto'){ p.estadoVenta = 'confirmado'; }
+      registrarCobroAuto(p); registrar('marcó "' + nom.replace(/^[^ ]+ /,'') + '" el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ')'); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
     cobro.appendChild(b);
   }
   renderPedidoFact(p);
@@ -2818,6 +2851,7 @@ document.getElementById('pedPresu').onclick = ()=>{
   if(nc && nc!=='Sin cliente') texto += 'Cliente: ' + nc + '\n';
   texto += '\n';
   for(const it of p.items){
+    if(it.conf===false) continue;
     const sub = subtotalItem(it);
     if(it.uv){
       texto += '▪ ' + it.nombre + ' · ' + it.base + '×' + it.altura + ' cm' + (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
@@ -3651,11 +3685,20 @@ function renderGanancias(){
     tot.className = 'ped-total';
     tot.textContent = 'Vendido: ' + plata(totV) + ' · Ganancia: ' + plata(totG);
     cont.prepend(tot);
+    const presupCount = pedidos.length - confirmados.length;
+    if(presupCount){
+      const nota = document.createElement('div');
+      nota.style.cssText = 'font-size:.7rem;color:var(--texto2);text-align:center;padding:2px 0 6px';
+      nota.textContent = '(' + presupCount + ' presupuesto(s) sin confirmar, no suman acá)';
+      cont.prepend(nota);
+    }
   }else{
     // agregación por producto en todos los pedidos
     const mapa = {};
     for(const p of pedidos){
+      if(p.estadoVenta === 'presupuesto') continue;
       for(const it of p.items){
+        if(it.conf===false) continue;
         const k = it.nombre;
         if(!mapa[k]) mapa[k] = {nombre:k, cant:0, vendido:0, ganancia:0, sinCosto:false};
         mapa[k].cant += (it.cant||0);
