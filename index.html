@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v6</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v9</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -337,7 +337,7 @@
     <h2>📦 Productos <span style="color:var(--texto2);font-weight:400;font-size:.72rem">(tocá los valores para editar)</span></h2>
     <div class="vistas" style="margin-bottom:10px">
       <button id="subProdCat" class="activo">📦 Catálogo</button>
-      <button id="subProdOff">📄 Offset</button>
+      <button id="subProdOff">📄 Offset estándar</button>
       <button id="subProdUV">🖨 UV Flaco</button>
     </div>
     <div id="panelCatalogo">
@@ -359,7 +359,7 @@
         <div style="flex:1.4">Ganancia sobre el costo: +<input id="offPct" type="number" step="1" inputmode="numeric">%</div>
         <button id="btnListaPrecios" style="flex:1;background:var(--panel2);border:1px solid var(--ambar);color:var(--ambar);border-radius:10px;font-weight:700;font-size:.72rem">📋 Copiar lista de precios</button>
       </div>
-      <div style="font-size:.68rem;color:var(--texto2);margin:6px 0 8px">Costos base: Te Imprimo Yo · Tocá el costo para actualizarlo</div>
+      <div style="font-size:.68rem;color:var(--texto2);margin:6px 0 8px">Proveedora: <b style="color:var(--texto)">Tamara</b> (Te Imprimo Yo) · Tocá el costo para actualizarlo · Cada ítem confirmado suma deuda a su cuenta (👥 → 🏭)</div>
       <div id="listaOffset" style="max-height:42vh;overflow-y:auto;margin-bottom:10px"></div>
       <div style="display:flex;gap:8px">
         <input id="inNuevoOffNombre" placeholder="Nuevo ítem offset" style="flex:2;margin:0">
@@ -645,7 +645,7 @@
     <input id="cliMail" type="email" placeholder="Opcional">
     <label>Notas</label>
     <textarea id="cliNotas" placeholder="Datos de facturación, horarios, referencias…"></textarea>
-    <div class="divisor">📋 Tareas de este cliente</div>
+    <div class="divisor" id="cliDivTareas">📋 Tareas de este cliente</div>
     <div id="cliTareas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
     <div id="cliCuenta" style="margin-bottom:10px"></div>
     <button id="cliNuevaTarea" style="width:100%;background:var(--panel);border:1px dashed var(--ambar);color:var(--ambar);border-radius:12px;padding:12px;font-weight:700;font-size:.85rem;margin-bottom:12px">＋ Tarea para este cliente</button>
@@ -879,6 +879,14 @@ async function cargar(){
         }
         od.proveedor = pablo.id;
       }
+      if(offset && !offset.proveedor){
+        let tamara = proveedores.find(x=> normalizarTexto(x.nombre)==='tamara');
+        if(!tamara){
+          tamara = {id:uid(), nombre:'Tamara', dir:'', mail:'', notas:'Proveedora de offset estándar (Te Imprimo Yo)'};
+          proveedores.push(tamara);
+        }
+        offset.proveedor = tamara.id;
+      }
       gastosFijos = d.gastosFijos || GASTOS_SEMILLA.map(g=>({id:uid()+Math.random().toString(36).slice(2,4), ...g}));
       if(d.offset){ offset = d.offset; }
       else{
@@ -914,6 +922,9 @@ async function cargar(){
   const pabloIni = {id:uid(), nombre:'Pablo', dir:'', mail:'', notas:'Proveedor de impresión offset digital'};
   proveedores.push(pabloIni);
   od.proveedor = pabloIni.id;
+  const tamaraIni = {id:uid(), nombre:'Tamara', dir:'', mail:'', notas:'Proveedora de offset estándar (Te Imprimo Yo)'};
+  proveedores.push(tamaraIni);
+  offset.proveedor = tamaraIni.id;
   iniciar(); guardarDatos();
 }
 async function guardarDatos(){
@@ -1866,7 +1877,16 @@ function abrirCliente(id){
   const res = buscarContacto(id);
   if(!res) return;
   const c = res.c;
-  document.getElementById('cliTitulo').textContent = (res.lista==='proveedores'?'🏭 Ficha del proveedor':'👤 Ficha del cliente');
+  const esProv = res.lista==='proveedores';
+  const palabra = esProv ? 'proveedor' : 'cliente';
+  document.getElementById('cliDivTareas').textContent = '📋 Tareas de este ' + palabra;
+  document.getElementById('cliNuevaTarea').textContent = '＋ Tarea para este ' + palabra;
+  document.getElementById('cliBorrar').textContent = '🗑 Borrar ' + palabra;
+  const tipoTxt = esProv ? 'proveedor' : 'cliente';
+  document.getElementById('cliTitulo').textContent = (esProv?'🏭 Ficha del proveedor':'👤 Ficha del cliente');
+  document.getElementById('cliDivTareas').textContent = '📋 Tareas de este ' + tipoTxt;
+  document.getElementById('cliNuevaTarea').textContent = '＋ Tarea para este ' + tipoTxt;
+  document.getElementById('cliBorrar').textContent = '🗑 Borrar ' + tipoTxt;
   document.getElementById('cliNombre').value = c.nombre;
   document.getElementById('cliCuit').value = c.cuit||'';
   document.getElementById('cliDir').value = c.dir||'';
@@ -1875,7 +1895,7 @@ function abrirCliente(id){
   const cont = document.getElementById('cliTareas');
   cont.innerHTML='';
   const suyas = tareas.filter(t=>t.cliente===id).sort((a,b)=>(a.orden||0)-(b.orden||0));
-  if(!suyas.length) cont.innerHTML = '<div class="vacio" style="padding:10px">Sin tareas para este cliente.</div>';
+  if(!suyas.length) cont.innerHTML = '<div class="vacio" style="padding:10px">Sin tareas para este ' + (res.lista==='proveedores'?'proveedor':'cliente') + '.</div>';
   for(const t of suyas) tarjetaTarea(t, cont);
   renderCuentaContacto(id, res.lista==='proveedores');
   modalCliente.classList.add('abierto');
@@ -1974,6 +1994,124 @@ function renderCuentaContacto(id, esProveedor){
     cont.appendChild(mas);
   }
   renderCuentaOD(id, cont);
+  renderCuentaOffStd(id, cont);
+}
+function renderCuentaOffStd(id, cont){
+  if(!offset || offset.proveedor !== id) return;
+  const trabajos = [];
+  for(const p of pedidos){
+    if(p.estadoVenta === 'presupuesto') continue;
+    (p.items||[]).forEach((it, idx)=>{
+      if(it.off && it.conf!==false){
+        trabajos.push({p, it, idx, fecha: p.creado||0});
+      }
+    });
+  }
+  const tit = document.createElement('div');
+  tit.className = 'divisor';
+  tit.textContent = '📄 Cuenta offset estándar';
+  cont.appendChild(tit);
+
+  const contacto = proveedores.find(x=>x.id===id);
+  const deudaIni = contacto ? (contacto.deudaInicial||0) : 0;
+  const deudaTrabajos = trabajos.reduce((s,t)=> s + (t.it.costoU||0)*(t.it.cant||1), 0);
+  const pagos = movimientos.filter(m=>m.quien===id && m.tipo==='egreso' && movReal(m)).reduce((s,m)=>s+(m.monto||0),0)
+    + (contacto ? (contacto.inicial||0) : 0);
+  const saldo = deudaIni + deudaTrabajos - pagos;
+
+  const card = document.createElement('div');
+  card.className = 'caja-card';
+  card.style.marginBottom = '8px';
+  card.innerHTML =
+    '<div class="cc-linea" style="font-size:.74rem;color:var(--texto2)"><span>Deuda inicial <button id="editDeudaIniOff" style="background:none;border:none;color:var(--ambar);font-size:.7rem;padding:0 4px">✏️</button></span><span>' + plata(deudaIni) + '</span></div>' +
+    '<div class="cc-linea"><span>Trabajos cargados (' + trabajos.length + ')</span><b>' + plata(deudaTrabajos) + '</b></div>' +
+    '<div class="cc-linea"><span>Pagado</span><b style="color:#4cd27d">' + plata(pagos) + '</b></div>' +
+    '<div class="cc-linea cc-saldo"><span>Saldo a pagar</span><b style="color:' + (saldo>0.5?'#ff7a7a':'#4cd27d') + '">' + plata(saldo) + '</b></div>';
+  cont.appendChild(card);
+  const btnD = card.querySelector('#editDeudaIniOff');
+  if(btnD && contacto) btnD.onclick = ()=>{
+    const linea = btnD.closest('.cc-linea');
+    linea.innerHTML = '<span style="font-size:.72rem;color:var(--texto2)">Deuda inicial</span>';
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.inputMode = 'numeric';
+    inp.value = deudaIni;
+    inp.style.cssText = 'width:120px;margin:0;padding:7px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+    linea.appendChild(inp);
+    inp.focus(); inp.select();
+    const g = ()=>{
+      contacto.deudaInicial = parseFloat(inp.value)||0;
+      registrar('ajustó la deuda inicial con ' + contacto.nombre + ' a ' + plata(contacto.deudaInicial));
+      guardarDatos();
+      document.getElementById('cliCuenta').innerHTML='';
+      renderCuentaContacto(id, true);
+    };
+    inp.addEventListener('blur', g);
+    inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+  };
+
+  if(trabajos.length){
+    const nota = document.createElement('div');
+    nota.style.cssText = 'font-size:.68rem;color:var(--texto2);margin-bottom:6px';
+    nota.textContent = 'Cotejo: ☐ marca verificado · tocá el monto para corregirlo al valor real.';
+    cont.appendChild(nota);
+    trabajos.sort((a,b)=> b.fecha - a.fecha);
+    for(const t of trabajos.slice(0, 25)){
+      const costoT = (t.it.costoU||0)*(t.it.cant||1);
+      const f = document.createElement('div');
+      f.className = 'mov-fila';
+      f.style.borderLeft = '4px solid ' + (t.it.offConc ? '#4cd27d' : '#c792ea');
+      f.innerHTML =
+        '<button class="conc" style="background:none;border:none;font-size:1rem;padding:2px 6px">' + (t.it.offConc ? '☑' : '☐') + '</button>' +
+        '<div class="mv-info"><div class="mv-concepto" style="font-size:.74rem"></div><div class="mv-quien"></div></div>' +
+        '<button class="offMonto" style="background:none;border:1px dashed ' + (t.it.offAjustado?'#4cd27d':'var(--borde)') + ';border-radius:8px;padding:5px 8px;font-weight:800;font-size:.78rem;color:' + (t.it.offAjustado?'#4cd27d':'#c792ea') + ';white-space:nowrap">' + plata(costoT) + '</button>';
+      f.querySelector('.mv-concepto').textContent = t.it.nombre + (t.it.cant>1 ? ' × '+t.it.cant : '');
+      f.querySelector('.mv-quien').textContent = fechaLinda(new Date(t.fecha).toISOString().slice(0,10)) + ' · pedido de ' + nombreClienteId(t.p.cliente) +
+        (t.it.offAjustado && t.it.offCostoEst!==undefined ? ' · estimado era ' + plata(t.it.offCostoEst) : '');
+      f.querySelector('.conc').onclick = ()=>{
+        t.it.offConc = !t.it.offConc;
+        registrar((t.it.offConc?'cotejó':'descotejó') + ' un trabajo de offset estándar (' + plata(costoT) + ')');
+        guardarDatos();
+        document.getElementById('cliCuenta').innerHTML='';
+        renderCuentaContacto(id, true);
+      };
+      f.querySelector('.offMonto').onclick = (ev)=>{
+        ev.stopPropagation();
+        const btn = ev.target;
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.inputMode = 'numeric';
+        inp.value = costoT;
+        inp.style.cssText = 'width:100px;margin:0;padding:6px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+        btn.replaceWith(inp);
+        inp.focus(); inp.select();
+        const g = ()=>{
+          const nuevo = parseFloat(inp.value)||0;
+          if(nuevo > 0 && nuevo !== costoT){
+            if(t.it.offCostoEst === undefined) t.it.offCostoEst = costoT;
+            t.it.costoU = nuevo / (t.it.cant||1);
+            t.it.offAjustado = true;
+            registrar('corrigió el costo real de un trabajo de offset estándar: ' + plata(t.it.offCostoEst) + ' → ' + plata(nuevo));
+            guardarDatos();
+          }
+          document.getElementById('cliCuenta').innerHTML='';
+          renderCuentaContacto(id, true);
+        };
+        inp.addEventListener('blur', g);
+        inp.addEventListener('keydown', e2=>{ if(e2.key==='Enter') inp.blur(); });
+      };
+      f.querySelector('.mv-info').onclick = ()=>{
+        modalCliente.classList.remove('abierto');
+        abrirPedido(t.p.id);
+      };
+      cont.appendChild(f);
+    }
+    const sinCotejar = trabajos.filter(t=>!t.it.offConc).length;
+    if(sinCotejar){
+      const aviso = document.createElement('div');
+      aviso.style.cssText = 'font-size:.7rem;color:var(--ambar);text-align:center;padding:4px;font-weight:700';
+      aviso.textContent = sinCotejar + ' trabajo(s) sin cotejar';
+      cont.appendChild(aviso);
+    }
+  }
 }
 function renderCuentaOD(id, cont){
   if(!od || od.proveedor !== id) return;
@@ -2562,7 +2700,7 @@ function renderBuscadorItems(p){
       b.className = 'sug-item';
       b.textContent = '📄 ' + m.nombre + '  —  ' + plata(precio);
       b.onclick = ()=>{
-        p.items.push({prod:null, nombre:m.nombre, cant:1, precio, costoU: m.costo});
+        p.items.push({prod:null, off:true, nombre:m.nombre, cant:1, precio, costoU: m.costo});
         renderPedidoItems(p); guardarDatos(); renderPedidos();
       };
       sug.appendChild(b);
@@ -4218,9 +4356,10 @@ function odCalcular(meta){
   const hojas = hojasBase > 0 ? hojasBase + 1 : 0; // +1 por armado de archivo
   const corte = meta.corte==='h15' ? od.corte.h15 : meta.corte==='m15' ? od.corte.m15 : {costo:0, venta:0};
   const margen = (odPedido && odPedido.odMargen !== undefined) ? odPedido.odMargen : od.margen;
-  const costo = hojas * costoHoja + corte.costo;
+  const costoCalc = hojas * costoHoja + corte.costo;
+  const costo = (meta.costoManual > 0) ? meta.costoManual : costoCalc;
   const venta = Math.round(hojas * costoHoja * (1 + margen/100)) + corte.venta;
-  return {hojas, hojasBase, costoHoja, costo, venta, corte, posado, margen};
+  return {hojas, hojasBase, costoHoja, costo, costoCalc, venta, corte, posado, margen};
 }
 function odNombre(meta, calc){
   const papel = meta.papel==='auto' ? 'Autoadhesivo brillante' : 'Papel ' + meta.papel + 'g';
@@ -4409,11 +4548,23 @@ function actualizarOffDig(){
   if(calc.hojas > 0){
     r.innerHTML =
       'Hojas: <b>' + calc.hojas + '</b> (' + calc.hojasBase + ' + 1 de armado) × ' + plata(calc.costoHoja) + '<br>' +
-      'Costo total: <b>' + plata(calc.costo) + '</b>' + (calc.corte.costo ? ' (incluye corte ' + plata(calc.corte.costo) + ')' : '') + '<br>' +
+      'Costo total: <b>' + plata(calc.costo) + '</b>' +
+      (odMeta.costoManual > 0
+        ? ' <span style="color:#5ab8ff;font-size:.72rem">✓ real del proveedor (calculado: ' + plata(calc.costoCalc) + ')</span>'
+        : (calc.corte.costo ? ' (incluye corte ' + plata(calc.corte.costo) + ')' : '')) + '<br>' +
+      '<input id="odCostoIn" type="number" inputmode="numeric" placeholder="o escribí el costo real que te pasó el proveedor $" value="' + (odMeta.costoManual > 0 ? odMeta.costoManual : '') + '" style="width:290px;max-width:100%;margin:2px 0 6px;padding:8px;font-size:13px;text-align:right;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff"><br>' +
       'Margen: <input id="odMargenIn" type="number" inputmode="numeric" value="' + calc.margen + '" style="width:58px;margin:0;padding:5px;font-size:14px;text-align:center;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--ambar);font-weight:800">% (todo el pedido)<br>' +
       '<span style="font-size:1rem;color:#4cd27d;font-weight:800">VENTA: ' + plata(calc.venta) + '</span>' +
       (calc.corte.venta ? ' <span style="color:var(--texto2);font-size:.72rem">(corte fijo ' + plata(calc.corte.venta) + ' incluido)</span>' : '') +
       '<br><input id="odVentaIn" type="number" inputmode="numeric" placeholder="o escribí la venta que pactaste $" style="width:210px;margin-top:6px;padding:8px;font-size:14px;text-align:right;background:var(--fondo);border:1px dashed #4cd27d;border-radius:8px;color:#4cd27d">';
+    const cIn = document.getElementById('odCostoIn');
+    if(cIn) cIn.addEventListener('change', ()=>{
+      const v = parseFloat(cIn.value)||0;
+      odMeta.costoManual = v > 0 ? v : null;
+      actualizarOffDig();
+      if(v > 0) toast('Costo real del proveedor: ' + plata(v) + ' ✓ (la deuda y la ganancia lo usan)');
+      else toast('Vuelve el costo calculado por tabla');
+    });
     const vIn = document.getElementById('odVentaIn');
     if(vIn) vIn.addEventListener('change', ()=>{
       const v = parseFloat(vIn.value)||0;
