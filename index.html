@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v14</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v15</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -339,6 +339,7 @@
       <button id="subProdCat" class="activo">📦 Catálogo</button>
       <button id="subProdOff">📄 Offset estándar</button>
       <button id="subProdUV">🖨 UV Flaco</button>
+      <button id="subProdRec">🧵 Recetas</button>
     </div>
     <div id="panelCatalogo">
       <div class="uv-mults" style="margin-bottom:10px">
@@ -366,6 +367,23 @@
         <input id="inNuevoOffNombre" placeholder="Nuevo ítem offset" style="flex:2;margin:0">
         <input id="inNuevoOffCosto" type="number" inputmode="numeric" placeholder="$ Costo" style="flex:1;margin:0">
         <button id="crearOff" style="flex:0 0 52px;background:var(--ambar);color:#1a1200;border:none;border-radius:10px;font-weight:800;font-size:1.1rem">＋</button>
+      </div>
+    </div>
+    <div id="panelRecetas" style="display:none">
+      <div style="font-size:.68rem;color:var(--texto2);margin:6px 0 8px">Insumos por lote (como los comprás) + recetas por producto. Tocá los valores para editar.</div>
+      <div id="listaRecetas"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="nuevaRecetaNombre" placeholder="Nueva receta…" style="flex:1;margin:0">
+        <button id="btnNuevaReceta" style="background:var(--ambar);color:#1a1200;border:none;border-radius:10px;padding:0 16px;font-weight:800">＋</button>
+      </div>
+      <div class="divisor" style="margin-top:14px">📦 Lotes de insumos</div>
+      <div id="listaLotes"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <input id="loteNombre" placeholder="Insumo" style="flex:2;min-width:120px;margin:0">
+        <input id="loteCant" type="number" inputmode="decimal" placeholder="Cant." style="width:70px;margin:0">
+        <input id="loteUnidad" placeholder="m/u/cm" style="width:64px;margin:0">
+        <input id="loteTotal" type="number" inputmode="numeric" placeholder="$ total lote" style="width:110px;margin:0">
+        <button id="btnNuevoLote" style="background:var(--ambar);color:#1a1200;border:none;border-radius:10px;padding:0 14px;font-weight:800">＋</button>
       </div>
     </div>
     <div id="panelUV" style="display:none">
@@ -710,6 +728,36 @@ let mo = {venta:15000, costo:7500};
 let esquemas = [];
 let cajaInicial = 0;
 let ajusteSocios = 0;
+let lotes = [], recetas = [];
+function SEMILLA_RECETAS(){
+  const L = (nombre, prov, cant, unidad, total, fecha)=>({id:uid(), nombre, prov, cant, unidad, total, fecha: fecha||null});
+  const cordura = L('Tela cordura', 'Imperio', 50, 'm', 346000);
+  const varilla = L('Varilla fibra de vidrio 6mm', '', 16, 'm', 107966);
+  const piton = L('Pitón con tuerca 4,76×70', 'Minfer', 20, 'u', 18757.8, '2026-07-15');
+  const regaton = L('Regatón plástico 16mm', 'Minfer', 20, 'u', 1400);
+  const silicona = L('Barra de silicona', 'Minfer', 4, 'barra', 3300);
+  const cano = L('Caño 15,85×1,2mm (tira 6m)', '', 6, 'm', 8933.12);
+  const maciza = L('Varilla maciza del 14', '', 600, 'cm', 15000);
+  const fliselina = L('Fliselina', '', 1, 'm', 700);
+  lotes = [cordura, varilla, piton, regaton, silicona, cano, maciza, fliselina];
+  recetas = [{
+    id: uid(), nombre: 'Fly Banner Recto (68×200)',
+    lineas: [
+      {tipo:'insumo', lote:cordura.id, cant:2, grupo:'tela'},
+      {tipo:'servicio', nombre:'Calandrado/sublimado (2m × $2.200)', costo:4400, grupo:'tela'},
+      {tipo:'servicio', nombre:'Costura (Evelyn)', costo:4000, grupo:'tela'},
+      {tipo:'insumo', lote:fliselina.id, cant:1, grupo:'tela'},
+      {tipo:'insumo', lote:varilla.id, cant:1, grupo:'estructura'},
+      {tipo:'insumo', lote:piton.id, cant:1, grupo:'estructura'},
+      {tipo:'insumo', lote:regaton.id, cant:1, grupo:'estructura'},
+      {tipo:'insumo', lote:silicona.id, cant:0.05, grupo:'estructura'},
+      {tipo:'insumo', lote:cano.id, cant:2.4, grupo:'estructura'},
+      {tipo:'servicio', nombre:'Galvanizado', costo:2000, grupo:'estructura'},
+      {tipo:'insumo', lote:maciza.id, cant:50, grupo:'estructura'}
+    ],
+    ventas: {tela: 51480, estructura: 29160, completo: 80640}
+  }];
+}
 let od = null;
 const OD_SEMILLA = {
   hojaW: 31.3, hojaH: 46.3,           // cm imprimibles
@@ -870,6 +918,9 @@ async function cargar(){
       historial = d.historial || [];
       if(d.mo) mo = d.mo;
       esquemas = d.esquemas || [];
+      lotes = d.lotes || [];
+      recetas = d.recetas || [];
+      if(!lotes.length && !recetas.length) SEMILLA_RECETAS();
       cajaInicial = d.cajaInicial || 0;
       ajusteSocios = d.ajusteSocios || 0;
       od = d.od || JSON.parse(JSON.stringify(OD_SEMILLA));
@@ -927,12 +978,13 @@ async function cargar(){
   const tamaraIni = {id:uid(), nombre:'Tamara', dir:'', mail:'', notas:'Proveedora de offset estándar (Te Imprimo Yo)'};
   proveedores.push(tamaraIni);
   offset.proveedor = tamaraIni.id;
+  SEMILLA_RECETAS();
   iniciar(); guardarDatos();
 }
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -2756,6 +2808,23 @@ function renderBuscadorItems(p){
       };
       sug.appendChild(b);
     }
+    // recetas: tela / estructura / completo
+    const resRec = recetas.filter(r=> normalizarTexto(r.nombre).includes(q)).slice(0,2);
+    for(const r of resRec){
+      for(const [grupo, etiqueta] of [['tela','tela'],['estructura','estructura'],['completo','completo']]){
+        const venta = r.ventas[grupo]||0;
+        if(venta<=0) continue;
+        const costo = grupo==='completo' ? costoReceta(r) : costoReceta(r, grupo);
+        const b = document.createElement('button');
+        b.className = 'sug-item';
+        b.textContent = '🧵 ' + r.nombre + ' · ' + etiqueta + '  —  ' + plata(venta);
+        b.onclick = ()=>{
+          p.items.push({prod:null, receta:r.id, nombre: r.nombre + ' (' + etiqueta + ')', cant:1, precio: venta, costoU: Math.round(costo)});
+          renderPedidoItems(p); guardarDatos(); renderPedidos();
+        };
+        sug.appendChild(b);
+      }
+    }
     // ítems offset (Te Imprimo Yo): precio de venta con la ganancia aplicada
     const resOff = offset.mats.filter(m=> normalizarTexto(m.nombre).includes(q)).slice(0,4);
     for(const m of resOff){
@@ -3749,6 +3818,8 @@ function aplicarDatosRemotos(d){
   historial = d.historial||historial;
   if(d.mo) mo = d.mo;
   esquemas = d.esquemas||esquemas;
+  lotes = d.lotes||lotes;
+  recetas = d.recetas||recetas;
   if(d.cajaInicial!==undefined) cajaInicial = d.cajaInicial;
   if(d.ajusteSocios!==undefined) ajusteSocios = d.ajusteSocios;
   if(d.od) od = d.od;
@@ -3948,7 +4019,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od});
+    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -3977,6 +4048,8 @@ document.getElementById('btnImportar').onclick = (e)=>{
     historial = d.historial||[];
     if(d.mo) mo = d.mo;
     esquemas = d.esquemas||[];
+    lotes = d.lotes||[];
+    recetas = d.recetas||[];
     cajaInicial = d.cajaInicial||0;
     ajusteSocios = d.ajusteSocios||0;
     if(d.od) od = d.od;
@@ -5070,13 +5143,205 @@ function setSubProd(s){
   document.getElementById('subProdCat').classList.toggle('activo', s==='cat');
   document.getElementById('subProdOff').classList.toggle('activo', s==='off');
   document.getElementById('subProdUV').classList.toggle('activo', s==='uv');
+  document.getElementById('subProdRec').classList.toggle('activo', s==='rec');
   document.getElementById('panelCatalogo').style.display = s==='cat' ? 'block' : 'none';
   document.getElementById('panelOffset').style.display = s==='off' ? 'block' : 'none';
   document.getElementById('panelUV').style.display = s==='uv' ? 'block' : 'none';
+  document.getElementById('panelRecetas').style.display = s==='rec' ? 'block' : 'none';
   if(s==='off') renderOffset();
   if(s==='uv') renderUV();
+  if(s==='rec') renderRecetas();
 }
+document.getElementById('subProdRec').onclick = ()=> setSubProd('rec');
 function ventaOffset(m){ return Math.round(m.costo * (1 + offset.pct/100)); }
+
+/* ---------- recetas e insumos por lote ---------- */
+function loteUnitario(l){ return (l.cant > 0) ? l.total / l.cant : 0; }
+function costoLinea(ln){
+  if(ln.tipo === 'servicio') return ln.costo || 0;
+  const l = lotes.find(x=>x.id===ln.lote);
+  return l ? loteUnitario(l) * (ln.cant||0) : 0;
+}
+function costoReceta(r, grupo){
+  return r.lineas.filter(ln=> !grupo || ln.grupo===grupo)
+    .reduce((s,ln)=> s + costoLinea(ln), 0);
+}
+function editable(el, valor, aplicar, ancho){
+  el.onclick = ()=>{
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.inputMode = 'decimal';
+    inp.value = valor();
+    inp.style.cssText = 'width:' + (ancho||90) + 'px;margin:0;padding:5px;font-size:14px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+    el.replaceWith(inp);
+    inp.focus(); inp.select();
+    const g = ()=>{ aplicar(parseFloat(inp.value)||0); guardarDatos(); renderRecetas(); };
+    inp.addEventListener('blur', g);
+    inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+  };
+}
+let recetaAbierta = null;
+function renderRecetas(){
+  // --- recetas ---
+  const contR = document.getElementById('listaRecetas');
+  contR.innerHTML = '';
+  for(const r of recetas){
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:12px;padding:10px;margin-bottom:8px';
+    const cab = document.createElement('div');
+    cab.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer';
+    const cTela = costoReceta(r,'tela'), cEst = costoReceta(r,'estructura'), cTot = cTela + cEst;
+    cab.innerHTML = '<b style="flex:1;font-size:.85rem">🧵 ' + r.nombre + '</b>' +
+      '<span style="font-size:.72rem;color:var(--texto2)">costo ' + plata(cTot) + '</span>' +
+      '<span style="color:var(--texto2)">' + (recetaAbierta===r.id ? '▾' : '▸') + '</span>';
+    cab.onclick = ()=>{ recetaAbierta = (recetaAbierta===r.id ? null : r.id); renderRecetas(); };
+    card.appendChild(cab);
+
+    if(recetaAbierta === r.id){
+      const cuerpo = document.createElement('div');
+      cuerpo.style.marginTop = '10px';
+      for(const grupo of ['tela','estructura']){
+        const gTit = document.createElement('div');
+        gTit.style.cssText = 'font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ambar);margin:8px 0 4px';
+        gTit.textContent = grupo==='tela' ? '🧶 Por tela' : '🔩 Por estructura';
+        cuerpo.appendChild(gTit);
+        r.lineas.forEach((ln, idx)=>{
+          if(ln.grupo !== grupo) return;
+          const l = ln.tipo==='insumo' ? lotes.find(x=>x.id===ln.lote) : null;
+          const f = document.createElement('div');
+          f.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:.74rem;padding:5px 0;border-bottom:1px dashed var(--borde)';
+          const nom = document.createElement('span');
+          nom.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis';
+          nom.textContent = ln.tipo==='insumo' ? (l ? l.nombre : '(lote borrado)') : '🛠 ' + ln.nombre;
+          f.appendChild(nom);
+          if(ln.tipo==='insumo' && l){
+            const pct = l.cant>0 ? Math.round(ln.cant/l.cant*1000)/10 : 0;
+            const uso = document.createElement('button');
+            uso.style.cssText = 'background:none;border:1px dashed var(--borde);border-radius:6px;padding:3px 7px;color:var(--texto2);font-size:.7rem';
+            uso.textContent = ln.cant + ' ' + l.unidad + ' (' + pct + '%)';
+            editable(uso, ()=>ln.cant, v=>{ ln.cant = v; });
+            f.appendChild(uso);
+          }else{
+            const cs = document.createElement('button');
+            cs.style.cssText = 'background:none;border:1px dashed var(--borde);border-radius:6px;padding:3px 7px;color:var(--texto2);font-size:.7rem';
+            cs.textContent = plata(ln.costo||0);
+            editable(cs, ()=>ln.costo||0, v=>{ ln.costo = v; });
+            f.appendChild(cs);
+          }
+          const val = document.createElement('b');
+          val.style.cssText = 'width:80px;text-align:right;font-size:.76rem';
+          val.textContent = plata(costoLinea(ln));
+          f.appendChild(val);
+          const quitar = document.createElement('button');
+          quitar.textContent = '✕';
+          quitar.style.cssText = 'background:none;border:none;color:var(--texto2);padding:0 2px';
+          quitar.onclick = (e)=> dosToques(e.target, '¿?', ()=>{ r.lineas.splice(idx,1); guardarDatos(); renderRecetas(); });
+          f.appendChild(quitar);
+          cuerpo.appendChild(f);
+        });
+        const sub = document.createElement('div');
+        sub.style.cssText = 'display:flex;justify-content:space-between;font-size:.76rem;font-weight:800;padding:5px 0';
+        const cGrupo = costoReceta(r, grupo);
+        const vGrupo = r.ventas[grupo] || 0;
+        sub.innerHTML = '<span>Subtotal ' + grupo + ': ' + plata(cGrupo) + '</span>' +
+          '<span>Venta: <button class="vGrupo" style="background:none;border:1px dashed #4cd27d;border-radius:6px;padding:3px 8px;color:#4cd27d;font-weight:800">' + plata(vGrupo) + '</button>' +
+          (vGrupo>0 && cGrupo>0 ? ' <span style="color:var(--texto2);font-weight:400;font-size:.68rem">(+' + Math.round((vGrupo/cGrupo-1)*100) + '%)</span>' : '') + '</span>';
+        editable(sub.querySelector('.vGrupo'), ()=>vGrupo, v=>{ r.ventas[grupo] = v; });
+        cuerpo.appendChild(sub);
+      }
+      // completo
+      const comp = document.createElement('div');
+      const vComp = r.ventas.completo || 0;
+      comp.style.cssText = 'display:flex;justify-content:space-between;font-size:.8rem;font-weight:800;padding:8px 0;border-top:1px solid var(--borde);margin-top:4px';
+      comp.innerHTML = '<span>COMPLETO · costo ' + plata(cTot) + '</span>' +
+        '<span>Venta: <button class="vComp" style="background:none;border:1px dashed #4cd27d;border-radius:6px;padding:3px 8px;color:#4cd27d;font-weight:800">' + plata(vComp) + '</button>' +
+        (vComp>0 && cTot>0 ? ' <span style="color:var(--texto2);font-weight:400;font-size:.68rem">(+' + Math.round((vComp/cTot-1)*100) + '%)</span>' : '') + '</span>';
+      editable(comp.querySelector('.vComp'), ()=>vComp, v=>{ r.ventas.completo = v; });
+      cuerpo.appendChild(comp);
+
+      // agregar líneas
+      const agregar = document.createElement('div');
+      agregar.style.cssText = 'display:flex;gap:6px;margin-top:8px;flex-wrap:wrap';
+      const selLote = document.createElement('select');
+      selLote.style.cssText = 'flex:2;min-width:130px;margin:0;padding:8px;font-size:13px;background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+      selLote.innerHTML = '<option value="">+ insumo…</option>' +
+        lotes.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('') +
+        '<option value="__serv__">🛠 servicio (costo directo)…</option>';
+      const selGrupo = document.createElement('select');
+      selGrupo.style.cssText = 'margin:0;padding:8px;font-size:13px;background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+      selGrupo.innerHTML = '<option value="tela">tela</option><option value="estructura">estructura</option>';
+      const btnL = document.createElement('button');
+      btnL.textContent = '＋';
+      btnL.style.cssText = 'background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:0 14px;font-weight:800';
+      btnL.onclick = ()=>{
+        if(!selLote.value) return;
+        if(selLote.value === '__serv__'){
+          const nombre = prompt ? null : null;
+          r.lineas.push({tipo:'servicio', nombre:'Servicio nuevo (editá el costo)', costo:0, grupo:selGrupo.value});
+        }else{
+          r.lineas.push({tipo:'insumo', lote:selLote.value, cant:1, grupo:selGrupo.value});
+        }
+        guardarDatos(); renderRecetas();
+      };
+      agregar.appendChild(selLote); agregar.appendChild(selGrupo); agregar.appendChild(btnL);
+      cuerpo.appendChild(agregar);
+
+      const borrarR = document.createElement('button');
+      borrarR.textContent = '🗑 Borrar receta';
+      borrarR.style.cssText = 'margin-top:8px;font-size:.7rem;background:none;border:none;color:#ff7a7a';
+      borrarR.onclick = (e)=> dosToques(e.target, '¿Borrar?', ()=>{ recetas = recetas.filter(x=>x.id!==r.id); guardarDatos(); renderRecetas(); });
+      cuerpo.appendChild(borrarR);
+      card.appendChild(cuerpo);
+    }
+    contR.appendChild(card);
+  }
+
+  // --- lotes ---
+  const contL = document.getElementById('listaLotes');
+  contL.innerHTML = '';
+  for(const l of lotes){
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:.74rem;padding:6px 0;border-bottom:1px dashed var(--borde)';
+    const nom = document.createElement('span');
+    nom.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis';
+    nom.textContent = l.nombre + (l.prov ? ' · ' + l.prov : '');
+    f.appendChild(nom);
+    const detalle = document.createElement('button');
+    detalle.style.cssText = 'background:none;border:1px dashed var(--borde);border-radius:6px;padding:3px 7px;color:var(--texto2);font-size:.7rem;white-space:nowrap';
+    detalle.textContent = l.cant + ' ' + l.unidad + ' · ' + plata(l.total);
+    editable(detalle, ()=>l.total, v=>{ l.total = v; });
+    f.appendChild(detalle);
+    const unit = document.createElement('b');
+    unit.style.cssText = 'width:96px;text-align:right;font-size:.72rem;color:var(--ambar)';
+    unit.textContent = plata(loteUnitario(l)) + '/' + l.unidad;
+    f.appendChild(unit);
+    const quitar = document.createElement('button');
+    quitar.textContent = '✕';
+    quitar.style.cssText = 'background:none;border:none;color:var(--texto2);padding:0 2px';
+    quitar.onclick = (e)=> dosToques(e.target, '¿?', ()=>{ lotes = lotes.filter(x=>x.id!==l.id); guardarDatos(); renderRecetas(); });
+    f.appendChild(quitar);
+    contL.appendChild(f);
+  }
+}
+document.getElementById('btnNuevaReceta').onclick = ()=>{
+  const n = document.getElementById('nuevaRecetaNombre').value.trim();
+  if(!n) return;
+  recetas.push({id:uid(), nombre:n, lineas:[], ventas:{tela:0, estructura:0, completo:0}});
+  document.getElementById('nuevaRecetaNombre').value = '';
+  recetaAbierta = recetas[recetas.length-1].id;
+  registrar('creó la receta "' + n + '"');
+  guardarDatos(); renderRecetas();
+};
+document.getElementById('btnNuevoLote').onclick = ()=>{
+  const n = document.getElementById('loteNombre').value.trim();
+  const cant = parseFloat(document.getElementById('loteCant').value)||0;
+  const unidad = document.getElementById('loteUnidad').value.trim() || 'u';
+  const total = parseFloat(document.getElementById('loteTotal').value)||0;
+  if(!n || cant<=0) return;
+  lotes.push({id:uid(), nombre:n, prov:'', cant, unidad, total, fecha: hoyISO()});
+  for(const el of ['loteNombre','loteCant','loteUnidad','loteTotal']) document.getElementById(el).value = '';
+  registrar('cargó el lote de insumo "' + n + '" (' + plata(total) + ')');
+  guardarDatos(); renderRecetas();
+};
 function renderOffProveedor(){
   const zona = document.getElementById('offProvZona');
   if(!zona) return;
