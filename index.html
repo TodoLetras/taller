@@ -2769,10 +2769,14 @@ document.getElementById('pedPresu').onclick = ()=>{
     if(it.uv){
       texto += '▪ ' + it.nombre + ' · ' + it.base + '×' + it.altura + ' cm' + (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
     }else{
-      texto += '▪ ' + it.nombre + (it.cant>1 ? ' × '+it.cant+(it.mo?' h':'') : '') + ': ' + plata(sub) + '\n';
+      texto += '▪ ' + it.nombre + (it.cant>1 ? ' × '+it.cant+(it.mo?' h':'') : '') + ': ' + plata(sub) +
+        (it.abierto ? ' *' : '') + '\n';
     }
   }
   texto += '\n*TOTAL: ' + plata(totalPedido(p)) + '*\n';
+  if(p.items.some(it=>it.abierto)){
+    texto += '\n(*) Valor estimado por hora de trabajo: se ajusta según las horas reales que lleve.\n';
+  }
   texto += '\nPresupuesto válido por 7 días. Cualquier consulta estamos a disposición.';
   document.getElementById('resumenTitulo').textContent = '📋 Presupuesto para el cliente';
   document.getElementById('resumenTexto').value = texto;
@@ -4105,6 +4109,18 @@ function renderPedidoMO(p){
   };
   fila.appendChild(tog);
   if(it){
+    const abierta = document.createElement('button');
+    abierta.textContent = it.abierto ? '⏱ Abierta' : '⏱';
+    abierta.title = 'Presupuesto abierto: se ajusta según las horas reales';
+    abierta.style.cssText = 'border-radius:12px;padding:12px;font-weight:700;font-size:.74rem;white-space:nowrap;' +
+      (it.abierto ? 'background:rgba(90,184,255,.15);border:1px solid #5ab8ff;color:#5ab8ff'
+                  : 'background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)');
+    abierta.onclick = ()=>{
+      it.abierto = !it.abierto;
+      renderPedidoItems(p); guardarDatos();
+      toast(it.abierto ? 'MO abierta: el presupuesto aclara que se ajusta por horas reales' : 'MO cerrada: precio fijo');
+    };
+    fila.appendChild(abierta);
     const pagar = document.createElement('button');
     const pagado = !!p.moPagado;
     pagar.style.cssText = 'border-radius:12px;padding:12px;font-weight:700;font-size:.74rem;white-space:nowrap;' +
