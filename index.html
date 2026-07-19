@@ -536,6 +536,8 @@
     <input id="movConcepto" placeholder="Ej: pago lonas al Flaco, adelanto, etc.">
     <label>Cliente / Proveedor (opcional)</label>
     <div class="cats-pick" id="movQuien"></div>
+    <label>¿Para un trabajo? <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional — vacío = gasto general)</span></label>
+    <div class="cats-pick" id="movPedido"></div>
     <label>¿Quién cobró / pagó?</label>
     <div class="cats-pick" id="movPersona"></div>
     <label>Fecha</label>
@@ -691,7 +693,7 @@ const LIMITE_BLOQUES_MB = 4.5;
 
 let cats = [], tareas = [], clientes = [], proveedores = [], productos = [], pedidos = [];
 let uv = null, offset = null;
-let movimientos = [], filtroCaja = 'todos', movTipoSel = 'egreso', movQuienSel = null, movPersonaSel = null;
+let movimientos = [], filtroCaja = 'todos', movTipoSel = 'egreso', movQuienSel = null, movPersonaSel = null, movPedidoSel = null;
 const PERSONAS = [['Marcos','#ffb020'],['Gastón','#5ab8ff']];
 let gastosFijos = [];
 let mo = {venta:15000, costo:7500};
@@ -2133,7 +2135,10 @@ function gananciaPedido(p){
     if(c===null){ sinCosto++; continue; }
     ganancia += subtotalItem(i) - c;
   }
-  return {ganancia, sinCosto};
+  const gastos = movimientos.filter(m=> m.tipo==='egreso' && m.pedido===p.id && !m.auto)
+    .reduce((s,m)=> s+(m.monto||0), 0);
+  ganancia -= gastos;
+  return {ganancia, sinCosto, gastos};
 }
 function nombreClienteId(id){
   if(!id) return 'Sin cliente';
@@ -2391,6 +2396,7 @@ function actualizarTotal(p){
     const total = totalPedido(p);
     const pct = total ? Math.round(g.ganancia/total*100) : 0;
     extra = '<div style="font-size:.74rem;color:#4cd27d;font-weight:700">Ganancia: ' + plata(g.ganancia) + ' (' + pct + '%)' +
+      (g.gastos ? ' <span style="color:#ff7a7a">· gastos asignados −' + plata(g.gastos) + '</span>' : '') +
       (g.sinCosto ? ' <span style="color:var(--texto2)">· ' + g.sinCosto + ' ítem(s) sin costo</span>' : '') + '</div>';
   }
   document.getElementById('pedTotal').innerHTML = extra + 'Total: ' + plata(totalPedido(p));
@@ -2993,7 +2999,12 @@ function renderCaja(){
       '<button class="mini borrarMov">✕</button>';
     f.querySelector('.mv-concepto').textContent = m.concepto || (m.tipo==='ingreso'?'Cobro':'Pago');
     const q = nombreQuien(m.quien);
-    f.querySelector('.mv-quien').textContent = q + (m.auto ? (q?' · ':'') + 'automático del pedido' : '');
+    let quienTxt = q + (m.auto ? (q?' · ':'') + 'automático del pedido' : '');
+    if(m.pedido && !m.auto){
+      const pAsig = pedidos.find(x=>x.id===m.pedido);
+      if(pAsig) quienTxt += (quienTxt?' · ':'') + '🧾 ' + nombreClienteId(pAsig.cliente);
+    }
+    f.querySelector('.mv-quien').textContent = quienTxt;
     // etiqueta de persona: asignada, o selector si falta (típico en cobros automáticos)
     const zonaPersona = document.createElement('span');
     if(m.persona){
@@ -3452,12 +3463,13 @@ function renderGastos(){
       modalGastos.classList.remove('abierto');
       movTipoSel = 'egreso';
       movQuienSel = null;
+      movPedidoSel = null;
       movPersonaSel = null;
       document.getElementById('movMonto').value = g.monto || '';
       document.getElementById('movConcepto').value = g.nombre;
       document.getElementById('movFecha').value = hoyISO();
       gastoFijoPagando = g.id;
-      renderMovTipo(); renderMovQuien(); renderMovPersona();
+      renderMovTipo(); renderMovQuien(); renderMovPedido(); renderMovPersona();
       modalMov.classList.add('abierto');
     };
     f.querySelector('.borrarGasto').onclick = (e)=>{
@@ -3620,15 +3632,69 @@ document.getElementById('btnNuevoMov').onclick = ()=>{
   gastoFijoPagando = null;
   movTipoSel = 'egreso';
   movQuienSel = null;
+  movPedidoSel = null;
   movPersonaSel = PERSONAS.find(p=>p[0]===usuarioActual) ? usuarioActual : null;
   document.getElementById('movMonto').value = '';
   document.getElementById('movConcepto').value = '';
   document.getElementById('movFecha').value = hoyISO();
   renderMovTipo();
   renderMovQuien();
+  renderMovPedido();
   renderMovPersona();
   modalMov.classList.add('abierto');
 };
+function renderMovPedido(){
+  const cont = document.getElementById('movPedido');
+  if(!cont) return;
+  cont.innerHTML = '';
+  if(movTipoSel !== 'egreso'){
+    cont.innerHTML = '<div style="font-size:.72rem;color:var(--texto2);padding:4px 2px">Solo aplica a pagos.</div>';
+    movPedidoSel = null;
+    return;
+  }
+  if(movPedidoSel){
+    const p = pedidos.find(x=>x.id===movPedidoSel);
+    const chip = document.createElement('button');
+    chip.className = 'chip-cliente';
+    chip.style.cssText += ';max-width:100%;white-space:normal;text-align:left';
+    chip.textContent = p ? ('🧾 ' + nombreClienteId(p.cliente) + ' · ' + plata(totalPedido(p)) + '  ✕') : '(pedido borrado)  ✕';
+    chip.onclick = ()=>{ movPedidoSel = null; renderMovPedido(); };
+    cont.appendChild(chip);
+    return;
+  }
+  const inp = document.createElement('input');
+  inp.className = 'buscador-cli';
+  inp.placeholder = 'Buscar trabajo… (o dejá vacío)';
+  cont.appendChild(inp);
+  const sug = document.createElement('div');
+  sug.className = 'sugerencias';
+  cont.appendChild(sug);
+  function filtrar(){
+    const q = normalizarTexto(inp.value.trim());
+    sug.innerHTML = '';
+    let candidatos = pedidos.slice().sort((a,b)=>(b.creado||0)-(a.creado||0));
+    if(q){
+      candidatos = candidatos.filter(p=>
+        normalizarTexto(nombreClienteId(p.cliente)).includes(q) ||
+        p.items.some(it=> normalizarTexto(it.nombre).includes(q)));
+    }
+    if(!q && candidatos.length){
+      const t = document.createElement('div');
+      t.className = 'sug-titulo';
+      t.textContent = 'Recientes';
+      sug.appendChild(t);
+    }
+    for(const p of candidatos.slice(0,5)){
+      const b = document.createElement('button');
+      b.className = 'sug-item';
+      b.textContent = nombreClienteId(p.cliente) + ' · ' + plata(totalPedido(p)) + (p.items[0] ? ' · ' + p.items[0].nombre.slice(0,30) : '');
+      b.onclick = ()=>{ movPedidoSel = p.id; renderMovPedido(); };
+      sug.appendChild(b);
+    }
+  }
+  inp.addEventListener('input', filtrar);
+  filtrar();
+}
 function renderMovPersona(){
   const cont = document.getElementById('movPersona');
   cont.innerHTML = '';
@@ -3647,7 +3713,7 @@ function renderMovTipo(){
     const b = document.createElement('button');
     b.textContent = nom;
     if(movTipoSel===val){ b.style.background=color+'26'; b.style.borderColor=color; b.style.color=color; }
-    b.onclick = ()=>{ movTipoSel = val; movQuienSel = null; renderMovTipo(); renderMovQuien(); };
+    b.onclick = ()=>{ movTipoSel = val; movQuienSel = null; renderMovTipo(); renderMovQuien(); renderMovPedido(); };
     cont.appendChild(b);
   }
 }
@@ -3709,7 +3775,7 @@ document.getElementById('movGuardar').onclick = ()=>{
     (movTipoSel==='egreso' ? 'Pago a proveedor' : 'Cobro');
   registrar((movTipoSel==='egreso'?'registró un pago':'registró un cobro')+' de '+plata(monto)+' ('+concepto+')');
   movimientos.push({id:uid(), tipo:movTipoSel, monto, concepto, persona: movPersonaSel,
-    quien: movQuienSel, gastoFijo: gastoFijoPagando,
+    quien: movQuienSel, gastoFijo: gastoFijoPagando, pedido: (movTipoSel==='egreso' ? movPedidoSel : null),
     fecha: document.getElementById('movFecha').value || hoyISO(), creado: Date.now()});
   if(moPagandoPedido){
     const pp = pedidos.find(x=>x.id===moPagandoPedido);
@@ -4059,7 +4125,7 @@ function renderPedidoMO(p){
     horas.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:7px;font-size:.74rem;color:var(--texto2);flex-wrap:wrap';
     horas.innerHTML =
       '<span>Horas:</span>' +
-      '<input class="moHoras" type="number" inputmode="decimal" step="0.5" min="0.5" ' +
+      '<input class="moHoras" type="text" inputmode="decimal" ' +
         'style="width:64px;margin:0;padding:8px 6px;font-size:15px;text-align:center;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)">' +
       '<span>h ×  $</span>' +
       '<input class="moPrecio" type="number" inputmode="numeric" ' +
@@ -4073,7 +4139,7 @@ function renderPedidoMO(p){
     inP.value = it.precio;
     sub.textContent = '= ' + plata(subtotalItem(it));
     const refrescar = ()=>{
-      it.cant = parseFloat(inH.value) || 1;
+      it.cant = parseFloat(String(inH.value).replace(',', '.')) || 1;
       it.precio = parseFloat(inP.value) || mo.venta;
       sub.textContent = '= ' + plata(subtotalItem(it));
       actualizarTotal(p);
@@ -4090,12 +4156,13 @@ function abrirPagoMO(p, it){
   gastoFijoPagando = null;
   movTipoSel = 'egreso';
   movQuienSel = null;
+  movPedidoSel = null; // la MO ya descuenta su costo en el ítem; no se asigna para no restar dos veces
   movPersonaSel = PERSONAS.find(x=>x[0]===usuarioActual) ? usuarioActual : null;
   const horas = it.cant || 1;
   document.getElementById('movMonto').value = horas * mo.costo;
   document.getElementById('movConcepto').value = 'Mano de obra: ' + nombreClienteId(p.cliente) + ' (' + horas + 'h × ' + plata(mo.costo) + ')';
   document.getElementById('movFecha').value = hoyISO();
-  renderMovTipo(); renderMovQuien(); renderMovPersona();
+  renderMovTipo(); renderMovQuien(); renderMovPedido(); renderMovPersona();
   modalMov.classList.add('abierto');
 }
 
