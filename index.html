@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v11</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v13</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -249,7 +249,7 @@
   <div class="vistas">
     <button id="vLista" class="activo">☰ Lista</button>
     <button id="vCal">📅 Calendario</button>
-    <button id="vCli">👥 Clientes</button>
+    <button id="vCli">👥 Contactos</button>
     <button id="vPed">🧾 Pedidos</button>
     <button id="vCaja">💵 Caja</button>
   </div>
@@ -1926,9 +1926,12 @@ function renderCuentaContacto(id, esProveedor){
     b0.textContent = '＋ Cargar arrastre anterior a la app';
     b0.style.cssText = 'width:100%;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)';
     b0.onclick = ()=>{
-      if(contacto){ contacto.inicial = 0.01; renderCuentaContacto(id, esProveedor); setTimeout(()=>{ const e2=document.getElementById('editArrastre'); if(e2) e2.click(); },50); }
+      if(contacto){ contacto.inicial = 0.01; document.getElementById('cliCuenta').innerHTML=''; renderCuentaContacto(id, esProveedor); setTimeout(()=>{ const e2=document.getElementById('editArrastre'); if(e2) e2.click(); },50); }
     };
     cont.appendChild(b0);
+    // aunque no haya movimientos de caja, las cuentas de proveedores integrados se muestran igual
+    renderCuentaOD(id, cont);
+    renderCuentaOffStd(id, cont);
     return;
   }
   const tit = document.createElement('div');
