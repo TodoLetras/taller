@@ -890,6 +890,7 @@
     <div class="receipt-total venta-total">
       <span class="label">VENTA (con el % general)</span>
       <span class="amount" id="circVenta">$ 0</span>
+      <input type="number" id="circVentaDeseada" placeholder="o escribí la venta $" title="El % de utilidad se recalcula solo" style="width:170px;margin-left:10px;padding:8px;font-size:.8rem;background:#14161c;border:1px dashed #4cd27d;border-radius:8px;color:#4cd27d;text-align:right">
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:8px">
       <button id="circGuardarBtn" style="background:#ffa730;color:#1a1200;border:none;border-radius:10px;padding:11px 14px;font-weight:800;font-size:.8rem">💾 Guardar como pedido</button>
@@ -920,6 +921,7 @@
       <div class="receipt-total venta-total">
         <span class="label">Valor de venta</span>
         <span class="amount" id="receiptVenta">$ 0</span>
+        <input type="number" id="ventaDeseada" placeholder="o escribí la venta acá $" title="Poné el precio de venta que querés y el % de utilidad se recalcula solo" style="width:190px;margin-left:10px;padding:8px;font-size:.8rem;background:#14161c;border:1px dashed #4cd27d;border-radius:8px;color:#4cd27d;text-align:right">
       </div>
     </div>
 
@@ -2916,6 +2918,23 @@ renderInsumosTable();
 renderFuentesGrid();
 renderInsumosManuales();
 
+/* ===== venta manual: escribís el precio y el % de utilidad se recalcula ===== */
+function aplicarVentaDeseada(ventaQuerida, costoBase){
+  if(!(ventaQuerida > 0) || !(costoBase > 0)) return;
+  const pct = Math.round(((ventaQuerida / costoBase) - 1) * 1000) / 10;
+  state.porcentajeVenta = pct;
+  const pv = document.getElementById("porcentajeVenta");
+  if(pv) pv.value = pct;
+  recalculate();
+  calcularCircular();
+}
+document.getElementById("ventaDeseada").addEventListener("change", (e)=>{
+  const v = parseFloat(e.target.value);
+  const costo = state.lastReceipt ? state.lastReceipt.total : 0;
+  aplicarVentaDeseada(v, costo);
+  e.target.value = "";
+});
+
 /* ===== cartel circular saliente: cálculo paramétrico ===== */
 let circUltimo = null;
 function calcularCircular(){
@@ -2974,6 +2993,12 @@ for(const id of ["circDiam","circCant","circFaces","circTiras"]){
 document.getElementById("porcentajeVenta").addEventListener("input", calcularCircular);
 calcularCircular();
 
+document.getElementById("circVentaDeseada").addEventListener("change", (e)=>{
+  const v = parseFloat(e.target.value);
+  const costo = circUltimo ? circUltimo.costo : 0;
+  aplicarVentaDeseada(v, costo);
+  e.target.value = "";
+});
 document.getElementById("circGuardarBtn").addEventListener("click", async ()=>{
   const btn = document.getElementById("circGuardarBtn");
   if(!circUltimo || !circUltimo.venta){
@@ -2986,7 +3011,7 @@ document.getElementById("circGuardarBtn").addEventListener("click", async ()=>{
   try{
     const g = await window.storage.get("pedidos-entrantes").catch(()=>null);
     const bandeja = (g && g.value) ? JSON.parse(g.value) : [];
-    bandeja.push({ desc: nombre.replace("Letras corpóreas — ",""), venta: Math.round(circUltimo.venta), costo: Math.round(circUltimo.costo), fecha: Date.now(), nombreCompleto: nombre });
+    bandeja.push({ desc: nombre.replace("Letras corpóreas — ",""), venta: Math.round(circUltimo.venta), costo: Math.round(circUltimo.costo), fecha: Date.now(), nombreCompleto: nombre, pedidoDestino });
     await window.storage.set("pedidos-entrantes", JSON.stringify(bandeja));
     btn.textContent = "✓ Guardado — abrí el Seguimiento"; btn.style.background = "#4cd27d";
     setTimeout(()=>{ btn.textContent = "💾 Guardar como pedido"; btn.style.background = "#ffa730"; }, 4000);
@@ -3045,6 +3070,13 @@ function aplicarConfigGuardada(cfg){
   }catch(e){}
 }
 
+const pedidoDestino = new URLSearchParams(location.search).get('pedido') || null;
+if(pedidoDestino){
+  const aviso = document.createElement('div');
+  aviso.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#ffa730;color:#1a1200;font-weight:800;font-size:.78rem;text-align:center;padding:8px;z-index:99';
+  aviso.textContent = '🔗 Cotizando para un pedido abierto: al guardar, el ítem se agrega a ese pedido.';
+  document.body.appendChild(aviso);
+}
 let _ultimaConfig = null;
 (async ()=>{
   try{
@@ -3082,7 +3114,8 @@ document.getElementById('guardarPedidoBtn').addEventListener('click', async ()=>
       desc,
       venta: Math.round(state.lastReceipt.venta),
       costo: Math.round(state.lastReceipt.total),
-      fecha: Date.now()
+      fecha: Date.now(),
+      pedidoDestino
     });
     await window.storage.set('pedidos-entrantes', JSON.stringify(bandeja));
     btn.textContent = '✓ Guardado — abrí el Seguimiento';

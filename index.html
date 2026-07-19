@@ -309,7 +309,10 @@
     <div id="pedItems"></div>
     <div class="cats-pick" id="pedAgregarItem" style="margin-top:6px"></div>
     <div id="pedMO" style="margin-top:8px"></div>
-    <button id="btnOffDig" style="width:100%;margin-top:8px;border-radius:12px;padding:12px;font-weight:700;font-size:.82rem;background:var(--panel2);border:1px dashed #5ab8ff;color:#5ab8ff">🖨 Agregar impresión offset digital</button>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="btnOffDig" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #5ab8ff;color:#5ab8ff">🖨 Offset digital</button>
+      <button id="btnCorpPed" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">🔤 Corpóreas</button>
+    </div>
     <div class="ped-total" id="pedTotal"></div>
     <label>Estado del presupuesto</label>
     <div class="cats-pick" id="pedEstadoVenta"></div>
@@ -2203,19 +2206,33 @@ async function procesarBandejaCotizador(){
     if(!g || !g.value) return;
     const bandeja = JSON.parse(g.value);
     if(!Array.isArray(bandeja) || !bandeja.length) return;
+    let abrirDestino = null;
     for(const e of bandeja){
-      pedidos.unshift({
-        id: uid(), cliente: null, tarea: null,
-        items: [{prod:null, nombre: 'Letras corpóreas' + (e.desc ? ' — ' + e.desc : ''),
-          cant: 1, precio: e.venta||0, costoU: e.costo||0}],
-        cobro: 'pendiente', fact: 'no', estadoVenta: 'presupuesto', creado: e.fecha || Date.now()
-      });
-      registrar('creó un pedido desde el cotizador de corpóreas (' + plata(e.venta||0) + ')');
+      const item = {prod:null, nombre: e.nombreCompleto || ('Letras corpóreas' + (e.desc ? ' — ' + e.desc : '')),
+        cant: 1, precio: e.venta||0, costoU: e.costo||0};
+      const destino = e.pedidoDestino ? pedidos.find(x=>x.id===e.pedidoDestino) : null;
+      if(destino){
+        destino.items.push(item);
+        abrirDestino = destino.id;
+        registrar('agregó corpóreas cotizadas al pedido de ' + nombreClienteId(destino.cliente) + ' (' + plata(e.venta||0) + ')');
+      }else{
+        pedidos.unshift({
+          id: uid(), cliente: null,
+          items: [item],
+          cobro: 'pendiente', fact: 'no', estadoVenta: 'presupuesto', creado: e.fecha || Date.now()
+        });
+        registrar('creó un pedido desde el cotizador de corpóreas (' + plata(e.venta||0) + ')');
+      }
     }
     await window.storage.delete('pedidos-entrantes').catch(()=>{});
     guardarDatos();
     renderPedidos();
-    toast('🔤 ' + bandeja.length + ' presupuesto(s) del cotizador cargado(s) como pedido. Asignale el cliente.');
+    if(abrirDestino){
+      abrirPedido(abrirDestino);
+      toast('🔤 Corpóreas agregadas al pedido ✓');
+    }else{
+      toast('🔤 ' + bandeja.length + ' presupuesto(s) del cotizador cargado(s) como pedido. Asignale el cliente.');
+    }
   }catch(err){}
 }
 setTimeout(procesarBandejaCotizador, 1500);
@@ -4256,6 +4273,12 @@ document.getElementById('odAgregar').onclick = ()=>{
   abrirPedido(odPedido.id);
 };
 modalOffDig.addEventListener('click', e=>{ if(e.target===modalOffDig){ modalOffDig.classList.remove('abierto'); if(odPedido) abrirPedido(odPedido.id); } });
+document.getElementById('btnCorpPed').onclick = ()=>{
+  const p = pedidos.find(x=>x.id===pedidoAbierto);
+  if(!p) return;
+  guardarDatos();
+  location.href = 'cotizador.html?pedido=' + p.id;
+};
 document.getElementById('btnOffDig').onclick = ()=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
   if(!p) return;
