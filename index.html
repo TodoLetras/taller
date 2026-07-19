@@ -315,6 +315,7 @@
     <div class="cats-pick" id="pedEstadoVenta"></div>
     <label>Cobro</label>
     <div class="cats-pick" id="pedCobro"></div>
+    <div id="pedSenas"></div>
     <label>Facturación</label>
     <div class="cats-pick" id="pedFact"></div>
     <div class="acciones">
@@ -2583,7 +2584,73 @@ function renderPedidoEstados(p){
       registrarCobroAuto(p); registrar('marcó "' + nom.replace(/^[^ ]+ /,'') + '" el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ')'); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
     cobro.appendChild(b);
   }
+  renderSenas(p);
   renderPedidoFact(p);
+}
+function renderSenas(p){
+  const cont = document.getElementById('pedSenas');
+  if(!cont) return;
+  cont.innerHTML = '';
+  const lista = senasDe(p);
+  const tot = totalSenas(p);
+  const total = totalPedido(p);
+  if(p.cobro==='pendiente' && !lista.length) return; // nada que mostrar todavía
+
+  const caja = document.createElement('div');
+  caja.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;padding:10px;margin-top:8px;font-size:.76rem;color:var(--texto2)';
+  let h = '';
+  for(const m of lista){
+    h += '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>🪙 Seña ' + fechaLinda(m.fecha) + (m.persona ? ' · cobró ' + m.persona : '') + '</span><b style="color:#5ab8ff">' + plata(m.monto) + '</b></div>';
+  }
+  if(lista.length){
+    h += '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--borde);margin-top:4px;padding-top:6px"><span>Señado</span><b style="color:#5ab8ff">' + plata(tot) + '</b></div>';
+  }
+  if(p.cobro!=='cobrado'){
+    h += '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>Saldo a cobrar</span><b style="color:var(--ambar)">' + plata(Math.max(0, total - tot)) + '</b></div>';
+  }
+  caja.innerHTML = h;
+  if(p.cobro!=='cobrado'){
+    const zona = document.createElement('div');
+    zona.style.marginTop = '6px';
+    const btn = document.createElement('button');
+    btn.textContent = '＋ Registrar seña recibida';
+    btn.style.cssText = 'width:100%;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--fondo);border:1px dashed #5ab8ff;color:#5ab8ff';
+    btn.onclick = ()=>{
+      zona.innerHTML = '';
+      const fila = document.createElement('div');
+      fila.style.cssText = 'display:flex;gap:6px;align-items:center';
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.inputMode = 'numeric'; inp.placeholder = '$ monto de la seña';
+      inp.style.cssText = 'flex:1;margin:0;padding:10px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid #5ab8ff;border-radius:8px;color:var(--texto)';
+      const ok = document.createElement('button');
+      ok.textContent = '✓';
+      ok.style.cssText = 'background:#5ab8ff;color:#0a1a26;border:none;border-radius:8px;padding:10px 16px;font-weight:800';
+      ok.onclick = ()=>{
+        const monto = parseFloat(inp.value)||0;
+        if(monto<=0){ inp.focus(); return; }
+        movimientos.push({id:uid(), tipo:'ingreso', sena:true, pedido:p.id,
+          monto, concepto:'Seña — ' + nombreClienteId(p.cliente),
+          persona: PERSONAS.find(x=>x[0]===usuarioActual) ? usuarioActual : null,
+          quien: p.cliente||null, fecha: hoyISO(), creado: Date.now()});
+        if(p.cobro==='pendiente') p.cobro = 'senado';
+        if(p.estadoVenta==='presupuesto') p.estadoVenta = 'confirmado';
+        registrar('registró una seña de ' + plata(monto) + ' del pedido de ' + nombreClienteId(p.cliente));
+        guardarDatos();
+        renderPedidoEstados(p); renderPedidos();
+        toast('Seña de ' + plata(monto) + ' registrada en Caja ✓');
+      };
+      const canc = document.createElement('button');
+      canc.textContent = '✕';
+      canc.style.cssText = 'background:none;border:none;color:var(--texto2);padding:10px 6px';
+      canc.onclick = ()=> renderSenas(p) || renderPedidoEstados(p);
+      fila.appendChild(inp); fila.appendChild(ok); fila.appendChild(canc);
+      zona.appendChild(fila);
+      inp.focus();
+    };
+    zona.appendChild(btn);
+    caja.appendChild(zona);
+  }
+  cont.appendChild(caja);
 }
 
 /* ---------- facturación con divisiones ---------- */
@@ -2892,17 +2959,32 @@ function nombreQuien(id){
   if(pr) return '🏭 ' + pr.nombre;
   return '';
 }
+function senasDe(p){
+  return movimientos.filter(m=> m.sena && m.pedido===p.id);
+}
+function totalSenas(p){
+  return senasDe(p).reduce((s,m)=> s+(m.monto||0), 0);
+}
 function registrarCobroAuto(p){
-  const idx = movimientos.findIndex(m=> m.pedido===p.id && m.auto);
+  const idx = movimientos.findIndex(m=> m.pedido===p.id && m.auto && !m.sena);
   if(p.cobro==='cobrado'){
-    if(idx<0){
-      movimientos.push({id:uid(), tipo:'ingreso', auto:true, pedido:p.id,
-        monto: totalPedido(p), concepto:'Cobro de pedido',
-        quien: p.cliente||null, fecha: hoyISO(), creado: Date.now()});
-      toast('Cobro registrado en Caja ✓');
+    const saldo = totalPedido(p) - totalSenas(p);
+    if(saldo > 0.5){
+      const concepto = totalSenas(p) > 0 ? 'Cobro de pedido (saldo)' : 'Cobro de pedido';
+      if(idx<0){
+        movimientos.push({id:uid(), tipo:'ingreso', auto:true, pedido:p.id,
+          monto: saldo, concepto,
+          quien: p.cliente||null, fecha: hoyISO(), creado: Date.now()});
+        toast('Cobro de ' + plata(saldo) + ' registrado en Caja ✓');
+      }else{
+        movimientos[idx].monto = saldo;
+        movimientos[idx].concepto = concepto;
+        movimientos[idx].quien = p.cliente||null;
+      }
+    }else if(idx>=0){
+      movimientos.splice(idx,1); // las señas ya cubrieron el total
     }else{
-      movimientos[idx].monto = totalPedido(p);
-      movimientos[idx].quien = p.cliente||null;
+      toast('Total cubierto por las señas ✓');
     }
   }else if(idx>=0){
     movimientos.splice(idx,1);
