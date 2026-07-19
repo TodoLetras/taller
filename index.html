@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v10</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v11</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -359,7 +359,8 @@
         <div style="flex:1.4">Ganancia sobre el costo: +<input id="offPct" type="number" step="1" inputmode="numeric">%</div>
         <button id="btnListaPrecios" style="flex:1;background:var(--panel2);border:1px solid var(--ambar);color:var(--ambar);border-radius:10px;font-weight:700;font-size:.72rem">📋 Copiar lista de precios</button>
       </div>
-      <div style="font-size:.68rem;color:var(--texto2);margin:6px 0 8px">Proveedora: <b style="color:var(--texto)">Tamara</b> (Te Imprimo Yo) · Tocá el costo para actualizarlo · Cada ítem confirmado suma deuda a su cuenta (👥 → 🏭)</div>
+      <div id="offProvZona" style="margin:6px 0 4px"></div>
+      <div style="font-size:.68rem;color:var(--texto2);margin:0 0 8px">Tocá el costo para actualizarlo · Cada ítem confirmado suma deuda a la cuenta del proveedor (👥 → 🏭)</div>
       <div id="listaOffset" style="max-height:42vh;overflow-y:auto;margin-bottom:10px"></div>
       <div style="display:flex;gap:8px">
         <input id="inNuevoOffNombre" placeholder="Nuevo ítem offset" style="flex:2;margin:0">
@@ -5017,7 +5018,40 @@ function setSubProd(s){
   if(s==='uv') renderUV();
 }
 function ventaOffset(m){ return Math.round(m.costo * (1 + offset.pct/100)); }
+function renderOffProveedor(){
+  const zona = document.getElementById('offProvZona');
+  if(!zona) return;
+  zona.innerHTML = '';
+  const fila = document.createElement('div');
+  fila.style.cssText = 'display:flex;gap:8px;align-items:center;font-size:.74rem;color:var(--texto2)';
+  fila.appendChild(document.createTextNode('Proveedor/a:'));
+  const sel = document.createElement('select');
+  const actual = proveedores.find(x=>x.id===offset.proveedor);
+  sel.style.cssText = 'flex:1;margin:0;padding:8px;font-size:14px;background:var(--panel2);border:1px solid ' + (actual?'var(--borde)':'#ff7a7a') + ';border-radius:10px;color:var(--texto)';
+  const o0 = document.createElement('option');
+  o0.value = ''; o0.textContent = actual ? '(cambiar)' : '⚠️ Elegir…';
+  sel.appendChild(o0);
+  for(const pr of proveedores.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre))){
+    const o = document.createElement('option');
+    o.value = pr.id; o.textContent = pr.nombre;
+    if(pr.id===offset.proveedor) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.onchange = ()=>{
+    if(sel.value){
+      offset.proveedor = sel.value;
+      const pr = proveedores.find(x=>x.id===sel.value);
+      registrar('vinculó el offset estándar al proveedor ' + (pr?pr.nombre:'?'));
+      guardarDatos();
+      renderOffProveedor();
+      toast('Offset estándar vinculado a ' + (pr?pr.nombre:'?') + ' ✓ (deuda, ganancia y cotejo usan su cuenta)');
+    }
+  };
+  fila.appendChild(sel);
+  zona.appendChild(fila);
+}
 function renderOffset(){
+  renderOffProveedor();
   document.getElementById('offPct').value = offset.pct;
   const cont = document.getElementById('listaOffset');
   cont.innerHTML = '';
