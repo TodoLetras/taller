@@ -303,7 +303,7 @@
     <h2>🧾 Pedido</h2>
     <label>Cliente</label>
     <div class="cats-pick" id="pedCliente"></div>
-    <label>Tarea vinculada</label>
+    <label>Tareas del trabajo</label>
     <div class="cats-pick" id="pedTarea"></div>
     <label>Ítems</label>
     <div id="pedItems"></div>
@@ -311,6 +311,8 @@
     <div id="pedMO" style="margin-top:8px"></div>
     <button id="btnOffDig" style="width:100%;margin-top:8px;border-radius:12px;padding:12px;font-weight:700;font-size:.82rem;background:var(--panel2);border:1px dashed #5ab8ff;color:#5ab8ff">🖨 Agregar impresión offset digital</button>
     <div class="ped-total" id="pedTotal"></div>
+    <label>Estado del presupuesto</label>
+    <div class="cats-pick" id="pedEstadoVenta"></div>
     <label>Cobro</label>
     <div class="cats-pick" id="pedCobro"></div>
     <label>Facturación</label>
@@ -756,10 +758,12 @@ function tipoInstalacion(nombre){
   if(n.includes('vinilo')) return 'ploteado';
   return 'con instalación';
 }
+const ESTADOS_VENTA = [['presupuesto','📝 Presupuesto','#9aa1b0'],['parcial','⚠️ Confirmado parcial','#ffb020'],['confirmado','✓ Confirmado','#4cd27d']];
 const ESTADOS_COBRO = [['pendiente','💰 A cobrar','#ff7a7a'],['senado','🪙 Señado','#5ab8ff'],['cobrado','✅ Cobrado','#4cd27d']];
 const ESTADOS_FACT = [['no','Sin facturar','#9aa1b0'],['si','🧾 Facturado','#4cd27d']];
 function plata(n){ return '$ ' + (Math.round(n)||0).toLocaleString('es-AR'); }
 let clienteNueva = null;   // cliente elegido en el modal de nueva tarea
+let pedidoNueva = null;    // pedido al que queda atada la nueva tarea (si nace desde un pedido)
 let clienteAbierto = null; // contacto abierto en su ficha
 let subTipo = 'cliente';   // sub-pestaña activa: cliente | proveedor
 let filtro='todas', vista='lista', catNueva=null;
@@ -823,6 +827,15 @@ async function cargar(){
       clientes = (d.clientes || []).map(c=>({dir:'', mail:'', ...c}));
       productos = d.productos || PRODUCTOS_SEMILLA.map(p=>({id:uid()+Math.random().toString(36).slice(2,4), ...p}));
       pedidos = d.pedidos || [];
+      for(const p of pedidos){ if(!p.estadoVenta) p.estadoVenta = 'confirmado'; }
+      // migración: el vínculo viejo pedido.tarea pasa a tarea.pedido (un pedido, varias tareas)
+      for(const p of pedidos){
+        if(p.tarea){
+          const t = tareas.find(x=>x.id===p.tarea);
+          if(t && !t.pedido) t.pedido = p.id;
+          delete p.tarea;
+        }
+      }
       // migrar ítems UV cargados con versiones anteriores (cant era m², sin medidas)
       for(const p of pedidos){
         for(const it of (p.items||[])){
@@ -1263,7 +1276,7 @@ async function abrirDetalle(id){
 function renderDetVenta(t){
   const cont = document.getElementById('detVenta');
   cont.innerHTML = '';
-  const p = pedidos.find(x=>x.tarea===t.id);
+  const p = pedidos.find(x=>x.id===t.pedido);
   const b = document.createElement('button');
   b.style.cssText = 'width:100%;border-radius:12px;padding:12px;font-weight:700;font-size:.85rem;border:1px dashed var(--ambar);background:var(--panel2);color:var(--ambar)';
   if(p){
@@ -1278,8 +1291,9 @@ function renderDetVenta(t){
   }else{
     b.textContent = '＋ Crear venta de esta tarea';
     b.onclick = ()=>{
-      const nuevo = {id:uid(), cliente: t.cliente||null, tarea: t.id, items:[], cobro:'pendiente', fact:'no', creado:Date.now()};
+      const nuevo = {id:uid(), cliente: t.cliente||null, items:[], cobro:'pendiente', fact:'no', estadoVenta:'presupuesto', creado:Date.now()};
       pedidos.unshift(nuevo);
+      t.pedido = nuevo.id;
       registrar('creó una venta desde la tarea "' + (t.texto||'').slice(0,40) + '"');
       guardarDatos();
       cerrarDetalle();
@@ -1596,9 +1610,10 @@ function archivoADataURL(f){
 
 /* ---------- nueva tarea ---------- */
 const modal = document.getElementById('modal');
-function abrirNueva(fechaPre, clientePre){
+function abrirNueva(fechaPre, clientePre, pedidoPre){
   catNueva = cats[0].id;
   clienteNueva = clientePre || null;
+  pedidoNueva = pedidoPre || null;
   document.getElementById('inTexto').value='';
   document.getElementById('inFecha').value = fechaPre || '';
   renderCatsPick();
@@ -1633,6 +1648,7 @@ document.getElementById('guardar').onclick = ()=>{
   tareas.unshift({
     id:uid(), texto,
     cliente: clienteNueva,
+    pedido: pedidoNueva,
     cat: catNueva,
     fecha: document.getElementById('inFecha').value || null,
     adj:0, orden: minOrden-10, creado: Date.now()
@@ -1949,6 +1965,7 @@ function renderCuentaOD(id, cont){
   // juntar todos los trabajos de offset digital de todos los pedidos
   const trabajos = [];
   for(const p of pedidos){
+    if(p.estadoVenta === 'presupuesto') continue; // cotizado pero no vendido: Pablo no imprimió nada
     (p.items||[]).forEach((it, idx)=>{
       if(it.odMeta){
         trabajos.push({p, it, idx, fecha: p.creado||0});
@@ -2158,13 +2175,15 @@ function renderPedidos(){
     const f = document.createElement('div');
     f.className = 'pedido-fila';
     const ec = ESTADOS_COBRO.find(e=>e[0]===p.cobro) || ESTADOS_COBRO[0];
+    const ev = ESTADOS_VENTA.find(e=>e[0]===(p.estadoVenta||'confirmado')) || ESTADOS_VENTA[2];
     const ef0 = estadoFact(p);
     const ef = ['x', ef0.label, ef0.color];
-    f.style.borderLeftColor = ec[2];
+    f.style.borderLeftColor = (p.estadoVenta==='presupuesto') ? ev[2] : ec[2];
     f.innerHTML =
       '<div class="ped-cab"><span class="ped-cli"></span><span class="ped-monto">'+plata(totalPedido(p))+'</span></div>' +
       '<div class="ped-det">'+p.items.length+' ítem(s) · '+horaLinda(p.creado).replace(/^(..):(..)$/,'hoy $1:$2')+'</div>' +
       '<div class="meta">' +
+        (p.estadoVenta!=='confirmado' ? '<span class="chip" style="background:'+ev[2]+'26;color:'+ev[2]+'">'+ev[1]+'</span> ' : '') +
         '<span class="chip" style="background:'+ec[2]+'26;color:'+ec[2]+'">'+ec[1]+'</span> ' +
         '<span class="chip" style="background:'+ef[2]+'26;color:'+ef[2]+'">'+ef[1]+'</span>' +
       '</div>';
@@ -2185,7 +2204,7 @@ async function procesarBandejaCotizador(){
         id: uid(), cliente: null, tarea: null,
         items: [{prod:null, nombre: 'Letras corpóreas' + (e.desc ? ' — ' + e.desc : ''),
           cant: 1, precio: e.venta||0, costoU: e.costo||0}],
-        cobro: 'pendiente', fact: 'no', creado: e.fecha || Date.now()
+        cobro: 'pendiente', fact: 'no', estadoVenta: 'presupuesto', creado: e.fecha || Date.now()
       });
       registrar('creó un pedido desde el cotizador de corpóreas (' + plata(e.venta||0) + ')');
     }
@@ -2198,7 +2217,7 @@ async function procesarBandejaCotizador(){
 setTimeout(procesarBandejaCotizador, 1500);
 
 document.getElementById('btnNuevoPedido').onclick = ()=>{
-  const p = {id:uid(), cliente:null, items:[], cobro:'pendiente', fact:'no', creado:Date.now()};
+  const p = {id:uid(), cliente:null, items:[], cobro:'pendiente', fact:'no', estadoVenta:'presupuesto', creado:Date.now()};
   pedidos.unshift(p);
   registrar('creó un pedido');
   guardarDatos();
@@ -2211,86 +2230,105 @@ function abrirPedido(id){
   const p = pedidos.find(x=>x.id===id);
   if(!p) return;
   renderPedidoCliente(p);
-  renderPedidoTarea(p);
+  renderPedidoEstadoVenta(p);
+  renderPedidoTareas(p);
   renderPedidoItems(p);
   renderPedidoEstados(p);
   modalPedido.classList.add('abierto');
 }
-function renderPedidoTarea(p){
+function renderPedidoTareas(p){
   const cont = document.getElementById('pedTarea');
   cont.innerHTML = '';
+  cont.style.flexDirection = 'column';
+  cont.style.alignItems = 'stretch';
+  const suyas = tareas.filter(t=>t.pedido===p.id).sort((a,b)=>(a.orden||0)-(b.orden||0));
 
-  if(p.tarea){
-    const t = tareas.find(x=>x.id===p.tarea);
-    const chip = document.createElement('button');
-    chip.className = 'chip-cliente';
-    chip.style.maxWidth = '100%';
-    chip.style.whiteSpace = 'normal';
-    chip.style.textAlign = 'left';
-    chip.textContent = '📋 ' + (t ? t.texto : '(tarea borrada)') + '  ✕';
-    chip.onclick = ()=>{
-      p.tarea = null;
-      renderPedidoTarea(p);
-      guardarDatos();
+  for(const t of suyas){
+    const cat = cats.find(c=>c.id===t.cat);
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;gap:8px;align-items:center;background:var(--panel2);border:1px solid var(--borde);border-left:4px solid ' + (cat?cat.color:'var(--borde)') + ';border-radius:10px;padding:9px 10px';
+    const cuerpo = document.createElement('button');
+    cuerpo.style.cssText = 'flex:1;min-width:0;text-align:left;background:none;border:none;color:var(--texto);font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    cuerpo.textContent = (cat && cat.completada ? '✓ ' : '') + t.texto;
+    if(cat && cat.completada) cuerpo.style.textDecoration = 'line-through';
+    cuerpo.onclick = ()=>{
+      modalPedido.classList.remove('abierto');
+      abrirDetalle(t.id);
     };
-    cont.appendChild(chip);
-    return;
+    f.appendChild(cuerpo);
+    const notas = document.createElement('span');
+    notas.style.cssText = 'font-size:.66rem;color:var(--texto2)';
+    if(t.adj) notas.textContent = '📎' + t.adj;
+    f.appendChild(notas);
+    const des = document.createElement('button');
+    des.textContent = '✕';
+    des.title = 'Desvincular (no borra la tarea)';
+    des.style.cssText = 'background:none;border:none;color:var(--texto2);padding:2px 4px';
+    des.onclick = (e)=>{
+      dosToques(e.target, '¿Soltar?', ()=>{
+        t.pedido = null;
+        renderPedidoTareas(p); guardarDatos();
+      });
+    };
+    f.appendChild(des);
+    cont.appendChild(f);
   }
 
-  const inp = document.createElement('input');
-  inp.className = 'buscador-cli';
-  inp.placeholder = 'Buscar tarea para vincular…';
-  cont.appendChild(inp);
-  const sug = document.createElement('div');
-  sug.className = 'sugerencias';
-  cont.appendChild(sug);
-
-  function filtrar(){
-    const q = normalizarTexto(inp.value.trim());
-    sug.innerHTML = '';
-    // tareas sin venta asociada (una tarea = una venta)
-    let candidatas = tareas.filter(t=> !pedidos.find(x=> x.tarea===t.id && x.id!==p.id));
-    if(q){
-      candidatas = candidatas.filter(t=>
-        normalizarTexto(t.texto).includes(q) || normalizarTexto(nombreCliente(t)).includes(q));
-    }else{
-      candidatas = candidatas.slice().sort((a,b)=>(b.creado||0)-(a.creado||0));
-      if(candidatas.length){
-        const tit = document.createElement('div');
-        tit.className = 'sug-titulo';
-        tit.textContent = 'Recientes';
-        sug.appendChild(tit);
+  // acciones: nueva tarea del trabajo + vincular una existente
+  const fila = document.createElement('div');
+  fila.style.cssText = 'display:flex;gap:8px' + (suyas.length ? ';margin-top:2px' : '');
+  const nueva = document.createElement('button');
+  nueva.textContent = '＋ Nueva tarea del trabajo';
+  nueva.style.cssText = 'flex:1;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)';
+  nueva.onclick = ()=>{
+    modalPedido.classList.remove('abierto');
+    abrirNueva('', p.cliente||null, p.id);
+  };
+  fila.appendChild(nueva);
+  const vincular = document.createElement('button');
+  vincular.textContent = '🔗 Vincular existente';
+  vincular.style.cssText = 'flex:1;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)';
+  vincular.onclick = ()=>{
+    fila.remove();
+    const inp = document.createElement('input');
+    inp.className = 'buscador-cli';
+    inp.placeholder = 'Buscar tarea para vincular…';
+    cont.appendChild(inp);
+    const sug = document.createElement('div');
+    sug.className = 'sugerencias';
+    cont.appendChild(sug);
+    function filtrar(){
+      const q = normalizarTexto(inp.value.trim());
+      sug.innerHTML = '';
+      let cand = tareas.filter(t=>!t.pedido);
+      if(q) cand = cand.filter(t=> normalizarTexto(t.texto).includes(q) || normalizarTexto(nombreCliente(t)).includes(q));
+      else cand = cand.slice().sort((a,b)=>(b.creado||0)-(a.creado||0));
+      for(const t of cand.slice(0,6)){
+        const b = document.createElement('button');
+        b.className = 'sug-item';
+        const nc = nombreCliente(t);
+        b.textContent = t.texto + (nc ? '  ('+nc+')' : '');
+        b.onclick = ()=>{
+          t.pedido = p.id;
+          if(!p.cliente && t.cliente){ p.cliente = t.cliente; renderPedidoCliente(p); }
+          renderPedidoTareas(p); guardarDatos(); renderPedidos();
+          toast('Tarea vinculada ✓');
+        };
+        sug.appendChild(b);
+      }
+      if(!sug.children.length){
+        const v = document.createElement('div');
+        v.className = 'sug-titulo';
+        v.textContent = q ? 'Sin resultados' : 'No hay tareas sueltas';
+        sug.appendChild(v);
       }
     }
-    for(const t of candidatas.slice(0,6)){
-      const b = document.createElement('button');
-      b.className = 'sug-item';
-      const nc = nombreCliente(t);
-      b.textContent = t.texto + (nc ? '  ('+nc+')' : '');
-      b.onclick = ()=>{
-        p.tarea = t.id;
-        // heredar el cliente de la tarea si el pedido no tiene
-        if(!p.cliente && t.cliente){
-          p.cliente = t.cliente;
-          renderPedidoCliente(p);
-          toast('Vinculado ✓ Cliente heredado: ' + nombreCliente(t));
-        }else{
-          toast('Tarea vinculada ✓');
-        }
-        renderPedidoTarea(p);
-        guardarDatos(); renderPedidos();
-      };
-      sug.appendChild(b);
-    }
-    if(!sug.querySelector('.sug-item')){
-      const v = document.createElement('div');
-      v.className = 'sug-titulo';
-      v.textContent = q ? 'Sin resultados' : 'No hay tareas disponibles';
-      sug.appendChild(v);
-    }
-  }
-  inp.addEventListener('input', filtrar);
-  filtrar();
+    inp.addEventListener('input', filtrar);
+    filtrar();
+    inp.focus();
+  };
+  fila.appendChild(vincular);
+  cont.appendChild(fila);
 }
 function renderPedidoCliente(p){
   renderPickerClientes('pedCliente', p.cliente||null, (cid)=>{
@@ -2487,6 +2525,21 @@ function renderBuscadorItems(p){
   inp.addEventListener('input', filtrar);
 }
 
+function renderPedidoEstadoVenta(p){
+  const cont = document.getElementById('pedEstadoVenta');
+  cont.innerHTML = '';
+  for(const [val, nom, color] of ESTADOS_VENTA){
+    const b = document.createElement('button');
+    b.textContent = nom;
+    if((p.estadoVenta||'confirmado')===val){ b.style.background=color+'26'; b.style.borderColor=color; b.style.color=color; }
+    b.onclick = ()=>{
+      p.estadoVenta = val;
+      registrar('marcó el pedido de ' + nombreClienteId(p.cliente) + ' como ' + nom.replace(/^[^\s]+\s/,''));
+      renderPedidoEstadoVenta(p); guardarDatos(); renderPedidos();
+    };
+    cont.appendChild(b);
+  }
+}
 function renderPedidoEstados(p){
   const cobro = document.getElementById('pedCobro');
   cobro.innerHTML = '';
@@ -3574,9 +3627,10 @@ function renderGanancias(){
     return;
   }
   if(subGan==='ventas'){
-    if(!pedidos.length){ cont.innerHTML = '<div class="vacio">Sin pedidos todavía.</div>'; return; }
+    const confirmados = pedidos.filter(p=> p.estadoVenta !== 'presupuesto');
+    if(!confirmados.length){ cont.innerHTML = '<div class="vacio">Sin ventas confirmadas todavía (los presupuestos sin confirmar no se cuentan acá).</div>'; return; }
     let totV = 0, totG = 0;
-    const ordenados = pedidos.slice().sort((a,b)=>(b.creado||0)-(a.creado||0));
+    const ordenados = confirmados.slice().sort((a,b)=>(b.creado||0)-(a.creado||0));
     for(const p of ordenados){
       const total = totalPedido(p);
       const g = gananciaPedido(p);
