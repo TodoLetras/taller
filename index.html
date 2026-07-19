@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v17</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v18</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -1440,14 +1440,20 @@ async function abrirDetalle(id){
   marcarNotasLeidas(id);
   // fusionar con la copia de la nube (fotos/audios compartidos entre dispositivos)
   dbxBajarBloques(id).then(remotos=>{
-    if(!remotos || detId !== id) return;
-    const fusion = fusionarBloques(bloques, remotos);
-    if(JSON.stringify(fusion) !== JSON.stringify(bloques)){
-      bloques = fusion;
-      renderBloques();
-      guardarBloques(false);
+    if(detId !== id) return;
+    if(remotos){
+      const fusion = fusionarBloques(bloques, remotos);
+      if(JSON.stringify(fusion) !== JSON.stringify(bloques)){
+        bloques = fusion;
+        renderBloques();
+        guardarBloques(false);
+      }
     }
     marcarNotasLeidas(id);
+    // sembrar la nube con lo que este dispositivo ya tenía (fotos cargadas antes de la sincronización)
+    if(bloques.length){
+      dbxSubirBloques(id, JSON.stringify(bloques));
+    }
   });
   document.getElementById('estadoGuardado').textContent = '';
   const ct = document.getElementById('compTexto');
