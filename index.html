@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v9</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v10</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -2308,7 +2308,11 @@ function gananciaPedido(p){
     if(c===null){ sinCosto++; continue; }
     ganancia += subtotalItem(i) - c;
   }
-  const gastos = movimientos.filter(m=> m.tipo==='egreso' && m.pedido===p.id && !m.auto && !m.anulado && !m.esAnulacion)
+  // los pagos a proveedores integrados (Pablo, Tamara) NO restan: su costo ya está dentro del ítem
+  const provIntegrados = [];
+  if(typeof od !== 'undefined' && od && od.proveedor) provIntegrados.push(od.proveedor);
+  if(typeof offset !== 'undefined' && offset && offset.proveedor) provIntegrados.push(offset.proveedor);
+  const gastos = movimientos.filter(m=> m.tipo==='egreso' && m.pedido===p.id && !m.auto && !m.anulado && !m.esAnulacion && !provIntegrados.includes(m.quien))
     .reduce((s,m)=> s+(m.monto||0), 0);
   ganancia -= gastos;
   return {ganancia, sinCosto, gastos};
