@@ -867,9 +867,23 @@
 
   </div>
 
+  <style>
+    #circList .receipt-row{
+      display:grid !important;
+      grid-template-columns: 24px 1fr auto;
+      gap:12px; padding:11px 4px;
+      border-bottom:1px dashed rgba(255,255,255,.12);
+      align-items:baseline;
+    }
+    #circList .receipt-row .n{ font-family:monospace; opacity:.5; font-size:12px; }
+    #circList .receipt-row .desc{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+    #circList .receipt-row .desc .name{ font-weight:700; }
+    #circList .receipt-row .desc .formula{ font-size:.72rem; opacity:.6; }
+    #circList .receipt-row .amt{ font-weight:800; white-space:nowrap; }
+  </style>
   <!-- ===== Cartel circular saliente (paramétrico, sin DXF) ===== -->
   <section class="panel" style="grid-column: 1 / -1;">
-    <p class="panel-title"><span class="num">⭕</span> Cartel circular saliente <span style="font-weight:400;font-size:.72rem;opacity:.7">— paramétrico, no necesita DXF</span></p>
+    <p class="panel-title"><span class="num">⭕</span> Cartel circular saliente <span style="font-weight:400;font-size:.72rem;opacity:.7">— paramétrico, no necesita DXF</span> <span style="font-size:.6rem;opacity:.45;font-family:monospace">v2</span></p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
       <label style="display:flex;flex-direction:column;gap:4px;font-size:.7rem;opacity:.8">Diámetro (cm)
         <input type="number" id="circDiam" value="60" min="10" step="1" style="width:90px"></label>
