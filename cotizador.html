@@ -2979,9 +2979,17 @@ function calcularCircular(){
   const costo = costoUnit * cant;
   const venta = costo * (1 + state.porcentajeVenta/100);
 
-  lista.innerHTML = items.map(i=>
-    `<div class="receipt-row"><div><div class="rname">${i.name}</div><div class="rformula">${i.formula}</div></div><div class="rvalue">${fmtARS(i.value)}</div></div>`
-  ).join("") + (cant>1 ? `<div class="receipt-row"><div><div class="rname">× ${cant} carteles</div></div><div class="rvalue"></div></div>` : "");
+  lista.innerHTML = items.map((i,idx)=>
+    `<div class="receipt-row">
+      <span class="n">${idx+1}</span>
+      <span class="desc"><span class="name">${i.name}</span><span class="formula">${i.formula}</span></span>
+      <span class="amt">${fmtARS(i.value)}</span>
+    </div>`
+  ).join("") + (cant>1 ? `<div class="receipt-row">
+      <span class="n">×</span>
+      <span class="desc"><span class="name">${cant} carteles</span><span class="formula">costo unitario ${fmtARS(costoUnit)}</span></span>
+      <span class="amt"></span>
+    </div>` : "");
   document.getElementById("circCosto").textContent = fmtARS(costo);
   document.getElementById("circVenta").textContent = fmtARS(venta);
   circUltimo = { costo, venta, D, cant, caras, tiras };
