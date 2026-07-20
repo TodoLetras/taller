@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v27</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v28</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -5095,23 +5095,33 @@ document.getElementById('btnOffDig').onclick = ()=>{
 };
 
 /* ---------- costos reales del offset AD (cotejo contra lo presupuestado) ---------- */
+// grupos de costo del offset AD, cada uno con su proveedor propio
+const AD_GRUPOS = [
+  {clave:'papel',  etq:'📄 Papel',   comp:['papel']},
+  {clave:'chapas', etq:'⬜ Chapas',  comp:['chapas']},
+  {clave:'ad',     etq:'🖨 AD (millar + postura + corte)', comp:['millar','postura','corte']}
+];
 function editarAdReal(it, p){
   const m = it.adMeta;
   const reales = m.reales || {};
+  if(!m.proveedores) m.proveedores = {};
+  if(!m.pagos) m.pagos = {};
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center;padding:18px';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center;padding:18px;overflow-y:auto';
   const hoja = document.createElement('div');
-  hoja.style.cssText = 'background:var(--panel);border:1px solid var(--borde);border-radius:16px;padding:16px;max-width:420px;width:100%';
-  const campos = [['papel','📄 Papel (papelera)'],['millar','🖨 Millar (AD)'],['chapas','⬜ Chapas (AD)'],['postura','⚙️ Postura (AD)'],['corte','✂️ Corte (AD)']];
+  hoja.style.cssText = 'background:var(--panel);border:1px solid var(--borde);border-radius:16px;padding:16px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto';
+  const campos = [['papel','Papel (papelera)'],['millar','Millar (AD)'],['chapas','Chapas (AD)'],['postura','Postura (AD)'],['corte','Corte (AD)']];
+
   hoja.innerHTML = '<div style="font-weight:800;font-size:.88rem;margin-bottom:2px">🧾 Costos reales del trabajo</div>' +
-    '<div style="font-size:.7rem;color:var(--texto2);margin-bottom:12px">Cargá lo que te cobraron de verdad; vacío = queda el presupuestado. La ganancia se sincera sola.</div>' +
+    '<div style="font-size:.7rem;color:var(--texto2);margin-bottom:12px">Cargá lo que te cobraron de verdad y a qué proveedor. Vacío = queda el presupuestado.</div>' +
     campos.map(([k, etq])=>
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:.76rem">' +
       '<span style="flex:1">' + etq + '<br><span style="font-size:.64rem;color:var(--texto2)">presup. ' + plata(m[k]||0) + '</span></span>' +
-      '<input data-k="' + k + '" type="number" inputmode="numeric" value="' + (reales[k]!==undefined ? reales[k] : '') + '" placeholder="' + Math.round(m[k]||0) + '" style="width:130px;margin:0;padding:9px;font-size:15px;text-align:right;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
+      '<input data-k="' + k + '" type="number" inputmode="numeric" value="' + (reales[k]!==undefined ? reales[k] : '') + '" placeholder="' + Math.round(m[k]||0) + '" style="width:110px;margin:0;padding:9px;font-size:15px;text-align:right;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
       '</div>'
     ).join('') +
-    '<div id="adRealTot" style="text-align:right;font-weight:800;font-size:.82rem;margin:10px 0"></div>';
+    '<div id="adRealTot" style="text-align:right;font-weight:800;font-size:.82rem;margin:6px 0 14px"></div>';
+
   const actualizarTot = ()=>{
     let tot = 0;
     for(const [k] of campos){
@@ -5122,10 +5132,57 @@ function editarAdReal(it, p){
     hoja.querySelector('#adRealTot').textContent = 'Costo total: ' + plata(tot) + (Math.round(tot) !== Math.round(it.costoU) ? '  (era ' + plata(it.costoU) + ')' : '');
     return tot;
   };
-  hoja.querySelectorAll('input').forEach(inp=> inp.addEventListener('input', actualizarTot));
+  hoja.querySelectorAll('input[data-k]').forEach(inp=> inp.addEventListener('input', actualizarTot));
+
+  // proveedores y pago, agrupados
+  const zonaProv = document.createElement('div');
+  zonaProv.className = 'divisor';
+  zonaProv.textContent = '🏭 Proveedores y pago';
+  hoja.appendChild(zonaProv);
+
+  const valorGrupo = (g)=> g.comp.reduce((s,k)=>{
+    const inp = hoja.querySelector('input[data-k="'+k+'"]');
+    const v = inp ? parseFloat(inp.value) : NaN;
+    return s + (isNaN(v) ? (m[k]||0) : v);
+  }, 0);
+
+  for(const g of AD_GRUPOS){
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:8px;font-size:.74rem';
+    const sel = document.createElement('select');
+    sel.style.cssText = 'flex:1;margin:0;padding:8px;font-size:13px;background:var(--panel2);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+    sel.innerHTML = '<option value="">' + g.etq + ': elegir proveedor…</option>' +
+      proveedores.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(pr=>
+        '<option value="'+pr.id+'"' + (m.proveedores[g.clave]===pr.id?' selected':'') + '>'+pr.nombre+'</option>'
+      ).join('');
+    sel.onchange = ()=>{ m.proveedores[g.clave] = sel.value || null; guardarDatos(); };
+    fila.appendChild(sel);
+    const btnPagar = document.createElement('button');
+    const yaPagado = m.pagos[g.clave];
+    btnPagar.textContent = yaPagado ? '✓ Pagado' : '💸 Pagar';
+    btnPagar.style.cssText = 'background:' + (yaPagado ? 'rgba(76,210,125,.12)' : 'var(--panel2)') + ';border:1px solid ' + (yaPagado ? 'rgba(76,210,125,.5)' : 'var(--borde)') + ';color:' + (yaPagado ? '#4cd27d' : 'var(--texto)') + ';border-radius:8px;padding:8px 10px;font-weight:700;font-size:.72rem;white-space:nowrap';
+    btnPagar.onclick = ()=>{
+      if(!sel.value){ toast('Elegí primero el proveedor de ' + g.etq); return; }
+      const monto = Math.round(valorGrupo(g));
+      if(monto <= 0){ toast('Ese grupo no tiene costo cargado'); return; }
+      confirmarQuienPago(monto, g.etq, sel.value, (quien)=>{
+        movimientos.push({id:uid(), tipo:'egreso', monto, concepto:'Offset AD · ' + g.etq + ' · ' + (it.nombre||'').slice(0,50),
+          quien: sel.value, persona: quien, pedido: p.id, fecha: hoyISO(), creado: Date.now()});
+        m.pagos[g.clave] = {monto, quien, fecha: hoyISO()};
+        registrar('pagó ' + g.etq + ' (' + plata(monto) + ') a ' + (proveedores.find(x=>x.id===sel.value)||{}).nombre + ' — pagó ' + quien);
+        guardarDatos(); renderCaja();
+        overlay.remove();
+        editarAdReal(it, p);
+        toast('Pago registrado en Caja ✓');
+      });
+    };
+    fila.appendChild(btnPagar);
+    hoja.appendChild(fila);
+  }
+
   const btnG = document.createElement('button');
   btnG.textContent = '✓ Guardar costos reales';
-  btnG.style.cssText = 'width:100%;border-radius:12px;padding:13px;font-weight:800;background:var(--ambar);color:#1a1200;border:none;margin-bottom:8px';
+  btnG.style.cssText = 'width:100%;border-radius:12px;padding:13px;font-weight:800;background:var(--ambar);color:#1a1200;border:none;margin:10px 0 8px';
   btnG.onclick = ()=>{
     const nuevos = {};
     for(const [k] of campos){
@@ -5141,7 +5198,7 @@ function editarAdReal(it, p){
     toast('Costos reales guardados ✓ La ganancia usa los números verdaderos.');
   };
   const btnC = document.createElement('button');
-  btnC.textContent = 'Cancelar';
+  btnC.textContent = 'Cerrar';
   btnC.style.cssText = 'width:100%;border-radius:12px;padding:11px;font-weight:700;background:var(--panel2);border:1px solid var(--borde);color:var(--texto)';
   btnC.onclick = ()=> overlay.remove();
   hoja.appendChild(btnG); hoja.appendChild(btnC);
@@ -5149,6 +5206,46 @@ function editarAdReal(it, p){
   overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
   document.body.appendChild(overlay);
   actualizarTot();
+}
+// modal chico: confirma quién pagó, con el usuario del dispositivo tildado por defecto
+function confirmarQuienPago(monto, etiqueta, proveedorId, onConfirmar){
+  const nombreProv = (proveedores.find(x=>x.id===proveedorId)||{}).nombre || '?';
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1001;display:flex;align-items:center;justify-content:center;padding:18px';
+  const hoja = document.createElement('div');
+  hoja.style.cssText = 'background:var(--panel);border:1px solid var(--borde);border-radius:16px;padding:18px;max-width:320px;width:100%';
+  hoja.innerHTML = '<div style="font-weight:800;font-size:.88rem;margin-bottom:2px">💸 Pagar ' + etiqueta + '</div>' +
+    '<div style="font-size:.76rem;color:var(--texto2);margin-bottom:14px">' + plata(monto) + ' a <b style="color:var(--texto)">' + nombreProv + '</b></div>' +
+    '<div style="font-size:.72rem;color:var(--texto2);margin-bottom:8px">¿Quién pagó?</div>';
+  const zonaBtns = document.createElement('div');
+  zonaBtns.style.cssText = 'display:flex;gap:8px;margin-bottom:14px';
+  let elegido = usuarioActual || PERSONAS[0][0];
+  for(const [nombre, color] of PERSONAS){
+    const b = document.createElement('button');
+    b.textContent = nombre;
+    const marcar = ()=>{
+      zonaBtns.querySelectorAll('button').forEach(x=> x.style.cssText = x.style.cssText.replace(/border:[^;]+;/,'border:1px solid var(--borde);').replace(/background:[^;]+;/,'background:var(--panel2);').replace(/color:[^;]+;/,'color:var(--texto);'));
+      b.style.border = '1px solid ' + color; b.style.background = color+'22'; b.style.color = color;
+      elegido = nombre;
+    };
+    b.style.cssText = 'flex:1;border-radius:10px;padding:11px;font-weight:700;font-size:.8rem;' +
+      (nombre===elegido ? ('border:1px solid '+color+';background:'+color+'22;color:'+color) : 'border:1px solid var(--borde);background:var(--panel2);color:var(--texto)');
+    b.onclick = marcar;
+    zonaBtns.appendChild(b);
+  }
+  hoja.appendChild(zonaBtns);
+  const btnOk = document.createElement('button');
+  btnOk.textContent = '✓ Registrar pago';
+  btnOk.style.cssText = 'width:100%;border-radius:12px;padding:12px;font-weight:800;background:var(--ambar);color:#1a1200;border:none;margin-bottom:8px';
+  btnOk.onclick = ()=>{ ov.remove(); onConfirmar(elegido); };
+  const btnCa = document.createElement('button');
+  btnCa.textContent = 'Cancelar';
+  btnCa.style.cssText = 'width:100%;border-radius:12px;padding:10px;font-weight:700;background:none;border:1px solid var(--borde);color:var(--texto2)';
+  btnCa.onclick = ()=> ov.remove();
+  hoja.appendChild(btnOk); hoja.appendChild(btnCa);
+  ov.appendChild(hoja);
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
 }
 
 /* ---------- presupuesto PDF con membrete ---------- */
