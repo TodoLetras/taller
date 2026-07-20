@@ -911,6 +911,33 @@
     </div>
   </section>
 
+  <!-- ===== Offset tradicional AD (GTO / Komori) ===== -->
+  <section class="panel" style="grid-column: 1 / -1;">
+    <p class="panel-title"><span class="num">🖨️</span> Offset tradicional (AD Impresiones) <span style="font-size:.6rem;opacity:.45;font-family:monospace">v1</span></p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:.7rem;opacity:.8">Pieza ancho (cm)
+        <input type="number" id="otAncho" value="15" step="0.1" style="width:86px"></label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:.7rem;opacity:.8">alto (cm)
+        <input type="number" id="otAlto" value="21" step="0.1" style="width:86px"></label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:.7rem;opacity:.8">Cantidad
+        <input type="number" id="otCant" value="1000" step="100" style="width:96px"></label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:.7rem;opacity:.8">Colores frente
+        <select id="otColF" style="padding:8px"><option value="1">1</option><option value="2">2</option><option value="4" selected>4</option></select></label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:.7rem;opacity:.8">dorso
+        <select id="otColD" style="padding:8px"><option value="0">sin dorso</option><option value="1">1</option><option value="2">2</option><option value="4" selected>4</option></select></label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:.7rem;opacity:.8;flex:1;min-width:210px">Papel
+        <select id="otPapel" style="padding:8px"></select></label>
+    </div>
+    <div id="otVeredicto" style="font-size:.76rem;color:#5ab8ff;font-weight:700;margin-bottom:8px;line-height:1.6"></div>
+    <div id="otCuadro"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button id="otCopiar" style="background:#14161c;border:1px solid #333844;color:#eef0f4;border-radius:10px;padding:11px 14px;font-weight:700;font-size:.78rem">📋 Copiar cuadrito</button>
+      <button id="otPapeles" style="background:#14161c;border:1px solid #333844;color:#eef0f4;border-radius:10px;padding:11px 14px;font-weight:700;font-size:.78rem">📄 Papeles y precios</button>
+      <a href="https://papeles.net" target="_blank" style="align-self:center;color:#5ab8ff;font-size:.72rem">papeles.net ↗</a>
+    </div>
+    <div id="otPanelPapeles" style="display:none;margin-top:10px;border-top:1px dashed #333844;padding-top:10px"></div>
+  </section>
+
   <!-- ===== FULL WIDTH: Cost breakdown ===== -->
   <section class="panel" style="grid-column: 1 / -1;">
     <p class="panel-title"><span class="num">03</span> Desglose de costos</p>
@@ -2947,6 +2974,216 @@ document.getElementById("ventaDeseada").addEventListener("change", (e)=>{
   const costo = state.lastReceipt ? state.lastReceipt.total : 0;
   aplicarVentaDeseada(v, costo);
   e.target.value = "";
+});
+
+/* ===== offset tradicional AD: GTO vs Komori, giro, paquetes ===== */
+const OT_DEF = {
+  maquinas: {
+    gto:   {nombre:'GTO 50×34',    W:50, H:34, chapa:6900,
+      cat:{ baja:{post:{1:11000,2:25800,4:47000}, millar:{1:10000,2:12400,4:18000}},
+            alta:{post:{1:11000,2:26000,4:47000}, millar:{1:14000,2:18000,4:26000}} }},
+    komori:{nombre:'Komori 64×46', W:64, H:46, chapa:10500,
+      cat:{ baja:{post:{1:14000,2:32700,4:52600}, millar:{1:12700,2:15800,4:23400}},
+            alta:{post:{1:14000,2:32700,4:52600}, millar:{1:16900,2:21500,4:31600}} }}
+  },
+  demasia: 30,
+  recargoParcial: 15,
+  margenes: [100,95,90,85,80,75],   // 1,2,3,4,5,6+ paquetes (y cantidad justa = 100)
+  papeles: [
+    {id:'p1', nombre:'Obra 80g',        W:72, H:102, hojas:500, g:80,  precio:0},
+    {id:'p2', nombre:'Ilustración 115g',W:72, H:102, hojas:500, g:115, precio:0},
+    {id:'p3', nombre:'Ilustración 150g',W:72, H:102, hojas:500, g:150, precio:0},
+    {id:'p4', nombre:'Ilustración 300g',W:72, H:102, hojas:125, g:300, precio:0},
+    {id:'p5', nombre:'Obra 80g',        W:65, H:95,  hojas:500, g:80,  precio:0}
+  ]
+};
+let OT = JSON.parse(JSON.stringify(OT_DEF));
+(async ()=>{
+  try{
+    const g = await window.storage.get('offtrad-config');
+    if(g && g.value){
+      const guardado = JSON.parse(g.value);
+      if(guardado.papeles) OT.papeles = guardado.papeles;
+      if(guardado.maquinas) OT.maquinas = guardado.maquinas;
+    }
+  }catch(e){}
+  otRenderPapeles();
+  otCalcular();
+})();
+function otGuardarConfig(){
+  window.storage.set('offtrad-config', JSON.stringify({papeles: OT.papeles, maquinas: OT.maquinas})).catch(()=>{});
+}
+function otGrid(W, H, a, b){
+  const c = Math.floor(W/a), f = Math.floor(H/b);
+  return (c<1 || f<1) ? 0 : c*f;
+}
+function otMejor(W, H, a, b){
+  return Math.max(otGrid(W,H,a,b), otGrid(W,H,b,a));
+}
+function otCalcular(){
+  const pw = parseFloat(document.getElementById('otAncho').value)||0;
+  const ph = parseFloat(document.getElementById('otAlto').value)||0;
+  const cant = parseInt(document.getElementById('otCant').value)||0;
+  const colF = parseInt(document.getElementById('otColF').value)||1;
+  const colD = parseInt(document.getElementById('otColD').value)||0;
+  const papel = OT.papeles.find(p=> p.id === document.getElementById('otPapel').value) || OT.papeles[0];
+  const ver = document.getElementById('otVeredicto');
+  const cuadro = document.getElementById('otCuadro');
+  if(!pw || !ph || !cant || !papel){ ver.textContent=''; cuadro.innerHTML=''; return; }
+  if(!papel.precio){
+    ver.innerHTML = '⚠️ El papel elegido no tiene precio cargado. Tocá "📄 Papeles y precios", fijate el valor en papeles.net y cargalo.';
+    cuadro.innerHTML = ''; return;
+  }
+  const cat = papel.g >= 180 ? 'alta' : 'baja';
+
+  // todas las variantes: máquina × modalidad
+  const variantes = [];
+  for(const key of ['gto','komori']){
+    const M = OT.maquinas[key];
+    const poses = otMejor(M.W, M.H, pw, ph);
+    if(poses < 1) continue;
+    const cortes = otMejor(papel.W, papel.H, M.W, M.H);
+    if(cortes < 1) continue;
+    const T = M.cat[cat];
+    const arm = (nombre, posesEf, posturasCosto, chapas, pasadasPorPliego, millarCols)=>{
+      variantes.push({maq:M, nombre, poses, posesEf, cortes, posturasCosto, chapas,
+        pasadasPorPliego, millarCols, chapaCosto: chapas*M.chapa, T});
+    };
+    if(colD === 0){
+      arm('solo frente', poses, T.post[colF], colF, 1, [colF]);
+    }else{
+      arm('dos juegos', poses, T.post[colF]+T.post[colD], colF+colD, 2, [colF, colD]);
+      if(colF === colD && poses >= 2){
+        arm('giro (mariposa)', Math.floor(poses/2), T.post[colF], colF, 2, [colF, colF]);
+      }
+    }
+  }
+  if(!variantes.length){ ver.textContent='⚠️ La pieza no entra en ninguna máquina.'; cuadro.innerHTML=''; return; }
+
+  // costo de una variante para una cantidad de pliegos máquina disponibles o necesarios
+  function costear(v, piezasObjetivo, paquetes){
+    const posturas = v.nombre==='dos juegos' ? 2 : 1;
+    const dem = OT.demasia * posturas;
+    let pliegos, piezas, costoPapel, parcial;
+    if(paquetes !== null){
+      const disp = paquetes * papel.hojas * v.cortes;
+      pliegos = disp;
+      piezas = Math.max(0, (disp - dem)) * v.posesEf;
+      costoPapel = paquetes * papel.precio;
+      parcial = false;
+    }else{
+      const netos = Math.ceil(piezasObjetivo / v.posesEf);
+      pliegos = netos + dem;
+      const hojasFab = Math.ceil(pliegos / v.cortes);
+      costoPapel = hojasFab * (papel.precio / papel.hojas) * (1 + OT.recargoParcial/100);
+      piezas = piezasObjetivo;
+      parcial = true;
+    }
+    let millares = 0;
+    for(const c of v.millarCols){
+      millares += Math.ceil(pliegos / 1000) * v.T.millar[c];
+    }
+    const costoAD = v.posturasCosto + v.chapaCosto + millares;
+    const nPaq = paquetes !== null ? paquetes : 1;
+    const margen = OT.margenes[Math.min(nPaq, 6) - 1];
+    const costo = costoAD + costoPapel;
+    const venta = costo * (1 + margen/100);
+    return {piezas, pliegos, costo, venta, unit: piezas>0 ? venta/piezas : 0, margen, parcial};
+  }
+
+  // elegir la variante ganadora con la cantidad pedida
+  let mejor = null;
+  for(const v of variantes){
+    const r = costear(v, cant, null);
+    if(!mejor || r.venta < mejor.r.venta) mejor = {v, r};
+  }
+  const v = mejor.v;
+  ver.innerHTML = '🏆 Conviene: <b>' + v.maq.nombre + '</b> · ' + v.nombre +
+    ' · ' + v.poses + ' poses/pliego' + (v.nombre.startsWith('giro') ? ' (' + v.posesEf + ' útiles)' : '') +
+    ' · ' + v.cortes + ' pliegos máquina por hoja de fábrica (' + papel.W + '×' + papel.H + ')' +
+    ' · ' + v.chapas + ' chapa(s)';
+
+  // el cuadrito: cantidad pedida + 1 a 4 paquetes
+  const filas = [];
+  filas.push({etiqueta: cant + ' u (cantidad justa, papel +' + OT.recargoParcial + '%)', ...costear(v, cant, null)});
+  for(let n=1; n<=4; n++){
+    const r = costear(v, 0, n);
+    if(r.piezas > 0) filas.push({etiqueta: n + ' paquete' + (n>1?'s':'') + ' → ' + r.piezas.toLocaleString('es-AR') + ' u', ...r});
+  }
+  window._otCuadro = {v, papel, filas, pieza: pw+'×'+ph+'cm', colores: colF + '/' + colD};
+  cuadro.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:.78rem">' +
+    '<tr style="opacity:.6;text-transform:uppercase;font-size:.64rem;letter-spacing:.06em"><td style="padding:6px 4px">Opción</td><td style="text-align:right">Margen</td><td style="text-align:right">Total</td><td style="text-align:right;padding-right:4px">Unitario</td></tr>' +
+    filas.map(f=>
+      '<tr style="border-top:1px dashed #333844"><td style="padding:8px 4px">' + f.etiqueta + '</td>' +
+      '<td style="text-align:right;opacity:.6">+' + f.margen + '%</td>' +
+      '<td style="text-align:right;font-weight:800">' + fmtARS(Math.round(f.venta)) + '</td>' +
+      '<td style="text-align:right;padding-right:4px;color:#4cd27d;font-weight:700">' + fmtARS(Math.round(f.unit*100)/100) + '</td></tr>'
+    ).join('') + '</table>';
+}
+for(const id of ['otAncho','otAlto','otCant','otColF','otColD','otPapel']){
+  document.getElementById(id).addEventListener('input', otCalcular);
+  document.getElementById(id).addEventListener('change', otCalcular);
+}
+function otRenderPapeles(){
+  const sel = document.getElementById('otPapel');
+  const previo = sel.value;
+  sel.innerHTML = OT.papeles.map(p=>
+    '<option value="'+p.id+'">'+p.nombre+' · '+p.W+'×'+p.H+' · '+p.hojas+'h'+(p.precio?' · '+fmtARS(p.precio)+'/paq':' · ⚠️ sin precio')+'</option>'
+  ).join('');
+  if(previo && OT.papeles.find(p=>p.id===previo)) sel.value = previo;
+  // editor
+  const ed = document.getElementById('otPanelPapeles');
+  ed.innerHTML = '<div style="font-size:.68rem;opacity:.6;margin-bottom:8px">Precio del paquete completo (mirá papeles.net y cargalo acá; queda guardado en este dispositivo).</div>' +
+    OT.papeles.map(p=>
+      '<div style="display:flex;gap:6px;align-items:center;padding:5px 0;border-bottom:1px dashed #333844;font-size:.74rem" data-id="'+p.id+'">' +
+      '<span style="flex:1">'+p.nombre+' · '+p.W+'×'+p.H+' · '+p.hojas+' hojas · '+p.g+'g</span>' +
+      '<input type="number" class="otPrecio" value="'+(p.precio||'')+'" placeholder="$ paquete" style="width:120px;padding:6px;text-align:right">' +
+      '<button class="otQuitar" style="background:none;border:none;color:#777;padding:2px 6px">✕</button></div>'
+    ).join('') +
+    '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
+    '<input id="otNvoNombre" placeholder="Papel nuevo" style="flex:2;min-width:110px">' +
+    '<input id="otNvoW" type="number" placeholder="W" style="width:58px"><input id="otNvoH" type="number" placeholder="H" style="width:58px">' +
+    '<input id="otNvoHojas" type="number" placeholder="hojas" style="width:66px"><input id="otNvoG" type="number" placeholder="g" style="width:56px">' +
+    '<input id="otNvoPrecio" type="number" placeholder="$ paq" style="width:90px">' +
+    '<button id="otNvoBtn" style="background:#ffa730;color:#1a1200;border:none;border-radius:8px;padding:0 14px;font-weight:800">＋</button></div>';
+  ed.querySelectorAll('.otPrecio').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const p = OT.papeles.find(x=>x.id===inp.closest('[data-id]').dataset.id);
+      if(p){ p.precio = parseFloat(inp.value)||0; otGuardarConfig(); otRenderPapeles(); otCalcular(); }
+    });
+  });
+  ed.querySelectorAll('.otQuitar').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      OT.papeles = OT.papeles.filter(x=>x.id!==btn.closest('[data-id]').dataset.id);
+      otGuardarConfig(); otRenderPapeles(); otCalcular();
+    });
+  });
+  ed.querySelector('#otNvoBtn').addEventListener('click', ()=>{
+    const n = ed.querySelector('#otNvoNombre').value.trim();
+    if(!n) return;
+    OT.papeles.push({id:'p'+Date.now(), nombre:n,
+      W: parseFloat(ed.querySelector('#otNvoW').value)||72, H: parseFloat(ed.querySelector('#otNvoH').value)||102,
+      hojas: parseInt(ed.querySelector('#otNvoHojas').value)||500, g: parseInt(ed.querySelector('#otNvoG').value)||115,
+      precio: parseFloat(ed.querySelector('#otNvoPrecio').value)||0});
+    otGuardarConfig(); otRenderPapeles(); otCalcular();
+  });
+}
+document.getElementById('otPapeles').addEventListener('click', ()=>{
+  const p = document.getElementById('otPanelPapeles');
+  p.style.display = p.style.display==='none' ? 'block' : 'none';
+});
+document.getElementById('otCopiar').addEventListener('click', async ()=>{
+  const c = window._otCuadro;
+  if(!c) return;
+  let t = '*PRESUPUESTO OFFSET · TODO LETRAS*\n';
+  t += 'Pieza: ' + c.pieza + ' · ' + c.colores + ' · ' + c.papel.nombre + '\n\n';
+  for(const f of c.filas){
+    t += '▪ ' + f.etiqueta + ': *' + fmtARS(Math.round(f.venta)) + '* (' + fmtARS(Math.round(f.unit*100)/100) + ' c/u)\n';
+  }
+  try{ await navigator.clipboard.writeText(t); }catch(e){}
+  const b = document.getElementById('otCopiar');
+  b.textContent = '✓ Copiado';
+  setTimeout(()=>{ b.textContent = '📋 Copiar cuadrito'; }, 2000);
 });
 
 /* ===== cartel circular saliente: cálculo paramétrico ===== */
