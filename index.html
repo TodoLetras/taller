@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v21</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v22</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -3054,7 +3054,7 @@ function renderPedidoItems(p){
     }else{
       d.innerHTML =
         '<div class="pi-nombre"></div>' +
-        '<input class="cant" type="number" inputmode="numeric" min="1">' +
+        '<input class="cant" type="text" inputmode="decimal">' +
         '<input class="precio" type="number" inputmode="numeric" min="0">' +
         '<button class="copiar-item">📋</button>' +
         '<button class="quitar-item">✕</button>';
@@ -3063,7 +3063,7 @@ function renderPedidoItems(p){
       const inPrecio = d.querySelector('.precio');
       inCant.value = it.cant;
       inPrecio.value = it.precio;
-      inCant.addEventListener('input', ()=>{ it.cant = parseInt(inCant.value)||1; actualizarTotal(p); sincronizarPedido(); });
+      inCant.addEventListener('input', ()=>{ it.cant = parseFloat(String(inCant.value).replace(',', '.'))||1; actualizarTotal(p); sincronizarPedido(); });
       inPrecio.addEventListener('input', ()=>{
         it.precio = parseFloat(inPrecio.value)||0;
         const prod = productos.find(x=>x.id===it.prod);
