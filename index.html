@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v22</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v23</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -3755,23 +3755,6 @@ function renderCaja(){
       h += '<div id="zonaCompensar" style="margin-top:8px"></div></div>';
       return h;
     })() +
-    (function(){
-      const pend = pedidos
-        .filter(p=> p.estadoVenta !== 'presupuesto' && p.cobro !== 'cobrado')
-        .map(p=> ({p, m: totalPedido(p) - totalSenas(p)}))
-        .filter(x=> x.m > 0.5);
-      const tot = pend.reduce((s,x)=> s+x.m, 0);
-      let h = '<div class="caja-card" style="margin-bottom:8px">' +
-        '<div class="cc-linea cc-saldo"><span>💰 Por cobrar</span><b style="color:' + (tot>0 ? 'var(--ambar)' : '#4cd27d') + '">' + plata(tot) + '</b></div>';
-      if(pend.length){
-        h += '<button id="pcToggle" style="width:100%;margin-top:6px;border-radius:10px;padding:9px;font-weight:700;font-size:.72rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)">Ver los ' + pend.length + ' trabajo(s) en la calle</button>' +
-          '<div id="pcLista" style="margin-top:6px"></div>';
-      }else{
-        h += '<div style="font-size:.72rem;color:var(--texto2)">Nada pendiente de cobro ✓</div>';
-      }
-      h += '</div>';
-      return h;
-    })() +
     '<div class="caja-card">' +
 (function(){
       const deudores = pedidos
@@ -3784,10 +3767,10 @@ function renderCaja(){
       let h = '<div class="caja-card" style="margin-bottom:8px;border-left:4px solid var(--ambar)">' +
         '<div class="cc-mes">💰 Por cobrar (en la calle)</div>' +
         '<div class="cc-linea cc-saldo"><span>' + deudores.length + ' trabajo(s)</span><b style="color:var(--ambar)">' + plata(total) + '</b></div>';
-      for(const x of deudores.slice(0,5)){
-        h += '<div class="cc-linea pcAbrir" data-id="' + x.p.id + '" style="font-size:.76rem;color:var(--texto2);cursor:pointer"><span>› ' + nombreClienteId(x.p.cliente) + (totalSenas(x.p)>0?' (señado)':'') + '</span><span>' + plata(x.saldo) + '</span></div>';
-      }
-      if(deudores.length > 5) h += '<div style="font-size:.68rem;color:var(--texto2);text-align:center">… y ' + (deudores.length-5) + ' más</div>';
+      deudores.forEach((x, i)=>{
+        h += '<div class="cc-linea pcAbrir' + (i>=5 ? ' pcExtra' : '') + '" data-id="' + x.p.id + '" style="font-size:.76rem;color:var(--texto2);cursor:pointer' + (i>=5 ? ';display:none' : '') + '"><span>› ' + nombreClienteId(x.p.cliente) + (totalSenas(x.p)>0?' (señado)':'') + '</span><span>' + plata(x.saldo) + '</span></div>';
+      });
+      if(deudores.length > 5) h += '<button id="pcVerTodos" style="width:100%;background:none;border:none;font-size:.68rem;color:#5ab8ff;text-align:center;padding:6px;font-weight:700">▾ Ver los ' + deudores.length + '</button>';
       return h + '</div>';
     })() +
     '<div class="cc-mes">' + MESES[hoy.getMonth()] + ' ' + hoy.getFullYear() + '</div>' +
@@ -3828,35 +3811,14 @@ function renderCaja(){
     inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
   };
 
+  const pcVT = document.getElementById('pcVerTodos');
+  if(pcVT) pcVT.onclick = ()=>{
+    document.querySelectorAll('.pcExtra').forEach(el=> el.style.display = 'flex');
+    pcVT.remove();
+  };
   document.querySelectorAll('.pcAbrir').forEach(el=>{
     el.onclick = ()=> abrirPedido(el.dataset.id);
   });
-  const pcT = document.getElementById('pcToggle');
-  if(pcT) pcT.onclick = ()=>{
-    const l = document.getElementById('pcLista');
-    if(l.children.length){ l.innerHTML = ''; pcT.textContent = pcT.textContent.replace('Ocultar','Ver los'); return; }
-    const pend = pedidos
-      .filter(p=> p.estadoVenta !== 'presupuesto' && p.cobro !== 'cobrado')
-      .map(p=> ({p, m: totalPedido(p) - totalSenas(p)}))
-      .filter(x=> x.m > 0.5)
-      .sort((a,b)=> b.m - a.m);
-    for(const x of pend){
-      const f = document.createElement('div');
-      f.className = 'mov-fila';
-      f.style.borderLeft = '4px solid var(--ambar)';
-      const senado = totalSenas(x.p);
-      f.innerHTML = '<div class="mv-info"><div class="mv-concepto"></div><div class="mv-quien"></div></div>' +
-        '<span class="mv-monto" style="color:var(--ambar)">' + plata(x.m) + '</span>';
-      f.querySelector('.mv-concepto').textContent = nombreClienteId(x.p.cliente);
-      f.querySelector('.mv-quien').textContent = (x.p.cobro==='senado' && senado ? 'señado ' + plata(senado) + ' · ' : '') +
-        (x.p.estadoVenta==='parcial' ? 'confirmado parcial · ' : '') +
-        'desde ' + fechaLinda(new Date(x.p.creado||Date.now()).toISOString().slice(0,10));
-      f.querySelector('.mv-info').onclick = ()=> abrirPedido(x.p.id);
-      f.style.cursor = 'pointer';
-      l.appendChild(f);
-    }
-    pcT.textContent = 'Ocultar';
-  };
   const btnAj = document.getElementById('editAjusteSocios');
   if(btnAj) btnAj.onclick = ()=>{
     const linea = btnAj.closest('.cc-linea');
