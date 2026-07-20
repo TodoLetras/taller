@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v30</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v31</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -5577,16 +5577,20 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
   const tar = adTarifa(maq, papel.gramaje);
   const dorso = cd > 0;
   const variantes = [];
+  // pasadas: cada pasada por máquina se cobra por millar con su tarifa;
+  // pasadas de igual tarifa se suman ANTES de redondear al millar
   variantes.push({giro:false, poses, posturas: dorso?2:1, chapas: cf + (dorso?cd:0),
     postCosto: (tar.post[cf]||0) + (dorso ? (tar.post[cd]||0) : 0),
-    millarPasadas: (tar.millar[cf]||0) + (dorso ? (tar.millar[cd]||0) : 0)});
+    pasadas: dorso
+      ? (cf===cd ? [{t: tar.millar[cf]||0, n:2}] : [{t: tar.millar[cf]||0, n:1}, {t: tar.millar[cd]||0, n:1}])
+      : [{t: tar.millar[cf]||0, n:1}]});
   if(dorso && cf===cd && poses>=2){
     // giro mariposa: mitad frentes, mitad dorsos en la MISMA chapa; tras las dos
     // pasadas cada pliego rinde TODAS las poses como piezas terminadas
     const posesPar = poses - (poses % 2);
     variantes.push({giro:true, poses: posesPar, posturas:1, chapas: cf,
       postCosto: tar.post[cf]||0,
-      millarPasadas: 2*(tar.millar[cf]||0)});
+      pasadas: [{t: tar.millar[cf]||0, n:2}]});
   }
   let mejor = null;
   for(const v of variantes){
@@ -5616,7 +5620,15 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
         nota = 'papel abierto sin recargo';
       }
     }
-    const millarCosto = Math.ceil(pliegos/1000) * v.millarPasadas;
+    const pliegosNetos = Math.max(0, pliegos - adCfg.demasia * v.posturas);
+    let millarCosto = 0, millares = 0, millarUnit = 0;
+    for(const g of v.pasadas){
+      const mi = Math.ceil(pliegosNetos * g.n / 1000);
+      millares += mi;
+      millarCosto += mi * g.t;
+      millarUnit = g.t; // si hay una sola tarifa, es esta; si hay dos, abajo se promedia
+    }
+    if(v.pasadas.length > 1 && millares > 0) millarUnit = Math.round(millarCosto / millares);
     const chapasCosto = v.chapas * maq.ctp;
     const corteCosto = parseFloat((document.getElementById('adCorte')||{}).value)||0;
     const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto;
@@ -5626,7 +5638,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
     const op = {maquina: maq.nombre, plW: plLargo, plH: plCorto, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes, paqDec,
       piezas, costo, margen, venta, unitario: piezas>0 ? venta/piezas : 0, nota,
       layout: posesManual > 0 ? null : layoutDet, pinza, marg, pzW, pzH,
-      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto,
+      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, millares, millarUnit,
       posturas: v.posturas, chapas: v.chapas, pliegosPorHoja, papelCosto,
       detalle: (v.giro
         ? 'GIRO mariposa: 1 juego de ' + v.chapas + ' chapas · ' + v.poses + ' poses/pliego (' + (v.poses/2) + ' frentes + ' + (v.poses/2) + ' dorsos)'
@@ -5838,7 +5850,7 @@ function calcularAd(){
                  postura: op.postCosto, corte: op.corteCosto||0, piezas: op.piezas, maquina: op.maquina,
                  det: {
                    papel:   {cant: op.hojas, unit: Math.round(op.hojas>0 ? op.papelCosto/op.hojas*100 : 0)/100, u:'hojas'},
-                   millar:  {cant: Math.ceil(op.pliegos/1000), unit: Math.ceil(op.pliegos/1000)>0 ? Math.round(op.millarCosto/Math.ceil(op.pliegos/1000)) : 0, u:'millar(es)'},
+                   millar:  {cant: op.millares, unit: op.millarUnit, u:'millar(es)'},
                    chapas:  {cant: op.chapas, unit: op.chapas>0 ? Math.round(op.chapasCosto/op.chapas) : 0, u:'chapas'},
                    postura: {cant: op.posturas||1, unit: Math.round(op.postCosto/(op.posturas||1)), u:'postura(s)'},
                    corte:   {cant: 1, unit: op.corteCosto||0, u:'corte'}
