@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v20</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v21</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -353,6 +353,7 @@
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <input id="inNuevoProdNombre" placeholder="Nuevo producto" style="flex:2;margin:0">
         <input id="inNuevoProdPrecio" type="number" inputmode="numeric" placeholder="$ Precio" style="flex:1;margin:0">
+        <input id="inNuevoProdCosto" type="number" inputmode="numeric" placeholder="$ Costo (op.)" style="flex:1;margin:0">
       </div>
       <input id="inNuevoProdRubro" placeholder="Rubro (ej: Estándar Offset, Corpóreas, 3D…)" style="margin:0;margin-bottom:8px">
       <button id="crearProducto" class="btn-primario" style="width:100%;border:none;border-radius:12px;padding:12px;font-weight:700">＋ Agregar</button>
@@ -3150,7 +3151,7 @@ function renderBuscadorItems(p){
       b.className = 'sug-item';
       b.textContent = prod.nombre + '  —  ' + plata(prod.precio);
       b.onclick = ()=>{
-        p.items.push({prod:prod.id, nombre:prod.nombre, cant:1, precio:prod.precio});
+        p.items.push({prod:prod.id, nombre:prod.nombre, cant:1, precio:prod.precio, costoU: prod.costo||0});
         renderPedidoItems(p); guardarDatos(); renderPedidos();
       };
       sug.appendChild(b);
@@ -5657,8 +5658,20 @@ function renderProductos(){
     }
     const f = document.createElement('div');
     f.className = 'prod-fila';
-    f.innerHTML = '<button class="pr-nombre"></button><button class="pr-precio"></button><button class="mini borrarProd">✕</button>';
+    f.innerHTML = '<button class="pr-nombre"></button><button class="pr-costo" style="background:none;border:none;color:var(--texto2);font-size:.7rem;padding:2px 4px;white-space:nowrap"></button><button class="pr-precio"></button><button class="mini borrarProd">✕</button>';
     f.querySelector('.pr-nombre').textContent = prod.nombre;
+    f.querySelector('.pr-costo').textContent = prod.costo ? 'costo ' + plata(prod.costo) : 'costo —';
+    f.querySelector('.pr-costo').onclick = function(){
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.inputMode = 'numeric';
+      inp.value = prod.costo || '';
+      inp.placeholder = '$ costo';
+      inp.style.cssText = 'width:90px;margin:0;font-size:14px;padding:6px 8px;text-align:right';
+      this.replaceWith(inp); inp.focus(); inp.select();
+      const g = ()=>{ prod.costo = parseFloat(inp.value)||0; renderProductos(); guardarDatos(); };
+      inp.addEventListener('blur', g);
+      inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+    };
     f.querySelector('.pr-precio').textContent = plata(prod.precio);
     f.querySelector('.pr-nombre').onclick = function(){
       const inp = document.createElement('input');
@@ -6057,7 +6070,9 @@ document.getElementById('crearProducto').onclick = ()=>{
   if(!n){ inN.focus(); return; }
   if(productos.find(x=> normalizarTexto(x.nombre)===normalizarTexto(n))){ toast('Ese producto ya existe'); return; }
   const rubroNuevo = document.getElementById('inNuevoProdRubro').value.trim() || 'Otros';
-  productos.push({id:uid(), nombre:n, precio: parseFloat(inP.value)||0, rubro: rubroNuevo});
+  productos.push({id:uid(), nombre:n, precio: parseFloat(inP.value)||0,
+    costo: parseFloat(document.getElementById('inNuevoProdCosto').value)||0, rubro: rubroNuevo});
+  document.getElementById('inNuevoProdCosto').value = '';
   inN.value=''; inP.value='';
   renderProductos(); guardarDatos();
   toast('Producto agregado ✓');
