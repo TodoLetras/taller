@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v39</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v40</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -3257,20 +3257,25 @@ function renderBuscadorItems(p){
       };
       sug.appendChild(b);
     }
-    // tela sublimada calandrada: aparece siempre que haya lotes de cordura + calandrado
+    // tela sublimada calandrada: aparece siempre (con cualquier búsqueda de "tela" o "subli" o "calan")
+    if(telasMat && !telasMat.length) SEMILLA_TELAS();
     const loteCord = lotes.find(l=> normalizarTexto(l.nombre).includes('cordura'));
     const loteCal = lotes.find(l=> normalizarTexto(l.nombre).includes('calandrad'));
-    if((normalizarTexto('tela sublimada calandrada').includes(q) || q.length < 2) && loteCord && loteCal){
-      const costoTela = loteUnitario(loteCord), costoCal = loteUnitario(loteCal);
+    const COSTO_CAL_DEFAULT = 2200;
+    const mostrarTela = ['tela','subli','calan','caland'].some(w=> normalizarTexto('tela sublimada calandrada').includes(q) || q.includes(w) || q.length < 2);
+    if(mostrarTela){
+      const costoTela = loteCord ? loteUnitario(loteCord) : 3700;
+      const costoCal = loteCal ? loteUnitario(loteCal) : COSTO_CAL_DEFAULT;
       const bTela = document.createElement('button');
       bTela.className = 'sug-item';
       bTela.innerHTML = '🧶 Tela sublimada calandrada <span style="color:var(--texto2);font-size:.72rem">· elegís la tela en el ítem</span>';
       bTela.onclick = ()=>{
-        const tm0 = telasMat[0] || {id:'', ancho:136, costoFijo:0};
+        if(!telasMat.length) SEMILLA_TELAS();
+        const tm0 = telasMat[0] || {id:'tm1', nombre:'Cordura', ancho:136, costoFijo:0, loteId: loteCord ? loteCord.id : null};
         const ct = Math.round(costoTelaM(tm0));
         p.items.push({prod:null, tela:true, nombre:'Tela sublimada calandrada',
-          precio: Math.round((ct+costoCal)*1.8),
-          costoTela: ct, costoCal: Math.round(costoCal),
+          precio: Math.round((ct+COSTO_CAL_DEFAULT)*1.8),
+          costoTela: ct, costoCal: COSTO_CAL_DEFAULT,
           telaMat: tm0.id, calProv:'',
           ancho: 0, cant: 1, costura: 0});
         renderPedidoItems(p); guardarDatos(); renderPedidos();
