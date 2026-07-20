@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v33</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v36</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -779,7 +779,24 @@ let mo = {venta:15000, costo:7500};
 let esquemas = [];
 let cajaInicial = 0;
 let ajusteSocios = 0;
-let lotes = [], recetas = [];
+let lotes = [], recetas = [], telasMat = [];
+function SEMILLA_TELAS(){
+  const loteCord = lotes.find(l=> normalizarTexto(l.nombre).includes('cordura'));
+  telasMat = [
+    {id:'tm1', nombre:'Cordura',    ancho:136, costoFijo:0, loteId: loteCord ? loteCord.id : null, prov:'Imperio'},
+    {id:'tm2', nombre:'Polyester',  ancho:148, costoFijo:3700, loteId:null, prov:'Sublimados del Centro'},
+    {id:'tm3', nombre:'Microfibra', ancho:148, costoFijo:3000, loteId:null, prov:'Sublimados del Centro'},
+    {id:'tm4', nombre:'Sire opaco', ancho:148, costoFijo:4500, loteId:null, prov:'Sublimados del Centro'},
+    {id:'tm5', nombre:'Tucker',     ancho:148, costoFijo:4500, loteId:null, prov:'Sublimados del Centro'},
+  ];
+}
+function costoTelaM(tm){
+  if(tm.loteId){
+    const l = lotes.find(x=>x.id===tm.loteId);
+    return l ? loteUnitario(l) : 0;
+  }
+  return tm.costoFijo || 0;
+}
 let adCfg = null, adPapeles = [];
 const AD_SEMILLA = {
   proveedor: null,
@@ -1031,6 +1048,7 @@ async function cargar(){
       esquemas = d.esquemas || [];
       lotes = d.lotes || [];
       recetas = d.recetas || [];
+      telasMat = d.telasMat || [];
       adCfg = d.adCfg || JSON.parse(JSON.stringify(AD_SEMILLA));
       adPapeles = d.adPapeles || [
         {id:uid(), nombre:'Ilustración 115g', gramaje:115, W:72, H:102, hojas:500, precio:0},
@@ -1155,12 +1173,13 @@ async function cargar(){
   proveedores.push(tamaraIni);
   offset.proveedor = tamaraIni.id;
   SEMILLA_RECETAS();
+  SEMILLA_TELAS();
   iniciar(); guardarDatos();
 }
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, adCfg, adPapeles, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, telasMat, adCfg, adPapeles, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -2751,8 +2770,8 @@ async function copiarItem(it){
 function subtotalItem(i){
   if(i.ventaManual > 0) return i.ventaManual;
   if(i.tela){
-    // metros lineales = ceil(cant * ancho_cm / anchoTela_cm)  → precio por metro lineal
-    const metrosLin = Math.ceil((i.cant||0) * (i.ancho||0) / 136);
+    const tm = telasMat.find(x=>x.id===i.telaMat) || {ancho:136};
+    const metrosLin = Math.ceil((i.cant||0) * (i.ancho||0) / (tm.ancho||136));
     return metrosLin * (i.precio||0) + (i.costura||0) * (i.cant||0);
   }
   if(i.uv){
@@ -2770,7 +2789,8 @@ function totalPedido(p){ return p.items.reduce((s,i)=> s + (i.conf===false ? 0 :
 function totalPresupuestado(p){ return p.items.reduce((s,i)=> s + subtotalItem(i), 0); }
 function costoItem(i){
   if(i.tela){
-    const metrosLin = Math.ceil((i.cant||0) * (i.ancho||0) / 136);
+    const tm = telasMat.find(x=>x.id===i.telaMat) || {ancho:136};
+    const metrosLin = Math.ceil((i.cant||0) * (i.ancho||0) / (tm.ancho||136));
     return metrosLin * (i.costoTela||0) + metrosLin * (i.costoCal||0) + (i.costura||0) * (i.cant||0);
   }
   if(i.uv && i.costoM2){
@@ -3039,20 +3059,44 @@ function renderPedidoItems(p){
           '<span style="font-size:.72rem;color:var(--texto2)" class="tSubCos"></span>' +
           '<span class="pi-sub" style="margin-left:auto"></span>' +
         '</div>';
+      // selector de material
+      const selTM = document.createElement('select');
+      selTM.style.cssText = 'margin:0 0 6px;padding:8px;width:100%;background:var(--panel2);border:1px solid var(--borde);border-radius:8px;color:var(--texto);font-size:.78rem';
+      selTM.innerHTML = telasMat.map(tm=>
+        '<option value="'+tm.id+'"' + (it.telaMat===tm.id?' selected':'') + '>'+tm.nombre+
+        ' · '+tm.ancho+'cm · $'+(costoTelaM(tm)).toLocaleString('es-AR')+'/m ('+tm.prov+')</option>'
+      ).join('');
+      d.querySelector('.pi-cab').after(selTM);
+      // selector de calandrado
+      const selCal = document.createElement('select');
+      selCal.style.cssText = 'margin:0 0 6px;padding:8px;width:100%;background:var(--panel2);border:1px solid var(--borde);border-radius:8px;color:var(--texto);font-size:.78rem';
+      const calOpts = [{id:'', nombre:'Calandrado Sublimados del Centro ($2.200/m)', costo:2200}];
+      for(const pr of proveedores) calOpts.push({id:pr.id, nombre:'Calandrado: '+pr.nombre+' ($2.200/m)', costo:2200});
+      selCal.innerHTML = calOpts.map(o=>'<option value="'+o.id+'"'+(it.calProv===o.id?' selected':'')+'>'+o.nombre+'</option>').join('');
+      selTM.after(selCal);
       const inTAn = d.querySelector('.tAncho'), inTC = d.querySelector('.tCant'), inTCos = d.querySelector('.tCostura');
       const tRes = d.querySelector('.tResumen'), tSubCos = d.querySelector('.tSubCos'), sub = d.querySelector('.pi-sub');
       inTAn.value = it.ancho||0; inTC.value = it.cant||1; inTCos.value = it.costura||0;
-      d.querySelector('.pi-nombre').textContent = it.nombre + ' ($' + (it.precio||0).toLocaleString('es-AR') + '/m lineal)';
+      d.querySelector('.pi-nombre').textContent = it.nombre;
       const refTela = ()=>{
+        const tm = telasMat.find(x=>x.id===selTM.value) || telasMat[0] || {ancho:136, costoFijo:0};
+        it.telaMat = tm.id;
+        it.calProv = selCal.value;
+        it.costoTela = Math.round(costoTelaM(tm));
+        it.costoCal = 2200;
         it.ancho = parseFloat(inTAn.value)||0;
         it.cant = parseInt(inTC.value)||1;
         it.costura = parseFloat(inTCos.value)||0;
-        const ml = Math.ceil(it.cant * it.ancho / 136);
-        tRes.textContent = ml + ' m lineales de tela y calandrado (' + it.cant + ' piezas de ' + it.ancho + ' cm en rollo de 136 cm)';
-        tSubCos.textContent = ' → $' + ((it.costura * it.cant)||0).toLocaleString('es-AR') + ' total costura';
+        const ml = Math.ceil(it.cant * it.ancho / (tm.ancho||136));
+        it.precio = Math.round((it.costoTela + it.costoCal) * 1.8);
+        tRes.textContent = ml + ' m lineales · ' + tm.nombre + ' ' + tm.ancho + 'cm · costo ' +
+          plata(it.costoTela) + '/m + cal ' + plata(it.costoCal) + '/m';
+        tSubCos.textContent = ' · costura ' + plata(it.costura * it.cant) + ' total';
         sub.textContent = '= ' + plata(subtotalItem(it));
         actualizarTotal(p); sincronizarPedido();
       };
+      selTM.addEventListener('change', refTela);
+      selCal.addEventListener('change', refTela);
       refTela();
       for(const el of [inTAn, inTC, inTCos]) el.addEventListener('input', refTela);
     }else if(it.uv){
@@ -3219,11 +3263,14 @@ function renderBuscadorItems(p){
       const costoTela = loteUnitario(loteCord), costoCal = loteUnitario(loteCal);
       const bTela = document.createElement('button');
       bTela.className = 'sug-item';
-      bTela.innerHTML = '🧶 Tela sublimada calandrada <span style="color:var(--texto2);font-size:.72rem">· tela $' + Math.round(costoTela).toLocaleString('es-AR') + '/m + cal $' + Math.round(costoCal).toLocaleString('es-AR') + '/m + costura por pieza</span>';
+      bTela.innerHTML = '🧶 Tela sublimada calandrada <span style="color:var(--texto2);font-size:.72rem">· elegís la tela en el ítem</span>';
       bTela.onclick = ()=>{
+        const tm0 = telasMat[0] || {id:'', ancho:136, costoFijo:0};
+        const ct = Math.round(costoTelaM(tm0));
         p.items.push({prod:null, tela:true, nombre:'Tela sublimada calandrada',
-          precio: Math.round((costoTela+costoCal)*1.8),  // margen 80% editable
-          costoTela: Math.round(costoTela), costoCal: Math.round(costoCal),
+          precio: Math.round((ct+costoCal)*1.8),
+          costoTela: ct, costoCal: Math.round(costoCal),
+          telaMat: tm0.id, calProv:'',
           ancho: 0, cant: 1, costura: 0});
         renderPedidoItems(p); guardarDatos(); renderPedidos();
         toast('Ingresá el ancho de la pieza y la cantidad 👆');
@@ -4204,6 +4251,7 @@ function aplicarDatosRemotos(d){
   esquemas = d.esquemas||esquemas;
   lotes = d.lotes||lotes;
   recetas = d.recetas||recetas;
+  telasMat = d.telasMat||telasMat;
   if(d.adCfg) adCfg = d.adCfg;
   if(d.adPapeles) adPapeles = d.adPapeles;
   if(d.cajaInicial!==undefined) cajaInicial = d.cajaInicial;
@@ -4405,7 +4453,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, adCfg, adPapeles});
+    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, telasMat, adCfg, adPapeles});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -4436,6 +4484,7 @@ document.getElementById('btnImportar').onclick = (e)=>{
     esquemas = d.esquemas||[];
     lotes = d.lotes||[];
     recetas = d.recetas||[];
+    telasMat = d.telasMat||[];
     if(d.adCfg) adCfg = d.adCfg;
     adPapeles = d.adPapeles||[];
     cajaInicial = d.cajaInicial||0;
