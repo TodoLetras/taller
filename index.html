@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v18</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v19</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -2234,19 +2234,23 @@ function renderPedidosContacto(id){
     .reduce((s,p)=> s + Math.max(0, totalPedido(p) - totalSenas(p)), 0);
   const presup = suyos.length - confirmados.length;
 
+  const cobradoCaja = movimientos.filter(m=> m.quien===id && m.tipo==='ingreso' && movReal(m))
+    .reduce((s,m)=> s+(m.monto||0), 0);
   const resumen = document.createElement('div');
   resumen.className = 'caja-card';
   resumen.style.marginBottom = '8px';
   resumen.innerHTML =
-    '<div class="cc-linea"><span>Encargado (confirmado)</span><b>' + plata(encargado) + '</b></div>' +
-    '<div class="cc-linea"><span>💰 Por cobrar</span><b style="color:' + (porCobrar>0.5 ? 'var(--ambar)' : '#4cd27d') + '">' + plata(porCobrar) + '</b></div>' +
-    (presup ? '<div class="cc-linea" style="font-size:.72rem;color:var(--texto2)"><span>📝 Presupuestos en danza</span><span>' + presup + '</span></div>' : '');
+    '<div class="cc-linea"><span>🧾 Vendido (confirmado)</span><b>' + plata(encargado) + '</b></div>' +
+    '<div class="cc-linea"><span>💰 Cobrado</span><b style="color:#4cd27d">' + plata(cobradoCaja) + '</b></div>' +
+    '<div class="cc-linea cc-saldo"><span>💸 Por cobrar</span><b style="color:' + (porCobrar>0.5 ? 'var(--ambar)' : '#4cd27d') + '">' + plata(porCobrar) + '</b></div>' +
+    (presup ? '<div class="cc-linea" style="font-size:.72rem;color:var(--texto2)"><span>📝 Presupuestos en danza (no suman)</span><span>' + presup + '</span></div>' : '');
   cont.appendChild(resumen);
 
   for(const p of suyos.slice(0, 10)){
     const ev = estadoFact ? null : null;
-    const est = p.estadoVenta==='presupuesto' ? '📝 presupuesto' : (p.estadoVenta==='parcial' ? '⚠️ parcial' : '✓ confirmado');
-    const cob = p.cobro==='cobrado' ? '✅ cobrado' : (p.cobro==='senado' ? '🪙 señado ' + plata(totalSenas(p)) : '💸 a cobrar');
+    const esPresu = p.estadoVenta==='presupuesto';
+    const est = esPresu ? '📝 SIN CONFIRMAR' : (p.estadoVenta==='parcial' ? '⚠️ parcial' : '✓ confirmado');
+    const cob = esPresu ? '' : (p.cobro==='cobrado' ? ' · ✅ cobrado' : (p.cobro==='senado' ? ' · 🪙 señado ' + plata(totalSenas(p)) : ' · 💸 a cobrar'));
     const f = document.createElement('div');
     f.className = 'mov-fila';
     f.style.cursor = 'pointer';
@@ -2257,7 +2261,21 @@ function renderPedidosContacto(id){
       '<span class="mv-monto" style="color:var(--texto)">' + plata(totalPedido(p)) + '</span>';
     const primero = (p.items.find(i=>i.conf!==false) || p.items[0]);
     f.querySelector('.mv-concepto').textContent = primero ? primero.nombre.slice(0,60) + (p.items.length>1 ? ' (+' + (p.items.length-1) + ')' : '') : '(sin ítems)';
-    f.querySelector('.mv-quien').textContent = fechaLinda(new Date(p.creado||Date.now()).toISOString().slice(0,10)) + ' · ' + est + ' · ' + cob;
+    f.querySelector('.mv-quien').textContent = fechaLinda(new Date(p.creado||Date.now()).toISOString().slice(0,10)) + ' · ' + est + cob;
+    if(esPresu){
+      const conf = document.createElement('button');
+      conf.textContent = '✓ Confirmar';
+      conf.style.cssText = 'margin-right:8px;border-radius:8px;padding:6px 10px;font-weight:700;font-size:.68rem;background:rgba(76,210,125,.12);border:1px solid rgba(76,210,125,.5);color:#4cd27d;white-space:nowrap';
+      conf.onclick = (e)=>{
+        e.stopPropagation();
+        p.estadoVenta = 'confirmado';
+        registrar('confirmó el presupuesto de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ') desde la ficha');
+        guardarDatos(); renderPedidos();
+        renderPedidosContacto(id);
+        toast('Presupuesto confirmado ✓ Ya suma como venta');
+      };
+      f.insertBefore(conf, f.querySelector('.mv-monto'));
+    }
     f.onclick = ()=>{
       modalCliente.classList.remove('abierto');
       abrirPedido(p.id);
