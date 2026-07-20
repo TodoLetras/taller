@@ -1,8 +1,12 @@
-const CACHE = 'taller-v3';
+const CACHE = 'taller-v4';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-180.png', './cotizador.html', './pdf-assets.js'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(ARCHIVOS.map(u => new Request(u, {cache: 'reload'}))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
@@ -15,9 +19,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const esNavegacion = e.request.mode === 'navigate' || e.request.destination === 'document';
   if (esNavegacion) {
-    // red primero: si hay internet trae la última versión; si no, usa la guardada
+    // directo al servidor, sin caché HTTP: si hay internet, SIEMPRE la última versión
     e.respondWith(
-      fetch(e.request).then(r => {
+      fetch(e.request, {cache: 'no-store'}).then(r => {
         const copia = r.clone();
         caches.open(CACHE).then(c => c.put('./index.html', copia));
         return r;
