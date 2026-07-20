@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v36</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v39</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -1049,6 +1049,7 @@ async function cargar(){
       lotes = d.lotes || [];
       recetas = d.recetas || [];
       telasMat = d.telasMat || [];
+      if(!telasMat.length) SEMILLA_TELAS();
       adCfg = d.adCfg || JSON.parse(JSON.stringify(AD_SEMILLA));
       adPapeles = d.adPapeles || [
         {id:uid(), nombre:'Ilustración 115g', gramaje:115, W:72, H:102, hojas:500, precio:0},
@@ -4252,6 +4253,7 @@ function aplicarDatosRemotos(d){
   lotes = d.lotes||lotes;
   recetas = d.recetas||recetas;
   telasMat = d.telasMat||telasMat;
+  if(!telasMat.length) SEMILLA_TELAS();
   if(d.adCfg) adCfg = d.adCfg;
   if(d.adPapeles) adPapeles = d.adPapeles;
   if(d.cajaInicial!==undefined) cajaInicial = d.cajaInicial;
@@ -4485,6 +4487,7 @@ document.getElementById('btnImportar').onclick = (e)=>{
     lotes = d.lotes||[];
     recetas = d.recetas||[];
     telasMat = d.telasMat||[];
+    if(!telasMat.length) SEMILLA_TELAS();
     if(d.adCfg) adCfg = d.adCfg;
     adPapeles = d.adPapeles||[];
     cajaInicial = d.cajaInicial||0;
