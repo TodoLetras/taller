@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v31</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v33</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -2750,6 +2750,11 @@ async function copiarItem(it){
 }
 function subtotalItem(i){
   if(i.ventaManual > 0) return i.ventaManual;
+  if(i.tela){
+    // metros lineales = ceil(cant * ancho_cm / anchoTela_cm)  → precio por metro lineal
+    const metrosLin = Math.ceil((i.cant||0) * (i.ancho||0) / 136);
+    return metrosLin * (i.precio||0) + (i.costura||0) * (i.cant||0);
+  }
   if(i.uv){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);   // demasía en ambos lados
     const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);  // demasía arriba y abajo
@@ -2764,6 +2769,10 @@ function medidaImpresion(i){
 function totalPedido(p){ return p.items.reduce((s,i)=> s + (i.conf===false ? 0 : subtotalItem(i)), 0); }
 function totalPresupuestado(p){ return p.items.reduce((s,i)=> s + subtotalItem(i), 0); }
 function costoItem(i){
+  if(i.tela){
+    const metrosLin = Math.ceil((i.cant||0) * (i.ancho||0) / 136);
+    return metrosLin * (i.costoTela||0) + metrosLin * (i.costoCal||0) + (i.costura||0) * (i.cant||0);
+  }
   if(i.uv && i.costoM2){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);
     const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);
@@ -2785,7 +2794,7 @@ function gananciaPedido(p){
   if(typeof od !== 'undefined' && od && od.proveedor) provIntegrados.push(od.proveedor);
   if(typeof offset !== 'undefined' && offset && offset.proveedor) provIntegrados.push(offset.proveedor);
   if(typeof adCfg !== 'undefined' && adCfg && adCfg.proveedor) provIntegrados.push(adCfg.proveedor);
-  const gastos = movimientos.filter(m=> m.tipo==='egreso' && m.pedido===p.id && !m.auto && !m.anulado && !m.esAnulacion && !provIntegrados.includes(m.quien))
+  const gastos = movimientos.filter(m=> m.tipo==='egreso' && m.pedido===p.id && !m.auto && !m.anulado && !m.esAnulacion && !m.costoIntegrado && !provIntegrados.includes(m.quien))
     .reduce((s,m)=> s+(m.monto||0), 0);
   ganancia -= gastos;
   return {ganancia, sinCosto, gastos};
@@ -3015,6 +3024,37 @@ function renderPedidoItems(p){
         modalPedido.classList.remove('abierto');
         abrirOffDig(p, idx);
       };
+    }else if(it.tela){
+      d.innerHTML =
+        '<div class="pi-cab"><div class="pi-nombre"></div><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
+        '<div class="pi-medidas">' +
+          '<span>Ancho pieza:</span><input class="tAncho" type="number" inputmode="numeric" min="0"><span>cm ×</span>' +
+          '<input class="tCant" type="number" inputmode="numeric" min="1"><span>piezas</span>' +
+        '</div>' +
+        '<div class="pi-medidas" style="font-size:.72rem;color:var(--texto2)">' +
+          '<span class="tResumen"></span>' +
+        '</div>' +
+        '<div class="pi-medidas">' +
+          '<span>Costura/pieza $</span><input class="tCostura" type="number" inputmode="numeric" min="0" style="width:90px">' +
+          '<span style="font-size:.72rem;color:var(--texto2)" class="tSubCos"></span>' +
+          '<span class="pi-sub" style="margin-left:auto"></span>' +
+        '</div>';
+      const inTAn = d.querySelector('.tAncho'), inTC = d.querySelector('.tCant'), inTCos = d.querySelector('.tCostura');
+      const tRes = d.querySelector('.tResumen'), tSubCos = d.querySelector('.tSubCos'), sub = d.querySelector('.pi-sub');
+      inTAn.value = it.ancho||0; inTC.value = it.cant||1; inTCos.value = it.costura||0;
+      d.querySelector('.pi-nombre').textContent = it.nombre + ' ($' + (it.precio||0).toLocaleString('es-AR') + '/m lineal)';
+      const refTela = ()=>{
+        it.ancho = parseFloat(inTAn.value)||0;
+        it.cant = parseInt(inTC.value)||1;
+        it.costura = parseFloat(inTCos.value)||0;
+        const ml = Math.ceil(it.cant * it.ancho / 136);
+        tRes.textContent = ml + ' m lineales de tela y calandrado (' + it.cant + ' piezas de ' + it.ancho + ' cm en rollo de 136 cm)';
+        tSubCos.textContent = ' → $' + ((it.costura * it.cant)||0).toLocaleString('es-AR') + ' total costura';
+        sub.textContent = '= ' + plata(subtotalItem(it));
+        actualizarTotal(p); sincronizarPedido();
+      };
+      refTela();
+      for(const el of [inTAn, inTC, inTCos]) el.addEventListener('input', refTela);
     }else if(it.uv){
       d.innerHTML =
         '<div class="pi-cab"><div class="pi-nombre"></div><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
@@ -3171,6 +3211,24 @@ function renderBuscadorItems(p){
         renderPedidoItems(p); guardarDatos(); renderPedidos();
       };
       sug.appendChild(b);
+    }
+    // tela sublimada calandrada: aparece siempre que haya lotes de cordura + calandrado
+    const loteCord = lotes.find(l=> normalizarTexto(l.nombre).includes('cordura'));
+    const loteCal = lotes.find(l=> normalizarTexto(l.nombre).includes('calandrad'));
+    if((normalizarTexto('tela sublimada calandrada').includes(q) || q.length < 2) && loteCord && loteCal){
+      const costoTela = loteUnitario(loteCord), costoCal = loteUnitario(loteCal);
+      const bTela = document.createElement('button');
+      bTela.className = 'sug-item';
+      bTela.innerHTML = '🧶 Tela sublimada calandrada <span style="color:var(--texto2);font-size:.72rem">· tela $' + Math.round(costoTela).toLocaleString('es-AR') + '/m + cal $' + Math.round(costoCal).toLocaleString('es-AR') + '/m + costura por pieza</span>';
+      bTela.onclick = ()=>{
+        p.items.push({prod:null, tela:true, nombre:'Tela sublimada calandrada',
+          precio: Math.round((costoTela+costoCal)*1.8),  // margen 80% editable
+          costoTela: Math.round(costoTela), costoCal: Math.round(costoCal),
+          ancho: 0, cant: 1, costura: 0});
+        renderPedidoItems(p); guardarDatos(); renderPedidos();
+        toast('Ingresá el ancho de la pieza y la cantidad 👆');
+      };
+      sug.appendChild(bTela);
     }
     // recetas: tela / estructura / completo
     const resRec = recetas.filter(r=> normalizarTexto(r.nombre).includes(q)).slice(0,2);
@@ -5181,16 +5239,18 @@ function editarAdReal(it, p){
     fila.appendChild(sel);
     const btnPagar = document.createElement('button');
     const yaPagado = m.pagos[g.clave];
-    btnPagar.textContent = yaPagado ? '✓ Pagado' : '💸 Pagar';
+    const completo = yaPagado && yaPagado.monto >= Math.round(valorGrupo(g)) - 1;
+    btnPagar.textContent = completo ? '✓ Pagado' : (yaPagado ? '✓ ' + plata(yaPagado.monto) + ' · 💸 más' : '💸 Pagar');
     btnPagar.style.cssText = 'background:' + (yaPagado ? 'rgba(76,210,125,.12)' : 'var(--panel2)') + ';border:1px solid ' + (yaPagado ? 'rgba(76,210,125,.5)' : 'var(--borde)') + ';color:' + (yaPagado ? '#4cd27d' : 'var(--texto)') + ';border-radius:8px;padding:8px 10px;font-weight:700;font-size:.72rem;white-space:nowrap';
     btnPagar.onclick = ()=>{
       if(!sel.value){ toast('Elegí primero el proveedor de ' + g.etq); return; }
       const monto = Math.round(valorGrupo(g));
       if(monto <= 0){ toast('Ese grupo no tiene costo cargado'); return; }
-      confirmarQuienPago(monto, g.etq, sel.value, (quien)=>{
-        movimientos.push({id:uid(), tipo:'egreso', monto, concepto:'Offset AD · ' + g.etq + ' · ' + (it.nombre||'').slice(0,50),
-          quien: sel.value, persona: quien, pedido: p.id, fecha: hoyISO(), creado: Date.now()});
-        m.pagos[g.clave] = {monto, quien, fecha: hoyISO()};
+      confirmarQuienPago(monto, g.etq, sel.value, (quien, montoPagado)=>{
+        movimientos.push({id:uid(), tipo:'egreso', monto: montoPagado, concepto:'Offset AD · ' + g.etq + ' · ' + (it.nombre||'').slice(0,50),
+          quien: sel.value, persona: quien, pedido: p.id, costoIntegrado: true, fecha: hoyISO(), creado: Date.now()});
+        const previo = (m.pagos[g.clave] && m.pagos[g.clave].monto) || 0;
+        m.pagos[g.clave] = {monto: previo + montoPagado, quien, fecha: hoyISO()};
         registrar('pagó ' + g.etq + ' (' + plata(monto) + ') a ' + (proveedores.find(x=>x.id===sel.value)||{}).nombre + ' — pagó ' + quien);
         guardarDatos(); renderCaja();
         overlay.remove();
@@ -5280,7 +5340,7 @@ function renderCuentaAdProv(id, cont){
       '<span class="mv-monto" style="color:' + (c.pago ? '#4cd27d' : 'var(--texto)') + '">' + plata(c.monto) + '</span>';
     f.querySelector('.mv-concepto').textContent = c.g.etq + ' · ' + (c.it.nombre||'').slice(0, 55);
     f.querySelector('.mv-quien').textContent = nombreClienteId(c.p.cliente) + ' · ' +
-      (c.pago ? '✓ pagado ' + fechaLinda(c.pago.fecha||'') + ' por ' + (c.pago.quien||'?') : '⏳ pendiente de pago');
+      (c.pago ? (c.pago.monto >= c.monto - 1 ? '✓ pagado ' : '⏳ pagado parcial ' + plata(c.pago.monto) + ' de ' + plata(c.monto) + ' · ') + fechaLinda(c.pago.fecha||'') + ' por ' + (c.pago.quien||'?') : '⏳ pendiente de pago');
     f.onclick = ()=>{ modalCliente.classList.remove('abierto'); abrirPedido(c.p.id); };
     cont.appendChild(f);
   }
@@ -5293,7 +5353,9 @@ function confirmarQuienPago(monto, etiqueta, proveedorId, onConfirmar){
   const hoja = document.createElement('div');
   hoja.style.cssText = 'background:var(--panel);border:1px solid var(--borde);border-radius:16px;padding:18px;max-width:320px;width:100%';
   hoja.innerHTML = '<div style="font-weight:800;font-size:.88rem;margin-bottom:2px">💸 Pagar ' + etiqueta + '</div>' +
-    '<div style="font-size:.76rem;color:var(--texto2);margin-bottom:14px">' + plata(monto) + ' a <b style="color:var(--texto)">' + nombreProv + '</b></div>' +
+    '<div style="font-size:.76rem;color:var(--texto2);margin-bottom:8px">a <b style="color:var(--texto)">' + nombreProv + '</b> · costo del grupo: ' + plata(monto) + '</div>' +
+    '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:4px">Monto a pagar HOY (editalo si parte salió de stock ya pagado):</div>' +
+    '<input id="qpMonto" type="number" inputmode="numeric" value="' + Math.round(monto) + '" style="width:100%;margin:0 0 12px;padding:11px;font-size:17px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:10px;color:var(--texto)">' +
     '<div style="font-size:.72rem;color:var(--texto2);margin-bottom:8px">¿Quién pagó?</div>';
   const zonaBtns = document.createElement('div');
   zonaBtns.style.cssText = 'display:flex;gap:8px;margin-bottom:14px';
@@ -5315,7 +5377,11 @@ function confirmarQuienPago(monto, etiqueta, proveedorId, onConfirmar){
   const btnOk = document.createElement('button');
   btnOk.textContent = '✓ Registrar pago';
   btnOk.style.cssText = 'width:100%;border-radius:12px;padding:12px;font-weight:800;background:var(--ambar);color:#1a1200;border:none;margin-bottom:8px';
-  btnOk.onclick = ()=>{ ov.remove(); onConfirmar(elegido); };
+  btnOk.onclick = ()=>{
+    const mReal = parseFloat(hoja.querySelector('#qpMonto').value)||0;
+    if(mReal <= 0){ toast('Poné un monto mayor a cero'); return; }
+    ov.remove(); onConfirmar(elegido, mReal);
+  };
   const btnCa = document.createElement('button');
   btnCa.textContent = 'Cancelar';
   btnCa.style.cssText = 'width:100%;border-radius:12px;padding:10px;font-weight:700;background:none;border:1px solid var(--borde);color:var(--texto2)';
