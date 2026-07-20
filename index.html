@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v23</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v27</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -531,12 +531,23 @@
       <span style="color:var(--texto2)">×</span>
       <input id="adH" type="number" inputmode="decimal" placeholder="Alto" style="flex:1;margin:0">
       <input id="adCant" type="number" inputmode="numeric" placeholder="Cantidad" style="flex:1;margin:0">
+      <input id="adPoses" type="number" inputmode="numeric" placeholder="Poses (auto)" title="Dejalo vacío para el cálculo automático, o escribí las poses reales de tu imposición" style="flex:1;margin:0">
+      <input id="adPinza" type="number" inputmode="decimal" value="1.5" title="Pinza (cm): franja que toma la máquina a lo largo del lado largo del pliego" style="width:70px;margin:0">
+      <input id="adMarg" type="number" inputmode="decimal" value="1" title="Margen lateral (cm) por costado" style="width:64px;margin:0">
     </div>
     <label>Colores</label>
     <div class="cats-pick" id="adColores"></div>
     <label>Papel <span style="font-weight:400;text-transform:none">(precio del paquete: tocalo para actualizarlo)</span></label>
     <select id="adPapel" style="width:100%;margin:0 0 8px;padding:11px;font-size:15px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
     <label>Descripción</label>
+    <label style="display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--texto2);margin-bottom:8px">
+      <input type="checkbox" id="adRecargoChk" checked style="width:auto;margin:0">
+      Cobrar +15% cuando el paquete queda abierto (papel sobrante)
+    </label>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <label style="font-size:.74rem;color:var(--texto2);margin:0">✂️ Corte guillotina $</label>
+      <input id="adCorte" type="number" inputmode="numeric" placeholder="0 (AD no cobra ≤16 poses)" style="flex:1;margin:0">
+    </div>
     <input id="adDesc" placeholder="Ej: folletos 10x15 full color">
     <div id="adResultado" style="margin-top:10px"></div>
     <details style="margin-top:12px">
@@ -3056,6 +3067,7 @@ function renderPedidoItems(p){
         '<div class="pi-nombre"></div>' +
         '<input class="cant" type="text" inputmode="decimal">' +
         '<input class="precio" type="number" inputmode="numeric" min="0">' +
+        (it.adTr && it.adMeta ? '<button class="adReal" title="Cargar lo cobrado real por AD y la papelera">🧾</button>' : '') +
         '<button class="copiar-item">📋</button>' +
         '<button class="quitar-item">✕</button>';
       d.querySelector('.pi-nombre').textContent = it.nombre;
@@ -3063,6 +3075,8 @@ function renderPedidoItems(p){
       const inPrecio = d.querySelector('.precio');
       inCant.value = it.cant;
       inPrecio.value = it.precio;
+      const btnReal = d.querySelector('.adReal');
+      if(btnReal) btnReal.onclick = ()=> editarAdReal(it, p);
       inCant.addEventListener('input', ()=>{ it.cant = parseFloat(String(inCant.value).replace(',', '.'))||1; actualizarTotal(p); sincronizarPedido(); });
       inPrecio.addEventListener('input', ()=>{
         it.precio = parseFloat(inPrecio.value)||0;
@@ -5080,6 +5094,63 @@ document.getElementById('btnOffDig').onclick = ()=>{
   abrirOffDig(p);
 };
 
+/* ---------- costos reales del offset AD (cotejo contra lo presupuestado) ---------- */
+function editarAdReal(it, p){
+  const m = it.adMeta;
+  const reales = m.reales || {};
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center;padding:18px';
+  const hoja = document.createElement('div');
+  hoja.style.cssText = 'background:var(--panel);border:1px solid var(--borde);border-radius:16px;padding:16px;max-width:420px;width:100%';
+  const campos = [['papel','📄 Papel (papelera)'],['millar','🖨 Millar (AD)'],['chapas','⬜ Chapas (AD)'],['postura','⚙️ Postura (AD)'],['corte','✂️ Corte (AD)']];
+  hoja.innerHTML = '<div style="font-weight:800;font-size:.88rem;margin-bottom:2px">🧾 Costos reales del trabajo</div>' +
+    '<div style="font-size:.7rem;color:var(--texto2);margin-bottom:12px">Cargá lo que te cobraron de verdad; vacío = queda el presupuestado. La ganancia se sincera sola.</div>' +
+    campos.map(([k, etq])=>
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:.76rem">' +
+      '<span style="flex:1">' + etq + '<br><span style="font-size:.64rem;color:var(--texto2)">presup. ' + plata(m[k]||0) + '</span></span>' +
+      '<input data-k="' + k + '" type="number" inputmode="numeric" value="' + (reales[k]!==undefined ? reales[k] : '') + '" placeholder="' + Math.round(m[k]||0) + '" style="width:130px;margin:0;padding:9px;font-size:15px;text-align:right;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
+      '</div>'
+    ).join('') +
+    '<div id="adRealTot" style="text-align:right;font-weight:800;font-size:.82rem;margin:10px 0"></div>';
+  const actualizarTot = ()=>{
+    let tot = 0;
+    for(const [k] of campos){
+      const inp = hoja.querySelector('input[data-k="'+k+'"]');
+      const v = parseFloat(inp.value);
+      tot += isNaN(v) ? (m[k]||0) : v;
+    }
+    hoja.querySelector('#adRealTot').textContent = 'Costo total: ' + plata(tot) + (Math.round(tot) !== Math.round(it.costoU) ? '  (era ' + plata(it.costoU) + ')' : '');
+    return tot;
+  };
+  hoja.querySelectorAll('input').forEach(inp=> inp.addEventListener('input', actualizarTot));
+  const btnG = document.createElement('button');
+  btnG.textContent = '✓ Guardar costos reales';
+  btnG.style.cssText = 'width:100%;border-radius:12px;padding:13px;font-weight:800;background:var(--ambar);color:#1a1200;border:none;margin-bottom:8px';
+  btnG.onclick = ()=>{
+    const nuevos = {};
+    for(const [k] of campos){
+      const v = parseFloat(hoja.querySelector('input[data-k="'+k+'"]').value);
+      if(!isNaN(v)) nuevos[k] = v;
+    }
+    m.reales = nuevos;
+    if(m.estimado === undefined) m.estimado = it.costoU;
+    it.costoU = actualizarTot();
+    registrar('cargó costos reales de offset AD (' + plata(it.costoU) + ', presupuestado ' + plata(m.estimado) + ')');
+    guardarDatos(); renderPedidoItems(p); renderPedidos();
+    overlay.remove();
+    toast('Costos reales guardados ✓ La ganancia usa los números verdaderos.');
+  };
+  const btnC = document.createElement('button');
+  btnC.textContent = 'Cancelar';
+  btnC.style.cssText = 'width:100%;border-radius:12px;padding:11px;font-weight:700;background:var(--panel2);border:1px solid var(--borde);color:var(--texto)';
+  btnC.onclick = ()=> overlay.remove();
+  hoja.appendChild(btnG); hoja.appendChild(btnC);
+  overlay.appendChild(hoja);
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  actualizarTot();
+}
+
 /* ---------- presupuesto PDF con membrete ---------- */
 let pdfLibsListas = false;
 function cargarScript(src){
@@ -5264,16 +5335,45 @@ document.getElementById('pedPDF').onclick = ()=>{
 const modalAd = document.getElementById('modalAd');
 let adPedido = null, adColSel = '4/4';
 const AD_COLORES = [['1/0',1,0],['1/1',1,1],['2/0',2,0],['2/2',2,2],['4/0',4,0],['4/1',4,1],['4/4',4,4]];
-function adEncaje(pw, ph, W, H){
-  function o(a,b){
+function adEncajeDet(pw, ph, W, H){
+  function o(a, b, rot){
     const c = Math.floor(W/a), f = Math.floor(H/b);
-    if(c<1 || f<1) return 0;
-    let n = c*f;
-    const eW = Math.floor((W - c*a)/b) * Math.floor(H/a);
-    const eH = Math.floor(W/b) * Math.floor((H - f*b)/a);
-    return n + Math.max(eW, eH, 0);
+    if(c<1 || f<1) return null;
+    const base = c*f;
+    // franja sobrante: a la derecha (piezas rotadas) o arriba
+    const derC = Math.floor((W - c*a)/b), derF = Math.floor(H/a);
+    const arrC = Math.floor(W/b), arrF = Math.floor((H - f*b)/a);
+    const der = derC*derF, arr = arrC*arrF;
+    let extra = null;
+    if(der >= arr && der > 0) extra = {lado:'der', cols:derC, rows:derF, x: c*a};
+    else if(arr > 0) extra = {lado:'arr', cols:arrC, rows:arrF, y: f*b};
+    return {n: base + Math.max(der, arr, 0), rot, a, b, cols:c, rows:f, extra};
   }
-  return Math.max(o(pw,ph), o(ph,pw));
+  const A = o(pw, ph, false), B = o(ph, pw, true);
+  if(!A) return B;
+  if(!B) return A;
+  return B.n > A.n ? B : A;
+}
+function adEncaje(pw, ph, W, H){
+  const d = adEncajeDet(pw, ph, W, H);
+  return d ? d.n : 0;
+}
+// divide la hoja de fábrica en partes iguales (mitades, cuartos, octavos…)
+// buscando el pliego máquina MÁS GRANDE que entre en la máquina
+function adCortePliego(pW, pH, MW, MH){
+  let mejor = null;
+  for(let nc=1; nc<=8; nc++){
+    for(let nf=1; nf<=8; nf++){
+      const w = pW/nc, h = pH/nf;
+      const entra = (w <= MW && h <= MH) || (h <= MW && w <= MH);
+      if(!entra) continue;
+      const n = nc*nf;
+      if(!mejor || n < mejor.n || (n === mejor.n && Math.min(w,h) > Math.min(mejor.w, mejor.h))){
+        mejor = {n, w: Math.round(w*100)/100, h: Math.round(h*100)/100, nc, nf};
+      }
+    }
+  }
+  return mejor;
 }
 function adMargen(paquetes){
   let m = 100;
@@ -5286,10 +5386,19 @@ function adTarifa(maq, gramaje){
 // calcula una opción: modo {tipo:'paquetes', n} o {tipo:'cantidad', q}
 function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
   const maq = adCfg.maquinas[maqKey];
-  const poses = adEncaje(pzW, pzH, maq.W, maq.H);
+  const posesManual = parseInt((document.getElementById('adPoses')||{}).value)||0;
+  const pinza = parseFloat((document.getElementById('adPinza')||{}).value)||0;
+  const marg = parseFloat((document.getElementById('adMarg')||{}).value)||0;
+  const cortePl = adCortePliego(papel.W, papel.H, maq.W, maq.H);
+  if(!cortePl) return null;
+  const plLargo = Math.max(cortePl.w, cortePl.h);
+  const plCorto = Math.min(cortePl.w, cortePl.h);
+  const utilW = plLargo - 2*marg;    // márgenes en las puntas del lado largo
+  const utilH = plCorto - pinza;     // la pinza recorre el lado largo: come del lado corto
+  const layoutDet = adEncajeDet(pzW, pzH, utilW, utilH);
+  const poses = posesManual > 0 ? posesManual : (layoutDet ? layoutDet.n : 0);
   if(poses < 1) return null;
-  const pliegosPorHoja = adEncaje(maq.W, maq.H, papel.W, papel.H);
-  if(pliegosPorHoja < 1) return null;
+  const pliegosPorHoja = cortePl.n;
   const tar = adTarifa(maq, papel.gramaje);
   const dorso = cd > 0;
   const variantes = [];
@@ -5297,7 +5406,10 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
     postCosto: (tar.post[cf]||0) + (dorso ? (tar.post[cd]||0) : 0),
     millarPasadas: (tar.millar[cf]||0) + (dorso ? (tar.millar[cd]||0) : 0)});
   if(dorso && cf===cd && poses>=2){
-    variantes.push({giro:true, poses: Math.floor(poses/2), posturas:1, chapas: cf,
+    // giro mariposa: mitad frentes, mitad dorsos en la MISMA chapa; tras las dos
+    // pasadas cada pliego rinde TODAS las poses como piezas terminadas
+    const posesPar = poses - (poses % 2);
+    variantes.push({giro:true, poses: posesPar, posturas:1, chapas: cf,
       postCosto: tar.post[cf]||0,
       millarPasadas: 2*(tar.millar[cf]||0)});
   }
@@ -5318,24 +5430,103 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
       piezas = modo.q;
       const paqExactos = hojas / papel.hojas;
       paquetes = Math.ceil(paqExactos);
+      const cobrarRecargo = (document.getElementById('adRecargoChk')||{checked:true}).checked;
       if(Number.isInteger(paqExactos)){
         papelCosto = paqExactos * (papel.precio||0);
-      }else{
+      }else if(cobrarRecargo){
         papelCosto = hojas * ((papel.precio||0) / papel.hojas) * (1 + adCfg.recargoParcial/100);
         nota = '+' + adCfg.recargoParcial + '% papel abierto';
+      }else{
+        papelCosto = hojas * ((papel.precio||0) / papel.hojas);
+        nota = 'papel abierto sin recargo';
       }
     }
     const millarCosto = Math.ceil(pliegos/1000) * v.millarPasadas;
     const chapasCosto = v.chapas * maq.ctp;
-    const costo = v.postCosto + chapasCosto + millarCosto + papelCosto;
+    const corteCosto = parseFloat((document.getElementById('adCorte')||{}).value)||0;
+    const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto;
     const margen = adMargen(paquetes);
     const venta = Math.round(costo * (1 + margen/100));
-    const op = {maquina: maq.nombre, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes,
+    const paqDec = Math.round((hojas / papel.hojas) * 100) / 100;
+    const op = {maquina: maq.nombre, plW: plLargo, plH: plCorto, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes, paqDec,
       piezas, costo, margen, venta, unitario: piezas>0 ? venta/piezas : 0, nota,
-      detalle: v.posturas+' postura(s) · '+v.chapas+' chapa(s) · '+poses+' poses'+(v.giro?' (giro: mariposa/pinza)':'')};
+      layout: posesManual > 0 ? null : layoutDet, pinza, marg, pzW, pzH,
+      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto,
+      posturas: v.posturas, chapas: v.chapas, pliegosPorHoja, papelCosto,
+      detalle: (v.giro
+        ? 'GIRO mariposa: 1 juego de ' + v.chapas + ' chapas · ' + v.poses + ' poses/pliego (' + (v.poses/2) + ' frentes + ' + (v.poses/2) + ' dorsos)'
+        : v.posturas + ' juego(s) de chapas (' + v.chapas + ' en total) · ' + v.poses + ' poses/pliego') +
+        ' · hoja ' + papel.W + '×' + papel.H + ' cortada en ' + pliegosPorHoja + ' → pliego máquina ' + plLargo + '×' + plCorto + ' cm (útil ' + (Math.round(utilW*10)/10) + '×' + (Math.round(utilH*10)/10) + ')'};
     if(!mejor || op.venta < mejor.venta) mejor = op;
   }
   return mejor;
+}
+function dibujarEsquemaAd(op){
+  const canvas = document.getElementById('adEsquema');
+  if(!canvas) return;
+  const L = op.layout;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.min(420, canvas.parentElement ? canvas.parentElement.clientWidth : 420);
+  const escala = (cssW - 20) / op.plW;
+  const cssH = op.plH * escala + 34;
+  canvas.style.height = cssH + 'px';
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+  const ox = 10, oy = 6;
+  const W = op.plW * escala, H = op.plH * escala;
+  // pliego
+  ctx.fillStyle = '#f4f1ea';
+  ctx.fillRect(ox, oy, W, H);
+  ctx.strokeStyle = '#888'; ctx.lineWidth = 1.2;
+  ctx.strokeRect(ox, oy, W, H);
+  // pinza: franja abajo, a lo largo del lado largo
+  const pinzaPx = op.pinza * escala;
+  ctx.fillStyle = 'rgba(255,80,80,.28)';
+  ctx.fillRect(ox, oy + H - pinzaPx, W, pinzaPx);
+  ctx.strokeStyle = 'rgba(255,80,80,.7)';
+  ctx.strokeRect(ox, oy + H - pinzaPx, W, pinzaPx);
+  // márgenes laterales
+  const margPx = op.marg * escala;
+  ctx.fillStyle = 'rgba(255,167,48,.14)';
+  ctx.fillRect(ox, oy, margPx, H);
+  ctx.fillRect(ox + W - margPx, oy, margPx, H);
+  if(!L){
+    ctx.fillStyle = '#555'; ctx.font = '11px sans-serif';
+    ctx.fillText('Poses cargadas a mano: sin esquema automático', ox + 8, oy + 16);
+  }else{
+    const a = L.a * escala, b = L.b * escala;
+    const dibujarPieza = (x, y, w, hh, rotada)=>{
+      ctx.fillStyle = rotada ? 'rgba(90,184,255,.30)' : 'rgba(76,210,125,.30)';
+      ctx.fillRect(x, y, w, hh);
+      ctx.strokeStyle = rotada ? 'rgba(90,184,255,.85)' : 'rgba(76,210,125,.85)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, w, hh);
+    };
+    // grilla principal (desde el margen izquierdo, apoyada arriba del área útil)
+    for(let c=0;c<L.cols;c++){
+      for(let f=0;f<L.rows;f++){
+        dibujarPieza(ox + margPx + c*a, oy + f*b, a, b, L.rot);
+      }
+    }
+    // franja extra
+    if(L.extra){
+      const ea = L.b * escala, eb = L.a * escala; // pieza girada respecto de la grilla
+      if(L.extra.lado === 'der'){
+        for(let c=0;c<L.extra.cols;c++) for(let f=0;f<L.extra.rows;f++)
+          dibujarPieza(ox + margPx + L.extra.x*escala + c*ea, oy + f*eb, ea, eb, !L.rot);
+      }else{
+        for(let c=0;c<L.extra.cols;c++) for(let f=0;f<L.extra.rows;f++)
+          dibujarPieza(ox + margPx + c*ea, oy + L.extra.y*escala + f*eb, ea, eb, !L.rot);
+      }
+    }
+    ctx.fillStyle = '#666'; ctx.font = '10px sans-serif';
+    ctx.fillText('pinza ' + op.pinza + ' cm', ox + 4, oy + H - pinzaPx + 11);
+  }
+  ctx.fillStyle = 'var(--texto2)';
+  ctx.fillStyle = '#9aa1b0'; ctx.font = '11px sans-serif';
+  ctx.fillText(op.maquina + ' · pliego máquina ' + op.plW + '×' + op.plH + ' cm · pieza ' + op.pzW + '×' + op.pzH + ' · ' + op.poses + ' poses' + (op.giro ? ' (giro: mitad frentes, mitad dorsos)' : ''), ox, oy + H + 16);
 }
 function adMejorOpcion(papel, cf, cd, pzW, pzH, modo){
   const a = adCalcular('gto', papel, cf, cd, pzW, pzH, modo);
@@ -5414,17 +5605,52 @@ function calcularAd(){
     if(op && op.piezas > 0) opciones.push({etq: n + ' paquete' + (n>1?'s':''), op});
   }
   if(!opciones.length){ res.innerHTML = '<div class="vacio" style="padding:10px">La pieza no entra en los pliegos de máquina.</div>'; return; }
-  let h = '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:6px">' + opciones[0].op.detalle + ' · demasía ' + adCfg.demasia + ' pliegos/postura</div>';
+  let h = '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:6px">' + opciones[0].op.detalle + ' · demasía ' + adCfg.demasia + ' pliegos/postura</div>' +
+    '<canvas id="adEsquema" style="width:100%;max-width:420px;display:block;margin:0 auto 10px;border-radius:8px"></canvas>';
+  h += '<div style="overflow-x:auto"><table style="width:100%;min-width:760px;border-collapse:collapse;font-size:.7rem">' +
+    '<tr style="color:var(--texto2);text-transform:uppercase;font-size:.6rem;letter-spacing:.05em;text-align:right">' +
+    '<td style="text-align:left;padding:5px 4px">Opción</td><td>Pliegos</td><td>Piezas</td><td>Papel</td><td>Millar</td><td>Chapas</td><td>Postura</td><td>Corte</td><td>Costo</td><td>%</td><td style="color:#4cd27d">VENTA</td><td>Unit.</td><td></td></tr>';
   for(const {etq, op} of opciones){
-    h += '<div class="mov-fila" style="border-left:4px solid #c792ea">' +
-      '<div class="mv-info"><div class="mv-concepto" style="font-size:.76rem">' + etq + ' → <b>' + op.piezas.toLocaleString('es-AR') + ' piezas</b></div>' +
-      '<div class="mv-quien">' + op.maquina + (op.giro?' · giro':'') + ' · ' + op.paquetes + ' paq · costo ' + plata(op.costo) + ' · +' + op.margen + '%' + (op.nota?' · '+op.nota:'') + '</div></div>' +
-      '<div style="text-align:right;margin-right:8px"><div style="font-weight:800;color:#4cd27d">' + plata(op.venta) + '</div>' +
-      '<div style="font-size:.66rem;color:var(--texto2)">' + plata(op.unitario) + ' c/u</div></div>' +
-      '<button class="adUsar" data-etq="' + etq + '" style="background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:8px 10px;font-weight:800;font-size:.72rem">＋</button>' +
-      '</div>';
+    h += '<tr style="border-top:1px dashed var(--borde);text-align:right">' +
+      '<td style="text-align:left;padding:7px 4px;white-space:nowrap"><b>' + etq + '</b>' + (op.nota?'<br><span style="font-size:.6rem;color:var(--texto2)">'+op.nota+'</span>':'') + '</td>' +
+      '<td>' + op.pliegos.toLocaleString('es-AR') + '</td>' +
+      '<td><b>' + op.piezas.toLocaleString('es-AR') + '</b></td>' +
+      '<td>' + plata(op.papelCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.paqDec.toLocaleString('es-AR') + ' paq</span></td>' +
+      '<td>' + plata(op.millarCosto) + '</td>' +
+      '<td>' + plata(op.chapasCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.chapas + ' ch</span></td>' +
+      '<td>' + plata(op.postCosto) + '</td>' +
+      '<td>' + plata(op.corteCosto) + '</td>' +
+      '<td><b>' + plata(op.costo) + '</b></td>' +
+      '<td>+' + op.margen + '</td>' +
+      '<td style="color:#4cd27d;font-weight:800;white-space:nowrap">' + plata(op.venta) + '</td>' +
+      '<td style="white-space:nowrap">' + plata(Math.round(op.unitario*100)/100) + '</td>' +
+      '<td><button class="adUsar" data-etq="' + etq + '" style="background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:6px 9px;font-weight:800;font-size:.72rem">＋</button></td></tr>';
+  }
+  h += '</table></div>';
+  // sugerencia: mismo gramaje en otros formatos de hoja, ¿alguno da mejor unitario?
+  if(q > 0 && opciones.length){
+    const base = opciones[0].op;
+    const alts = adPapeles.filter(x=> x.id !== papel.id && (x.precio||0) > 0 && x.gramaje === papel.gramaje);
+    const filasAlt = [];
+    for(const alt of alts){
+      const o2 = adMejorOpcion(alt, cf, cd, pzW, pzH, {tipo:'cantidad', q});
+      if(o2 && o2.piezas > 0) filasAlt.push({alt, o2});
+    }
+    filasAlt.sort((a,b)=> a.o2.unitario - b.o2.unitario);
+    if(filasAlt.length){
+      const partes = filasAlt.map(f=>{
+        const dif = Math.round((f.o2.unitario / base.unitario - 1) * 1000) / 10;
+        const mejor = f.o2.unitario < base.unitario - 0.005;
+        return '<span style="' + (mejor ? 'color:#4cd27d;font-weight:700' : 'color:var(--texto2)') + '">' +
+          f.alt.W + '×' + f.alt.H + ' → ' + plata(Math.round(f.o2.unitario*100)/100) + ' c/u (' + (dif>0?'+':'') + dif + '%' + (mejor ? ' ✓ conviene' : '') + ' · ' + f.o2.poses + ' poses en ' + f.o2.plW + '×' + f.o2.plH + ')</span>';
+      });
+      const hayMejor = filasAlt[0].o2.unitario < base.unitario - 0.005;
+      h += '<div style="margin-top:8px;padding:9px 11px;border-radius:10px;font-size:.7rem;line-height:1.7;background:' + (hayMejor ? 'rgba(76,210,125,.08)' : 'var(--panel2)') + ';border:1px dashed ' + (hayMejor ? 'rgba(76,210,125,.5)' : 'var(--borde)') + '">' +
+        '💡 <b>Mismo gramaje, otros formatos:</b> ' + partes.join('  ·  ') + '</div>';
+    }
   }
   res.innerHTML = h;
+  dibujarEsquemaAd(opciones[0].op);
   const lista = opciones;
   res.querySelectorAll('.adUsar').forEach((btn, i)=>{
     btn.onclick = ()=>{
@@ -5432,7 +5658,9 @@ function calcularAd(){
       const desc = document.getElementById('adDesc').value.trim();
       const nombre = (desc ? desc + ' · ' : '') + 'Offset AD · ' + pzW + '×' + pzH + 'cm · ' + adColSel + ' · ' + papel.nombre +
         ' · ' + op.piezas.toLocaleString('es-AR') + ' u (' + op.maquina + (op.giro?', giro':'') + ')';
-      adPedido.items.push({prod:null, adTr:true, nombre, cant:1, precio: op.venta, costoU: op.costo});
+      adPedido.items.push({prod:null, adTr:true, nombre, cant:1, precio: op.venta, costoU: op.costo,
+        adMeta: {papel: Math.round(op.papelCosto), millar: op.millarCosto, chapas: op.chapasCosto,
+                 postura: op.postCosto, corte: op.corteCosto||0, piezas: op.piezas, maquina: op.maquina}});
       registrar('cargó offset AD en el pedido de ' + nombreClienteId(adPedido.cliente) + ' (' + plata(op.venta) + ')');
       guardarDatos(); renderPedidos();
       modalAd.classList.remove('abierto');
@@ -5440,7 +5668,8 @@ function calcularAd(){
     };
   });
 }
-for(const id of ['adW','adH','adCant']) document.getElementById(id).addEventListener('input', calcularAd);
+for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg']) document.getElementById(id).addEventListener('input', calcularAd);
+document.getElementById('adRecargoChk').addEventListener('change', calcularAd);
 document.getElementById('adPapAgregar').onclick = ()=>{
   const n = document.getElementById('adPapNombre').value.trim();
   if(!n) return;
