@@ -972,6 +972,10 @@
     </div>
     <div class="pdf-btn-row">
       <button id="exportarConfigBtn" class="export-btn">⬇ Exportar configuración</button>
+      <select id="pdfModo" style="padding:10px;background:#14161c;border:1px solid #333844;border-radius:10px;color:#eef0f4;font-size:.78rem">
+        <option value="tecnico" selected>PDF para el cliente (propuesta técnica, sin costos)</option>
+        <option value="desglose">PDF interno (con desglose de costos)</option>
+      </select>
       <button id="generarPdfBtn" class="pdf-btn">Generar presupuesto en PDF</button>
     </div>
   </section>
@@ -3431,13 +3435,16 @@ function renderIlluminatedSignCanvas(targetWidthPx){
   function tx(x){ return offX + (x-minX)*scale; }
   function ty(y){ return targetH - (offY + (y-minY)*scale); } // flip Y (DXF Y-up)
 
-  // Fondo negro (resalta la iluminación, como pediste)
-  ctx.fillStyle = "#070707";
+  // Superficie de soporte naranja (placa de fondo), con viñeta para profundidad
+  const fondo = ctx.createLinearGradient(0,0,0,targetH);
+  fondo.addColorStop(0,   "#a85812");
+  fondo.addColorStop(0.5, "#96490d");
+  fondo.addColorStop(1,   "#7c3a09");
+  ctx.fillStyle = fondo;
   ctx.fillRect(0,0,targetW,targetH);
-  // sutil viñeta para dar profundidad a la pared de soporte
-  const vign = ctx.createRadialGradient(targetW/2,targetH/2,0, targetW/2,targetH/2, Math.max(targetW,targetH)*0.7);
-  vign.addColorStop(0, "rgba(255,255,255,0)");
-  vign.addColorStop(1, "rgba(0,0,0,0.35)");
+  const vign = ctx.createRadialGradient(targetW/2,targetH/2,0, targetW/2,targetH/2, Math.max(targetW,targetH)*0.72);
+  vign.addColorStop(0, "rgba(0,0,0,0)");
+  vign.addColorStop(1, "rgba(30,10,0,0.45)");
   ctx.fillStyle = vign;
   ctx.fillRect(0,0,targetW,targetH);
 
@@ -3487,16 +3494,16 @@ function renderIlluminatedSignCanvas(targetWidthPx){
     ctx.restore();
   });
 
-  // === PASADA 2: bloom (corona de luz) -- se dibuja en "lighter" para que
-  // se sume como luz real sobre la cara lateral y el fondo. ===
+  // === PASADA 2: derrame de luz sobre el soporte -- blanco cálido en "lighter",
+  // aclara el naranja alrededor de cada letra (reflejo del panel encendido). ===
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   state.letters.forEach(letter=>{
-    [targetW*0.022, targetW*0.013, targetW*0.007].forEach((blur,i)=>{
+    [targetW*0.03, targetW*0.016, targetW*0.008].forEach((blur,i)=>{
       ctx.filter = `blur(${blur}px)`;
-      ctx.globalAlpha = [0.16,0.26,0.38][i];
+      ctx.globalAlpha = [0.10,0.18,0.26][i];
       buildLetterPath(letter);
-      ctx.fillStyle = "#ffb347";
+      ctx.fillStyle = "#fff3d8";
       ctx.fill("evenodd");
     });
   });
@@ -3516,13 +3523,29 @@ function renderIlluminatedSignCanvas(targetWidthPx){
     const rad = Math.max(bbox.w,bbox.h)*scale*0.62;
     const frontGrad = ctx.createRadialGradient(ccx,ccy,0, ccx,ccy,rad);
     frontGrad.addColorStop(0,    "#ffffff");
-    frontGrad.addColorStop(0.35, "#fff6e0");
-    frontGrad.addColorStop(0.72, "#ffd27a");
-    frontGrad.addColorStop(1,    "#ff9d2e");
+    frontGrad.addColorStop(0.75, "#ffffff");
+    frontGrad.addColorStop(1,    "#fdf3df");
     ctx.fillStyle = frontGrad;
     ctx.fillRect(tx(bbox.minX)-20, ty(bbox.maxY)-20, bbox.w*scale+40, bbox.h*scale+40);
     ctx.restore();
   });
+
+  // === PASADA 3b: corona (bloom) en los bordes frontales ===
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  state.letters.forEach(letter=>{
+    [ [targetW*0.010, 0.30, targetW*0.004], [targetW*0.004, 0.45, targetW*0.002] ].forEach(([blur, alpha, lw])=>{
+      ctx.filter = `blur(${blur}px)`;
+      ctx.globalAlpha = alpha;
+      buildLetterPath(letter);
+      ctx.strokeStyle = "#fffdf5";
+      ctx.lineWidth = Math.max(1.5, lw);
+      ctx.stroke();
+    });
+  });
+  ctx.filter = "none";
+  ctx.globalAlpha = 1;
+  ctx.restore();
 
   // === PASADA 4: perfil de contención sutil (borde del acrílico) ===
   state.letters.forEach(letter=>{
@@ -3624,32 +3647,89 @@ function generarPresupuestoPDF(){
       });
       y += 4;
 
-      // --- Tabla de costos ---
-      y = ensureSpace(y, 20);
-      pdf.text("Detalle de costos", marginX, y, { bold:true, size:12, color:[30,30,30] });
-      y += 7;
-
       const receipt = state.lastReceipt || { items:[], total:0, venta:0 };
-      receipt.items.forEach((it, idx)=>{
-        const formulaWrapped = pdf.wrapText(it.formula, 115, 8.3, false);
-        const rowHeight = 4 + formulaWrapped.length*3.6 + 2;
-        y = ensureSpace(y, rowHeight);
-        pdf.text(`${idx+1}. ${it.name}`, marginX, y, { bold:true, size:9, color:[30,30,30] });
-        formulaWrapped.forEach((w,li)=>{
-          pdf.text(w, marginX, y+4+li*3.6, { size:8.3, color:[120,120,120] });
+      const modoPdf = (document.getElementById('pdfModo')||{}).value || 'tecnico';
+
+      if(modoPdf === 'desglose'){
+        // --- Tabla de costos (uso interno) ---
+        y = ensureSpace(y, 20);
+        pdf.text("Detalle de costos", marginX, y, { bold:true, size:12, color:[30,30,30] });
+        y += 7;
+        receipt.items.forEach((it, idx)=>{
+          const formulaWrapped = pdf.wrapText(it.formula, 115, 8.3, false);
+          const rowHeight = 4 + formulaWrapped.length*3.6 + 2;
+          y = ensureSpace(y, rowHeight);
+          pdf.text(`${idx+1}. ${it.name}`, marginX, y, { bold:true, size:9, color:[30,30,30] });
+          formulaWrapped.forEach((w,li)=>{
+            pdf.text(w, marginX, y+4+li*3.6, { size:8.3, color:[120,120,120] });
+          });
+          pdf.text(fmtARS(it.value), pageW-marginX, y, { size:9, align:"right", color:[30,30,30] });
+          y += rowHeight;
         });
-        pdf.text(fmtARS(it.value), pageW-marginX, y, { size:9, align:"right", color:[30,30,30] });
-        y += rowHeight;
-      });
-
-      y += 4;
-      y = ensureSpace(y, 35);
-      pdf.line(marginX, y, pageW-marginX, y, 0.6, [255,167,48]);
-      y += 7;
-
-      pdf.text("Total presupuesto (costo)", marginX, y, { size:10.5, color:[90,90,90] });
-      pdf.text(fmtARS(receipt.total), pageW-marginX, y, { bold:true, size:10.5, align:"right", color:[30,30,30] });
-      y += 9;
+        y += 4;
+        y = ensureSpace(y, 35);
+        pdf.line(marginX, y, pageW-marginX, y, 0.6, [255,167,48]);
+        y += 7;
+        pdf.text("Total presupuesto (costo)", marginX, y, { size:10.5, color:[90,90,90] });
+        pdf.text(fmtARS(receipt.total), pageW-marginX, y, { bold:true, size:10.5, align:"right", color:[30,30,30] });
+        y += 9;
+      }else{
+        // --- Propuesta técnica para el cliente (sin costos) ---
+        const secciones = [];
+        secciones.push({tit:'Propuesta técnica — Letras corpóreas con iluminación LED interior', parr:[
+          'Cartelería fabricada para uso en exterior: materiales seleccionados por su comportamiento a la intemperie y sistema eléctrico dimensionado con margen de seguridad.'
+        ]});
+        const construccion = [
+          'Frente: acrílico de 3 mm de alta difusión lumínica, con buena resistencia a los rayos UV (mantiene el color con la exposición al sol).',
+          'Laterales: impresión 3D en PETG apto para exterior, polímero de alta resistencia mecánica y térmica.'
+        ];
+        if(state.incluirBase){
+          const mat = state.baseMaterial === 'chapa' ? 'chapa prepintada' : 'PVC espumado rígido de 5 mm';
+          construccion.push('Fondo y chasis: ' + mat + ', con pestañas de anclaje impresas en 3D para una fijación firme y prolija.' +
+            (state.baseBastidor ? ' Reforzado con bastidor estructural de chapa.' : ''));
+        }else{
+          construccion.push('Fijación: pestañas de anclaje impresas en 3D para montaje directo sobre la superficie.');
+        }
+        secciones.push({tit:'Construcción', parr: construccion});
+        secciones.push({tit:'Iluminación y seguridad eléctrica', parr:[
+          'Tiras LED con protección IP67 (herméticas frente a lluvia, humedad y polvo), montadas en el interior del cuerpo.',
+          'Fuente de alimentación 220 V → 12 V dimensionada con un excedente del 10% sobre el consumo del cartel: los componentes trabajan holgados, se evita el sobrecalentamiento y se prolonga la vida útil del sistema.'
+        ]});
+        const inst = manoDeObra.instalacion_horas > 0;
+        secciones.push({tit: inst ? 'Instalación incluida' : 'Entrega y asesoramiento', parr:[
+          inst
+            ? 'La propuesta incluye la colocación en obra a cargo de nuestro equipo. Coordinamos con el electricista del local las especificaciones de conexión para una instalación segura y ordenada.'
+            : 'El cartel se entrega terminado y listo para conectar. Asesoramos sin cargo al electricista a cargo sobre las especificaciones de conexión.'
+        ]});
+        const extras = [];
+        if(manoDeObra.grua_horas > 0) extras.push('servicio de grúa/hidroelevador');
+        if(manoDeObra.andamios_cuerpos > 0) extras.push('andamios');
+        for(const im of insumosManuales){ if(im.nombre && im.cantidad > 0) extras.push(im.nombre.toLowerCase()); }
+        if(state.viniloIncluido || (vinilo.cantidad_m2_manual||0) > 0) extras.push('vinilo de terminación');
+        if(extras.length){
+          secciones.push({tit:'Adicionales incluidos', parr:['Esta propuesta incluye además: ' + extras.join(', ') + '.']});
+        }
+        secciones.push({tit:'Recomendación para la instalación eléctrica (a cargo del cliente)', parr:[
+          'Contar con toma corriente con conexión a tierra normalizada. Se sugiere un estabilizador de tensión para proteger la electrónica ante fluctuaciones de la red.'
+        ]});
+        for(const s of secciones){
+          y = ensureSpace(y, 14);
+          pdf.text(s.tit, marginX, y, { bold:true, size:10.5, color:[30,30,30] });
+          y += 5.5;
+          for(const p of s.parr){
+            const wrapped = pdf.wrapText('•  ' + p, contentW - 2, 9, false);
+            y = ensureSpace(y, wrapped.length*4.2 + 2);
+            wrapped.forEach(w=>{
+              pdf.text(w, marginX, y, { size:9, color:[70,70,70] });
+              y += 4.2;
+            });
+            y += 1.2;
+          }
+          y += 2.5;
+        }
+        y = ensureSpace(y, 30);
+        y += 2;
+      }
 
       pdf.rect(marginX, y-5.5, contentW, 11, [255,247,235]);
       pdf.text("VALOR DE VENTA", marginX+3, y+1.5, { bold:true, size:13, color:[200,120,20] });
