@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v28</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v30</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -2398,6 +2398,7 @@ function renderCuentaContacto(id, esProveedor){
     // aunque no haya movimientos de caja, las cuentas de proveedores integrados se muestran igual
     renderCuentaOD(id, cont);
     renderCuentaOffStd(id, cont);
+  renderCuentaAdProv(id, cont);
     return;
   }
   const tit = document.createElement('div');
@@ -2465,6 +2466,7 @@ function renderCuentaContacto(id, esProveedor){
   }
   renderCuentaOD(id, cont);
   renderCuentaOffStd(id, cont);
+  renderCuentaAdProv(id, cont);
 }
 function renderCuentaOffStd(id, cont){
   if(!offset || offset.proveedor !== id) return;
@@ -5114,12 +5116,19 @@ function editarAdReal(it, p){
 
   hoja.innerHTML = '<div style="font-weight:800;font-size:.88rem;margin-bottom:2px">🧾 Costos reales del trabajo</div>' +
     '<div style="font-size:.7rem;color:var(--texto2);margin-bottom:12px">Cargá lo que te cobraron de verdad y a qué proveedor. Vacío = queda el presupuestado.</div>' +
-    campos.map(([k, etq])=>
-      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:.76rem">' +
-      '<span style="flex:1">' + etq + '<br><span style="font-size:.64rem;color:var(--texto2)">presup. ' + plata(m[k]||0) + '</span></span>' +
-      '<input data-k="' + k + '" type="number" inputmode="numeric" value="' + (reales[k]!==undefined ? reales[k] : '') + '" placeholder="' + Math.round(m[k]||0) + '" style="width:110px;margin:0;padding:9px;font-size:15px;text-align:right;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
-      '</div>'
-    ).join('') +
+    campos.map(([k, etq])=>{
+      const d = (m.det && m.det[k]) || {cant:1, unit:(m[k]||0), u:''};
+      return '<div style="margin-bottom:10px">' +
+        '<div style="display:flex;gap:8px;align-items:center;font-size:.76rem">' +
+        '<span style="flex:1">' + etq + '<br><span style="font-size:.64rem;color:var(--texto2)">presup. ' + plata(m[k]||0) + '</span></span>' +
+        '<input data-k="' + k + '" type="number" inputmode="numeric" value="' + (reales[k]!==undefined ? reales[k] : '') + '" placeholder="' + Math.round(m[k]||0) + '" style="width:110px;margin:0;padding:9px;font-size:15px;text-align:right;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:4px;font-size:.66rem;color:var(--texto2)">' +
+        '<input data-c="' + k + '" type="number" inputmode="decimal" value="' + d.cant + '" style="width:74px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--panel2);border:1px solid var(--borde);border-radius:7px;color:var(--texto)">' +
+        '<span>' + (d.u||'u') + ' ×</span>' +
+        '<input data-u="' + k + '" type="number" inputmode="decimal" value="' + d.unit + '" style="width:96px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--panel2);border:1px solid var(--borde);border-radius:7px;color:var(--texto)">' +
+        '<span>c/u</span></div></div>';
+    }).join('') +
     '<div id="adRealTot" style="text-align:right;font-weight:800;font-size:.82rem;margin:6px 0 14px"></div>';
 
   const actualizarTot = ()=>{
@@ -5133,6 +5142,19 @@ function editarAdReal(it, p){
     return tot;
   };
   hoja.querySelectorAll('input[data-k]').forEach(inp=> inp.addEventListener('input', actualizarTot));
+  for(const [k] of campos){
+    const inC = hoja.querySelector('input[data-c="'+k+'"]');
+    const inU = hoja.querySelector('input[data-u="'+k+'"]');
+    const inK = hoja.querySelector('input[data-k="'+k+'"]');
+    const recalc = ()=>{
+      const c = parseFloat(String(inC.value).replace(',','.'))||0;
+      const u = parseFloat(String(inU.value).replace(',','.'))||0;
+      inK.value = Math.round(c*u);
+      actualizarTot();
+    };
+    if(inC) inC.addEventListener('input', recalc);
+    if(inU) inU.addEventListener('input', recalc);
+  }
 
   // proveedores y pago, agrupados
   const zonaProv = document.createElement('div');
@@ -5190,6 +5212,16 @@ function editarAdReal(it, p){
       if(!isNaN(v)) nuevos[k] = v;
     }
     m.reales = nuevos;
+    if(!m.det) m.det = {};
+    for(const [k] of campos){
+      const c = parseFloat(String((hoja.querySelector('input[data-c="'+k+'"]')||{}).value||'').replace(',','.'));
+      const u = parseFloat(String((hoja.querySelector('input[data-u="'+k+'"]')||{}).value||'').replace(',','.'));
+      if(!isNaN(c) || !isNaN(u)){
+        m.det[k] = m.det[k] || {u:''};
+        if(!isNaN(c)) m.det[k].cant = c;
+        if(!isNaN(u)) m.det[k].unit = u;
+      }
+    }
     if(m.estimado === undefined) m.estimado = it.costoU;
     it.costoU = actualizarTot();
     registrar('cargó costos reales de offset AD (' + plata(it.costoU) + ', presupuestado ' + plata(m.estimado) + ')');
@@ -5206,6 +5238,52 @@ function editarAdReal(it, p){
   overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
   document.body.appendChild(overlay);
   actualizarTot();
+}
+// compras de offset AD asignadas a este proveedor (deuda desde que lo elegís, pago aparte)
+function renderCuentaAdProv(id, cont){
+  const compras = [];
+  for(const p of pedidos){
+    if(p.estadoVenta === 'presupuesto') continue;
+    for(const it of (p.items||[])){
+      if(!it.adTr || !it.adMeta || it.conf === false) continue;
+      const m = it.adMeta;
+      if(!m.proveedores) continue;
+      for(const g of AD_GRUPOS){
+        if(m.proveedores[g.clave] !== id) continue;
+        const reales = m.reales || {};
+        const monto = g.comp.reduce((s,k)=> s + (reales[k] !== undefined ? reales[k] : (m[k]||0)), 0);
+        if(monto <= 0) continue;
+        compras.push({p, it, g, monto, pago: m.pagos && m.pagos[g.clave]});
+      }
+    }
+  }
+  if(!compras.length) return;
+  const tit = document.createElement('div');
+  tit.className = 'divisor';
+  tit.textContent = '🖨 Compras offset AD';
+  cont.appendChild(tit);
+  const pendiente = compras.filter(c=>!c.pago).reduce((s,c)=> s+c.monto, 0);
+  const card = document.createElement('div');
+  card.className = 'caja-card';
+  card.style.marginBottom = '8px';
+  card.innerHTML =
+    '<div class="cc-linea"><span>Compras asignadas (' + compras.length + ')</span><b>' + plata(compras.reduce((s,c)=>s+c.monto,0)) + '</b></div>' +
+    '<div class="cc-linea cc-saldo"><span>Pendiente de pago</span><b style="color:' + (pendiente>0.5 ? '#ff7a7a' : '#4cd27d') + '">' + plata(pendiente) + '</b></div>';
+  cont.appendChild(card);
+  compras.sort((a,b)=> (b.p.creado||0)-(a.p.creado||0));
+  for(const c of compras.slice(0, 20)){
+    const f = document.createElement('div');
+    f.className = 'mov-fila';
+    f.style.borderLeft = '4px solid ' + (c.pago ? '#4cd27d' : '#c792ea');
+    f.style.cursor = 'pointer';
+    f.innerHTML = '<div class="mv-info"><div class="mv-concepto" style="font-size:.74rem"></div><div class="mv-quien"></div></div>' +
+      '<span class="mv-monto" style="color:' + (c.pago ? '#4cd27d' : 'var(--texto)') + '">' + plata(c.monto) + '</span>';
+    f.querySelector('.mv-concepto').textContent = c.g.etq + ' · ' + (c.it.nombre||'').slice(0, 55);
+    f.querySelector('.mv-quien').textContent = nombreClienteId(c.p.cliente) + ' · ' +
+      (c.pago ? '✓ pagado ' + fechaLinda(c.pago.fecha||'') + ' por ' + (c.pago.quien||'?') : '⏳ pendiente de pago');
+    f.onclick = ()=>{ modalCliente.classList.remove('abierto'); abrirPedido(c.p.id); };
+    cont.appendChild(f);
+  }
 }
 // modal chico: confirma quién pagó, con el usuario del dispositivo tildado por defecto
 function confirmarQuienPago(monto, etiqueta, proveedorId, onConfirmar){
@@ -5757,7 +5835,14 @@ function calcularAd(){
         ' · ' + op.piezas.toLocaleString('es-AR') + ' u (' + op.maquina + (op.giro?', giro':'') + ')';
       adPedido.items.push({prod:null, adTr:true, nombre, cant:1, precio: op.venta, costoU: op.costo,
         adMeta: {papel: Math.round(op.papelCosto), millar: op.millarCosto, chapas: op.chapasCosto,
-                 postura: op.postCosto, corte: op.corteCosto||0, piezas: op.piezas, maquina: op.maquina}});
+                 postura: op.postCosto, corte: op.corteCosto||0, piezas: op.piezas, maquina: op.maquina,
+                 det: {
+                   papel:   {cant: op.hojas, unit: Math.round(op.hojas>0 ? op.papelCosto/op.hojas*100 : 0)/100, u:'hojas'},
+                   millar:  {cant: Math.ceil(op.pliegos/1000), unit: Math.ceil(op.pliegos/1000)>0 ? Math.round(op.millarCosto/Math.ceil(op.pliegos/1000)) : 0, u:'millar(es)'},
+                   chapas:  {cant: op.chapas, unit: op.chapas>0 ? Math.round(op.chapasCosto/op.chapas) : 0, u:'chapas'},
+                   postura: {cant: op.posturas||1, unit: Math.round(op.postCosto/(op.posturas||1)), u:'postura(s)'},
+                   corte:   {cant: 1, unit: op.corteCosto||0, u:'corte'}
+                 }}});
       registrar('cargó offset AD en el pedido de ' + nombreClienteId(adPedido.cliente) + ' (' + plata(op.venta) + ')');
       guardarDatos(); renderPedidos();
       modalAd.classList.remove('abierto');
