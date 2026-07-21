@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v40</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v42</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -313,6 +313,7 @@
     <div style="display:flex;gap:8px;margin-top:8px">
       <button id="btnOffDig" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #5ab8ff;color:#5ab8ff">🖨 Offset digital</button>
       <button id="btnAdOff" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #c792ea;color:#c792ea">🖨 Offset AD</button>
+      <button id="btnCompraPed" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #4cd27d;color:#4cd27d">🛒 Compra</button>
       <button id="btnCorpPed" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">🔤 Corpóreas</button>
     </div>
     <div class="ped-total" id="pedTotal"></div>
@@ -410,7 +411,10 @@
 
 <div id="vistaCaja" style="padding:8px 16px;display:none">
   <div id="cajaResumen"></div>
-  <button id="btnNuevoMov" style="width:100%;background:var(--ambar);color:#1a1200;border:none;border-radius:12px;padding:12px;font-weight:800;font-size:.85rem;margin:10px 0 8px">＋ Registrar movimiento</button>
+  <div style="display:flex;gap:8px;margin:10px 0 8px">
+    <button id="btnNuevoMov" style="flex:2;background:var(--ambar);color:#1a1200;border:none;border-radius:12px;padding:12px;font-weight:800;font-size:.85rem">＋ Registrar movimiento</button>
+    <button id="btnCompraCaja" style="flex:1;background:var(--panel2);border:1px dashed #4cd27d;color:#4cd27d;border-radius:12px;padding:12px;font-weight:800;font-size:.85rem">🛒 Compra</button>
+  </div>
   <div style="display:flex;gap:8px;margin-bottom:10px">
     <button id="btnGastosFijos" style="flex:1;background:var(--panel);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:11px;font-weight:700;font-size:.78rem">🏠 Gastos fijos</button>
     <button id="btnGanancias" style="flex:1;background:var(--panel);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:11px;font-weight:700;font-size:.78rem">📊 Ganancias</button>
@@ -779,24 +783,7 @@ let mo = {venta:15000, costo:7500};
 let esquemas = [];
 let cajaInicial = 0;
 let ajusteSocios = 0;
-let lotes = [], recetas = [], telasMat = [];
-function SEMILLA_TELAS(){
-  const loteCord = lotes.find(l=> normalizarTexto(l.nombre).includes('cordura'));
-  telasMat = [
-    {id:'tm1', nombre:'Cordura',    ancho:136, costoFijo:0, loteId: loteCord ? loteCord.id : null, prov:'Imperio'},
-    {id:'tm2', nombre:'Polyester',  ancho:148, costoFijo:3700, loteId:null, prov:'Sublimados del Centro'},
-    {id:'tm3', nombre:'Microfibra', ancho:148, costoFijo:3000, loteId:null, prov:'Sublimados del Centro'},
-    {id:'tm4', nombre:'Sire opaco', ancho:148, costoFijo:4500, loteId:null, prov:'Sublimados del Centro'},
-    {id:'tm5', nombre:'Tucker',     ancho:148, costoFijo:4500, loteId:null, prov:'Sublimados del Centro'},
-  ];
-}
-function costoTelaM(tm){
-  if(tm.loteId){
-    const l = lotes.find(x=>x.id===tm.loteId);
-    return l ? loteUnitario(l) : 0;
-  }
-  return tm.costoFijo || 0;
-}
+let lotes = [], recetas = [], compras = [];
 let adCfg = null, adPapeles = [];
 const AD_SEMILLA = {
   proveedor: null,
@@ -1048,8 +1035,7 @@ async function cargar(){
       esquemas = d.esquemas || [];
       lotes = d.lotes || [];
       recetas = d.recetas || [];
-      telasMat = d.telasMat || [];
-      if(!telasMat.length) SEMILLA_TELAS();
+      compras = d.compras || [];
       adCfg = d.adCfg || JSON.parse(JSON.stringify(AD_SEMILLA));
       adPapeles = d.adPapeles || [
         {id:uid(), nombre:'Ilustración 115g', gramaje:115, W:72, H:102, hojas:500, precio:0},
@@ -1174,13 +1160,12 @@ async function cargar(){
   proveedores.push(tamaraIni);
   offset.proveedor = tamaraIni.id;
   SEMILLA_RECETAS();
-  SEMILLA_TELAS();
   iniciar(); guardarDatos();
 }
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, telasMat, adCfg, adPapeles, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -2770,11 +2755,6 @@ async function copiarItem(it){
 }
 function subtotalItem(i){
   if(i.ventaManual > 0) return i.ventaManual;
-  if(i.tela){
-    const tm = telasMat.find(x=>x.id===i.telaMat) || {ancho:136};
-    const metrosLin = Math.ceil((i.cant||0) * (i.ancho||0) / (tm.ancho||136));
-    return metrosLin * (i.precio||0) + (i.costura||0) * (i.cant||0);
-  }
   if(i.uv){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);   // demasía en ambos lados
     const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);  // demasía arriba y abajo
@@ -2789,11 +2769,6 @@ function medidaImpresion(i){
 function totalPedido(p){ return p.items.reduce((s,i)=> s + (i.conf===false ? 0 : subtotalItem(i)), 0); }
 function totalPresupuestado(p){ return p.items.reduce((s,i)=> s + subtotalItem(i), 0); }
 function costoItem(i){
-  if(i.tela){
-    const tm = telasMat.find(x=>x.id===i.telaMat) || {ancho:136};
-    const metrosLin = Math.ceil((i.cant||0) * (i.ancho||0) / (tm.ancho||136));
-    return metrosLin * (i.costoTela||0) + metrosLin * (i.costoCal||0) + (i.costura||0) * (i.cant||0);
-  }
   if(i.uv && i.costoM2){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);
     const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);
@@ -2816,7 +2791,8 @@ function gananciaPedido(p){
   if(typeof offset !== 'undefined' && offset && offset.proveedor) provIntegrados.push(offset.proveedor);
   if(typeof adCfg !== 'undefined' && adCfg && adCfg.proveedor) provIntegrados.push(adCfg.proveedor);
   const gastos = movimientos.filter(m=> m.tipo==='egreso' && m.pedido===p.id && !m.auto && !m.anulado && !m.esAnulacion && !m.costoIntegrado && !provIntegrados.includes(m.quien))
-    .reduce((s,m)=> s+(m.monto||0), 0);
+    .reduce((s,m)=> s+(m.monto||0), 0)
+    + compras.reduce((s,c)=> s + (c.lineas||[]).filter(l=> l.asignado===p.id).reduce((s2,l)=> s2+(l.total||0), 0), 0);
   ganancia -= gastos;
   return {ganancia, sinCosto, gastos};
 }
@@ -3045,61 +3021,6 @@ function renderPedidoItems(p){
         modalPedido.classList.remove('abierto');
         abrirOffDig(p, idx);
       };
-    }else if(it.tela){
-      d.innerHTML =
-        '<div class="pi-cab"><div class="pi-nombre"></div><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
-        '<div class="pi-medidas">' +
-          '<span>Ancho pieza:</span><input class="tAncho" type="number" inputmode="numeric" min="0"><span>cm ×</span>' +
-          '<input class="tCant" type="number" inputmode="numeric" min="1"><span>piezas</span>' +
-        '</div>' +
-        '<div class="pi-medidas" style="font-size:.72rem;color:var(--texto2)">' +
-          '<span class="tResumen"></span>' +
-        '</div>' +
-        '<div class="pi-medidas">' +
-          '<span>Costura/pieza $</span><input class="tCostura" type="number" inputmode="numeric" min="0" style="width:90px">' +
-          '<span style="font-size:.72rem;color:var(--texto2)" class="tSubCos"></span>' +
-          '<span class="pi-sub" style="margin-left:auto"></span>' +
-        '</div>';
-      // selector de material
-      const selTM = document.createElement('select');
-      selTM.style.cssText = 'margin:0 0 6px;padding:8px;width:100%;background:var(--panel2);border:1px solid var(--borde);border-radius:8px;color:var(--texto);font-size:.78rem';
-      selTM.innerHTML = telasMat.map(tm=>
-        '<option value="'+tm.id+'"' + (it.telaMat===tm.id?' selected':'') + '>'+tm.nombre+
-        ' · '+tm.ancho+'cm · $'+(costoTelaM(tm)).toLocaleString('es-AR')+'/m ('+tm.prov+')</option>'
-      ).join('');
-      d.querySelector('.pi-cab').after(selTM);
-      // selector de calandrado
-      const selCal = document.createElement('select');
-      selCal.style.cssText = 'margin:0 0 6px;padding:8px;width:100%;background:var(--panel2);border:1px solid var(--borde);border-radius:8px;color:var(--texto);font-size:.78rem';
-      const calOpts = [{id:'', nombre:'Calandrado Sublimados del Centro ($2.200/m)', costo:2200}];
-      for(const pr of proveedores) calOpts.push({id:pr.id, nombre:'Calandrado: '+pr.nombre+' ($2.200/m)', costo:2200});
-      selCal.innerHTML = calOpts.map(o=>'<option value="'+o.id+'"'+(it.calProv===o.id?' selected':'')+'>'+o.nombre+'</option>').join('');
-      selTM.after(selCal);
-      const inTAn = d.querySelector('.tAncho'), inTC = d.querySelector('.tCant'), inTCos = d.querySelector('.tCostura');
-      const tRes = d.querySelector('.tResumen'), tSubCos = d.querySelector('.tSubCos'), sub = d.querySelector('.pi-sub');
-      inTAn.value = it.ancho||0; inTC.value = it.cant||1; inTCos.value = it.costura||0;
-      d.querySelector('.pi-nombre').textContent = it.nombre;
-      const refTela = ()=>{
-        const tm = telasMat.find(x=>x.id===selTM.value) || telasMat[0] || {ancho:136, costoFijo:0};
-        it.telaMat = tm.id;
-        it.calProv = selCal.value;
-        it.costoTela = Math.round(costoTelaM(tm));
-        it.costoCal = 2200;
-        it.ancho = parseFloat(inTAn.value)||0;
-        it.cant = parseInt(inTC.value)||1;
-        it.costura = parseFloat(inTCos.value)||0;
-        const ml = Math.ceil(it.cant * it.ancho / (tm.ancho||136));
-        it.precio = Math.round((it.costoTela + it.costoCal) * 1.8);
-        tRes.textContent = ml + ' m lineales · ' + tm.nombre + ' ' + tm.ancho + 'cm · costo ' +
-          plata(it.costoTela) + '/m + cal ' + plata(it.costoCal) + '/m';
-        tSubCos.textContent = ' · costura ' + plata(it.costura * it.cant) + ' total';
-        sub.textContent = '= ' + plata(subtotalItem(it));
-        actualizarTotal(p); sincronizarPedido();
-      };
-      selTM.addEventListener('change', refTela);
-      selCal.addEventListener('change', refTela);
-      refTela();
-      for(const el of [inTAn, inTC, inTCos]) el.addEventListener('input', refTela);
     }else if(it.uv){
       d.innerHTML =
         '<div class="pi-cab"><div class="pi-nombre"></div><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
@@ -3256,32 +3177,6 @@ function renderBuscadorItems(p){
         renderPedidoItems(p); guardarDatos(); renderPedidos();
       };
       sug.appendChild(b);
-    }
-    // tela sublimada calandrada: aparece siempre (con cualquier búsqueda de "tela" o "subli" o "calan")
-    if(telasMat && !telasMat.length) SEMILLA_TELAS();
-    const loteCord = lotes.find(l=> normalizarTexto(l.nombre).includes('cordura'));
-    const loteCal = lotes.find(l=> normalizarTexto(l.nombre).includes('calandrad'));
-    const COSTO_CAL_DEFAULT = 2200;
-    const mostrarTela = ['tela','subli','calan','caland'].some(w=> normalizarTexto('tela sublimada calandrada').includes(q) || q.includes(w) || q.length < 2);
-    if(mostrarTela){
-      const costoTela = loteCord ? loteUnitario(loteCord) : 3700;
-      const costoCal = loteCal ? loteUnitario(loteCal) : COSTO_CAL_DEFAULT;
-      const bTela = document.createElement('button');
-      bTela.className = 'sug-item';
-      bTela.innerHTML = '🧶 Tela sublimada calandrada <span style="color:var(--texto2);font-size:.72rem">· elegís la tela en el ítem</span>';
-      bTela.onclick = ()=>{
-        if(!telasMat.length) SEMILLA_TELAS();
-        const tm0 = telasMat[0] || {id:'tm1', nombre:'Cordura', ancho:136, costoFijo:0, loteId: loteCord ? loteCord.id : null};
-        const ct = Math.round(costoTelaM(tm0));
-        p.items.push({prod:null, tela:true, nombre:'Tela sublimada calandrada',
-          precio: Math.round((ct+COSTO_CAL_DEFAULT)*1.8),
-          costoTela: ct, costoCal: COSTO_CAL_DEFAULT,
-          telaMat: tm0.id, calProv:'',
-          ancho: 0, cant: 1, costura: 0});
-        renderPedidoItems(p); guardarDatos(); renderPedidos();
-        toast('Ingresá el ancho de la pieza y la cantidad 👆');
-      };
-      sug.appendChild(bTela);
     }
     // recetas: tela / estructura / completo
     const resRec = recetas.filter(r=> normalizarTexto(r.nombre).includes(q)).slice(0,2);
@@ -4257,8 +4152,7 @@ function aplicarDatosRemotos(d){
   esquemas = d.esquemas||esquemas;
   lotes = d.lotes||lotes;
   recetas = d.recetas||recetas;
-  telasMat = d.telasMat||telasMat;
-  if(!telasMat.length) SEMILLA_TELAS();
+  compras = d.compras||compras;
   if(d.adCfg) adCfg = d.adCfg;
   if(d.adPapeles) adPapeles = d.adPapeles;
   if(d.cajaInicial!==undefined) cajaInicial = d.cajaInicial;
@@ -4460,7 +4354,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, telasMat, adCfg, adPapeles});
+    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -4491,8 +4385,7 @@ document.getElementById('btnImportar').onclick = (e)=>{
     esquemas = d.esquemas||[];
     lotes = d.lotes||[];
     recetas = d.recetas||[];
-    telasMat = d.telasMat||[];
-    if(!telasMat.length) SEMILLA_TELAS();
+    compras = d.compras||[];
     if(d.adCfg) adCfg = d.adCfg;
     adPapeles = d.adPapeles||[];
     cajaInicial = d.cajaInicial||0;
@@ -4725,6 +4618,7 @@ modalGanancias.addEventListener('click', e=>{ if(e.target===modalGanancias) moda
 
 /* alta manual de movimiento */
 const modalMov = document.getElementById('modalMov');
+document.getElementById('btnCompraCaja').onclick = ()=> abrirCompra(null);
 document.getElementById('btnNuevoMov').onclick = ()=>{
   moPagandoPedido = null;
   gastoFijoPagando = null;
@@ -5211,7 +5105,166 @@ document.getElementById('btnOffDig').onclick = ()=>{
   abrirOffDig(p);
 };
 
-/* ---------- costos reales del offset AD (cotejo contra lo presupuestado) ---------- */
+/* ---------- ventana de compras (dos puertas: pedido o caja) ---------- */
+function abrirCompra(pedidoId){
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:998;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+  const hoja = document.createElement('div');
+  hoja.style.cssText = 'background:var(--panel);border:1px solid var(--borde);border-radius:16px;padding:16px;max-width:480px;width:100%;margin:auto 0';
+  const pedCtx = pedidoId ? pedidos.find(x=>x.id===pedidoId) : null;
+  hoja.innerHTML = '<div style="font-weight:800;font-size:.9rem;margin-bottom:2px">🛒 Compra' + (pedCtx ? ' para ' + nombreClienteId(pedCtx.cliente) : '') + '</div>' +
+    '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:12px">Cargá lo comprado, a quién, y cómo se asigna. El pago es aparte y flexible.</div>' +
+    '<div id="cmpLineas"></div>' +
+    '<button id="cmpAddLinea" style="width:100%;border-radius:10px;padding:9px;font-weight:700;font-size:.72rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2);margin-bottom:12px">＋ Otra línea</button>' +
+    '<div style="font-size:.7rem;color:var(--texto2);margin-bottom:4px">🏭 Proveedor</div>' +
+    '<div style="display:flex;gap:6px;margin-bottom:12px">' +
+      '<select id="cmpProv" style="flex:1;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:8px;color:var(--texto);font-size:.8rem"></select>' +
+    '</div>' +
+    '<div style="font-size:.7rem;color:var(--texto2);margin-bottom:4px">💸 Pago (opcional)</div>' +
+    '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">' +
+      '<input id="cmpPago" type="number" inputmode="numeric" placeholder="$ pagado hoy (vacío = todo a deuda)" style="flex:1;margin:0;padding:10px;text-align:right;background:var(--fondo);border:1px dashed #4cd27d;border-radius:8px;color:#4cd27d">' +
+      '<button id="cmpPagoTodo" style="border-radius:8px;padding:9px 11px;font-weight:700;font-size:.7rem;background:var(--panel2);border:1px solid var(--borde);color:var(--texto)">Todo</button>' +
+    '</div>' +
+    '<div id="cmpSaldo" style="text-align:right;font-size:.68rem;color:var(--texto2);margin-bottom:12px"></div>' +
+    '<button id="cmpGuardar" style="width:100%;border-radius:12px;padding:13px;font-weight:800;background:var(--ambar);color:#1a1200;border:none;margin-bottom:8px">✓ Guardar compra</button>' +
+    '<button id="cmpCerrar" style="width:100%;border-radius:12px;padding:10px;font-weight:700;background:none;border:1px solid var(--borde);color:var(--texto2)">Cancelar</button>';
+  ov.appendChild(hoja);
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+  hoja.querySelector('#cmpCerrar').onclick = ()=> ov.remove();
+
+  // proveedor con creación al vuelo
+  const selProv = hoja.querySelector('#cmpProv');
+  const renderProv = (selId)=>{
+    selProv.innerHTML = '<option value="">Elegir proveedor…</option>' +
+      proveedores.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(pr=>
+        '<option value="'+pr.id+'"'+(pr.id===selId?' selected':'')+'>'+pr.nombre+'</option>').join('') +
+      '<option value="__stock__">📦 Salió de stock propio (sin proveedor ni pago)</option>' +
+      '<option value="__nuevo__">＋ Crear proveedor nuevo…</option>';
+  };
+  renderProv();
+  selProv.onchange = ()=>{
+    if(selProv.value === '__nuevo__'){
+      const nombre = prompt('Nombre del proveedor nuevo:');
+      if(nombre && nombre.trim()){
+        const nuevo = {id:uid(), nombre: nombre.trim(), dir:'', mail:'', notas:''};
+        proveedores.push(nuevo);
+        registrar('creó el proveedor "' + nuevo.nombre + '" desde una compra');
+        guardarDatos();
+        renderProv(nuevo.id);
+      }else{
+        selProv.value = '';
+      }
+    }
+    refrescarSaldo();
+  };
+
+  // líneas
+  const lineas = [];
+  const contL = hoja.querySelector('#cmpLineas');
+  function agregarLinea(){
+    const ln = {nombre:'', cant:1, unit:0, total:0, asignado: pedidoId||null, catalogar:false};
+    lineas.push(ln);
+    const f = document.createElement('div');
+    f.style.cssText = 'border:1px solid var(--borde);border-radius:10px;padding:8px;margin-bottom:8px';
+    f.innerHTML =
+      '<input class="lNom" placeholder="¿Qué compraste? (ej: resma A4 impresa ByN)" style="width:100%;margin:0 0 6px;padding:9px;font-size:.82rem">' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+        '<input class="lCant" type="number" inputmode="decimal" value="1" style="width:64px;margin:0;padding:8px;text-align:right">' +
+        '<span style="font-size:.7rem;color:var(--texto2)">×</span>' +
+        '<input class="lUnit" type="number" inputmode="numeric" placeholder="$ unit" style="width:92px;margin:0;padding:8px;text-align:right">' +
+        '<span style="font-size:.7rem;color:var(--texto2)">=</span>' +
+        '<input class="lTot" type="number" inputmode="numeric" placeholder="$ total" style="flex:1;margin:0;padding:8px;text-align:right;font-weight:700">' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">' +
+        '<select class="lAsig" style="flex:1;margin:0;padding:8px;background:var(--panel2);border:1px solid var(--borde);border-radius:8px;color:var(--texto);font-size:.74rem">' +
+          (pedCtx ? '<option value="'+pedidoId+'" selected>→ Este trabajo ('+nombreClienteId(pedCtx.cliente)+')</option>' : '') +
+          '<option value=""'+(pedCtx?'':' selected')+'>Sin asignar (queda disponible)</option>' +
+          pedidos.filter(x=> x.id!==pedidoId && x.cobro!=='cobrado').slice(0,25).map(x=>
+            '<option value="'+x.id+'">→ '+nombreClienteId(x.cliente)+'</option>').join('') +
+        '</select>' +
+        '<label style="display:flex;align-items:center;gap:4px;font-size:.64rem;color:var(--texto2);margin:0;white-space:nowrap"><input type="checkbox" class="lCat" style="width:auto;margin:0">catálogo</label>' +
+      '</div>' +
+      '<input class="lVenta" type="number" inputmode="numeric" placeholder="$ venta al cliente (opcional: crea el ítem en el trabajo)" style="width:100%;margin:6px 0 0;padding:8px;text-align:right;background:var(--fondo);border:1px dashed var(--ambar);border-radius:8px;color:var(--ambar);font-size:.78rem;display:' + (pedCtx?'block':'none') + '">';
+    const iC = f.querySelector('.lCant'), iU = f.querySelector('.lUnit'), iT = f.querySelector('.lTot');
+    const recalc = (desde)=>{
+      const c = parseFloat(String(iC.value).replace(',','.'))||0;
+      const u = parseFloat(iU.value)||0;
+      if(desde==='tot'){ ln.total = parseFloat(iT.value)||0; if(c>0){ ln.unit = ln.total/c; iU.value = Math.round(ln.unit*100)/100; } }
+      else { ln.total = Math.round(c*u); iT.value = ln.total||''; ln.unit = u; }
+      ln.cant = c;
+      refrescarSaldo();
+    };
+    iC.addEventListener('input', ()=>recalc('cu'));
+    iU.addEventListener('input', ()=>recalc('cu'));
+    iT.addEventListener('input', ()=>recalc('tot'));
+    f.querySelector('.lNom').addEventListener('input', e=>{ ln.nombre = e.target.value; });
+    f.querySelector('.lAsig').addEventListener('change', e=>{ ln.asignado = e.target.value || null; });
+    f.querySelector('.lCat').addEventListener('change', e=>{ ln.catalogar = e.target.checked; });
+    f.querySelector('.lVenta').addEventListener('input', e=>{ ln.venta = parseFloat(e.target.value)||0; });
+    contL.appendChild(f);
+  }
+  agregarLinea();
+  hoja.querySelector('#cmpAddLinea').onclick = agregarLinea;
+
+  const inPago = hoja.querySelector('#cmpPago');
+  const totalCompra = ()=> lineas.reduce((s,l)=> s+(l.total||0), 0);
+  const refrescarSaldo = ()=>{
+    const tot = totalCompra();
+    const pag = parseFloat(inPago.value)||0;
+    const esStock = selProv.value === '__stock__';
+    hoja.querySelector('#cmpSaldo').textContent = esStock
+      ? 'Stock propio: solo costo, sin deuda ni pago'
+      : 'Total ' + plata(tot) + (pag>0 ? ' · pagás ' + plata(pag) + (pag<tot ? ' · queda deber ' + plata(tot-pag) : (pag>tot ? ' · a favor ' + plata(pag-tot) : ' · saldado ✓')) : ' · todo a deuda');
+  };
+  inPago.addEventListener('input', refrescarSaldo);
+  hoja.querySelector('#cmpPagoTodo').onclick = ()=>{ inPago.value = totalCompra(); refrescarSaldo(); };
+  refrescarSaldo();
+
+  hoja.querySelector('#cmpGuardar').onclick = ()=>{
+    const lineasOk = lineas.filter(l=> l.nombre.trim() && l.total>0);
+    if(!lineasOk.length){ toast('Cargá al menos una línea con nombre y monto'); return; }
+    const esStock = selProv.value === '__stock__';
+    if(!esStock && !selProv.value){ toast('Elegí el proveedor (o "stock propio")'); return; }
+    const provId = esStock ? null : selProv.value;
+    const pago = parseFloat(inPago.value)||0;
+
+    const guardarTodo = (quienPago)=>{
+      const compra = {id:uid(), prov: provId, esStock, fecha: hoyISO(), creado: Date.now(),
+        lineas: lineasOk.map(l=>({nombre:l.nombre.trim(), cant:l.cant, unit:l.unit, total:l.total, asignado:l.asignado||null})),
+        pagado: pago};
+      compras.push(compra);
+      // catálogo
+      for(const l of lineasOk){
+        if(l.catalogar){
+          productos.push({id:uid(), nombre:l.nombre.trim(), precio: l.venta||0, costo: l.unit||0, rubro:'Compras'});
+        }
+        // ítem de venta en el trabajo
+        if(l.venta > 0 && l.asignado){
+          const pd = pedidos.find(x=>x.id===l.asignado);
+          if(pd) pd.items.push({prod:null, nombre:l.nombre.trim(), cant:1, precio:l.venta, compraLn:true});
+        }
+      }
+      // pago → caja
+      if(!esStock && pago > 0){
+        movimientos.push({id:uid(), tipo:'egreso', monto:pago,
+          concepto:'🛒 ' + lineasOk.map(l=>l.nombre).join(', ').slice(0,60),
+          quien: provId, persona: quienPago, pedido: pedidoId||null,
+          costoIntegrado: true, fecha: hoyISO(), creado: Date.now()});
+      }
+      registrar('cargó una compra de ' + plata(totalCompra()) + (provId ? ' a ' + (proveedores.find(x=>x.id===provId)||{}).nombre : ' (stock propio)') + (pago>0 ? ' · pagó ' + plata(pago) + ' ' + quienPago : ' · a deuda'));
+      guardarDatos(); renderPedidos(); if(typeof renderCaja==='function') try{ renderCaja(); }catch(e){}
+      ov.remove();
+      toast('Compra guardada ✓');
+    };
+
+    if(!esStock && pago > 0){
+      confirmarQuienPago(pago, 'compra', provId, (quien)=> guardarTodo(quien));
+    }else{
+      guardarTodo(null);
+    }
+  };
+}
 // grupos de costo del offset AD, cada uno con su proveedor propio
 const AD_GRUPOS = [
   {clave:'papel',  etq:'📄 Papel',   comp:['papel']},
@@ -6002,6 +6055,7 @@ document.getElementById('adPapAgregar').onclick = ()=>{
 };
 document.getElementById('adCerrar').onclick = ()=>{ modalAd.classList.remove('abierto'); if(adPedido) abrirPedido(adPedido.id); };
 modalAd.addEventListener('click', e=>{ if(e.target===modalAd){ modalAd.classList.remove('abierto'); if(adPedido) abrirPedido(adPedido.id); } });
+document.getElementById('btnCompraPed').onclick = ()=>{ if(pedidoAbierto) abrirCompra(pedidoAbierto); };
 document.getElementById('btnAdOff').onclick = ()=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
   if(!p) return;
