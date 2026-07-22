@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v42</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v44</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -317,6 +317,11 @@
       <button id="btnCorpPed" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">🔤 Corpóreas</button>
     </div>
     <div class="ped-total" id="pedTotal"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
+      <input id="descPct" type="number" inputmode="decimal" placeholder="desc. %" min="1" max="99" style="width:90px;margin:0;padding:8px;font-size:13px;text-align:right;background:var(--fondo);border:1px dashed var(--ambar);border-radius:8px;color:var(--ambar)">
+      <button id="btnAplicarDesc" style="border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">% Aplicar descuento</button>
+      <button id="btnQuitarDesc" style="display:none;border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed #ff7a7a;color:#ff7a7a">✕ Quitar descuento</button>
+    </div>
     <label>Estado del presupuesto</label>
     <div class="cats-pick" id="pedEstadoVenta"></div>
     <label>Cobro</label>
@@ -2314,7 +2319,7 @@ function renderPedidosContacto(id){
   const confirmados = suyos.filter(p=> p.estadoVenta !== 'presupuesto');
   const encargado = confirmados.reduce((s,p)=> s + totalPedido(p), 0);
   const porCobrar = confirmados.filter(p=> p.cobro !== 'cobrado')
-    .reduce((s,p)=> s + Math.max(0, totalPedido(p) - totalSenas(p)), 0);
+    .reduce((s,p)=> s + saldoPedido(p), 0);
   const presup = suyos.length - confirmados.length;
 
   const cobradoCaja = movimientos.filter(m=> m.quien===id && m.tipo==='ingreso' && movReal(m))
@@ -2326,6 +2331,7 @@ function renderPedidosContacto(id){
     '<div class="cc-linea"><span>🧾 Vendido (confirmado)</span><b>' + plata(encargado) + '</b></div>' +
     '<div class="cc-linea"><span>💰 Cobrado</span><b style="color:#4cd27d">' + plata(cobradoCaja) + '</b></div>' +
     '<div class="cc-linea cc-saldo"><span>💸 Por cobrar</span><b style="color:' + (porCobrar>0.5 ? 'var(--ambar)' : '#4cd27d') + '">' + plata(porCobrar) + '</b></div>' +
+    (creditoDe(id) > 0.5 ? '<div class="cc-linea"><span>💚 A favor del cliente</span><b style="color:#4cd27d">' + plata(creditoDe(id)) + '</b></div>' : '') +
     (presup ? '<div class="cc-linea" style="font-size:.72rem;color:var(--texto2)"><span>📝 Presupuestos en danza (no suman)</span><span>' + presup + '</span></div>' : '');
   cont.appendChild(resumen);
 
@@ -2333,7 +2339,7 @@ function renderPedidosContacto(id){
     const ev = estadoFact ? null : null;
     const esPresu = p.estadoVenta==='presupuesto';
     const est = esPresu ? '📝 SIN CONFIRMAR' : (p.estadoVenta==='parcial' ? '⚠️ parcial' : '✓ confirmado');
-    const cob = esPresu ? '' : (p.cobro==='cobrado' ? ' · ✅ cobrado' : (p.cobro==='senado' ? ' · 🪙 señado ' + plata(totalSenas(p)) : ' · 💸 a cobrar'));
+    const cob = esPresu ? '' : (p.cobro==='cobrado' ? ' · ✅ cobrado' : (p.cobro==='senado' ? ' · 🪙 a cuenta ' + plata(totalSenas(p)+(p.creditoAplicado||0)) : ' · 💸 a cobrar'));
     const f = document.createElement('div');
     f.className = 'mov-fila';
     f.style.cursor = 'pointer';
@@ -2401,6 +2407,7 @@ function renderCuentaContacto(id, esProveedor){
     };
     cont.appendChild(b0);
     // aunque no haya movimientos de caja, las cuentas de proveedores integrados se muestran igual
+    if(!esProveedor) bloqueCredito(id, cont);
     renderCuentaOD(id, cont);
     renderCuentaOffStd(id, cont);
   renderCuentaAdProv(id, cont);
@@ -2469,9 +2476,73 @@ function renderCuentaContacto(id, esProveedor){
     mas.textContent = '… y ' + (suyos.length-8) + ' movimiento(s) más en la Caja';
     cont.appendChild(mas);
   }
+  if(!esProveedor) bloqueCredito(id, cont);
   renderCuentaOD(id, cont);
   renderCuentaOffStd(id, cont);
   renderCuentaAdProv(id, cont);
+}
+function bloqueCredito(id, cont){
+  const c = clientes.find(x=>x.id===id);
+  if(!c) return;
+  const cred = c.credito||0;
+  const box = document.createElement('div');
+  box.className = 'caja-card';
+  box.style.marginBottom = '8px';
+  if(cred > 0.5) box.style.borderLeft = '4px solid #4cd27d';
+  box.innerHTML = (cred > 0.5
+    ? '<div class="cc-linea"><span>💚 A favor del cliente</span><b style="color:#4cd27d">' + plata(cred) + '</b></div>' +
+      '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:6px">Al cobrar un trabajo suyo, el sistema ofrece aplicar este crédito primero.</div>'
+    : '');
+  const zona = document.createElement('div');
+  box.appendChild(zona);
+  const btn = document.createElement('button');
+  btn.textContent = '＋ Cargar crédito a favor a mano';
+  btn.style.cssText = 'width:100%;border-radius:10px;padding:9px;font-weight:700;font-size:.72rem;background:var(--fondo);border:1px dashed #4cd27d;color:#4cd27d';
+  btn.onclick = ()=>{
+    zona.innerHTML = '';
+    let conCaja = false;
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.inputMode = 'numeric'; inp.placeholder = '$ monto a favor';
+    inp.style.cssText = 'width:100%;margin:0 0 6px;padding:10px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid #4cd27d;border-radius:8px;color:var(--texto)';
+    const mot = document.createElement('input');
+    mot.placeholder = 'Motivo (ej: transfirió de más)';
+    mot.style.cssText = 'width:100%;margin:0 0 6px;padding:10px;font-size:14px;background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+    const tog = document.createElement('button');
+    const pintarTog = ()=>{
+      tog.textContent = (conCaja ? '☑' : '☐') + ' La plata entró ahora (anotar también el ingreso en Caja)';
+      tog.style.cssText = 'width:100%;background:none;border:none;text-align:left;font-size:.72rem;padding:4px 0 8px;color:' + (conCaja ? '#4cd27d' : 'var(--texto2)');
+    };
+    pintarTog();
+    tog.onclick = ()=>{ conCaja = !conCaja; pintarTog(); };
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:6px';
+    const ok = document.createElement('button');
+    ok.textContent = '✓ Cargar';
+    ok.style.cssText = 'flex:1;background:#4cd27d;color:#0a1f12;border:none;border-radius:8px;padding:10px;font-weight:800';
+    ok.onclick = ()=>{
+      const monto = parseFloat(inp.value)||0;
+      if(monto<=0){ inp.focus(); return; }
+      sumarCredito(id, monto, mot.value.trim() || 'carga manual');
+      if(conCaja){
+        movimientos.push({id:uid(), tipo:'ingreso', monto,
+          concepto:'Crédito a favor — ' + c.nombre + (mot.value.trim() ? ' (' + mot.value.trim() + ')' : ''),
+          persona: PERSONAS.find(x=>x[0]===usuarioActual) ? usuarioActual : null,
+          quien: id, fecha: hoyISO(), creado: Date.now()});
+      }
+      guardarDatos();
+      renderCuentaContacto(id, false); renderPedidosContacto(id); renderCaja();
+      toast(plata(monto) + ' cargados a favor de ' + c.nombre + ' ✓');
+    };
+    const canc = document.createElement('button');
+    canc.textContent = '✕';
+    canc.style.cssText = 'background:none;border:none;color:var(--texto2);padding:10px 8px';
+    canc.onclick = ()=> renderCuentaContacto(id, false);
+    fila.appendChild(ok); fila.appendChild(canc);
+    zona.appendChild(inp); zona.appendChild(mot); zona.appendChild(tog); zona.appendChild(fila);
+    inp.focus();
+  };
+  zona.appendChild(btn);
+  cont.appendChild(box);
 }
 function renderCuentaOffStd(id, cont){
   if(!offset || offset.proveedor !== id) return;
@@ -2768,6 +2839,52 @@ function medidaImpresion(i){
 }
 function totalPedido(p){ return p.items.reduce((s,i)=> s + (i.conf===false ? 0 : subtotalItem(i)), 0); }
 function totalPresupuestado(p){ return p.items.reduce((s,i)=> s + subtotalItem(i), 0); }
+
+/* ---- descuento del pedido (precio colega, promos, etc.) ---- */
+function subtotalFormula(i){
+  // subtotal por fórmula, ignorando la venta pactada
+  if(i.uv){
+    const anchoTotal = (i.base||0) + 2*(i.demAncho||0);
+    const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);
+    const m2 = (anchoTotal/100) * (altoTotal/100);
+    return m2 * (i.cant||0) * (i.precio||0);
+  }
+  return (i.cant||0)*(i.precio||0);
+}
+function aplicarDescuentoPedido(p, pct){
+  pct = parseFloat(String(pct).replace(',', '.'));
+  if(!(pct > 0 && pct < 100)){ toast('Poné un porcentaje entre 1 y 99'); return; }
+  for(const it of p.items){
+    // guardo una sola vez lo que había antes del descuento (pactada o nada)
+    if(it.vmAntesDesc === undefined) it.vmAntesDesc = (it.ventaManual > 0 ? it.ventaManual : null);
+    const base = (it.vmAntesDesc !== null) ? it.vmAntesDesc : subtotalFormula(it);
+    it.ventaManual = Math.round(base * (1 - pct/100));
+  }
+  p.descPedido = pct;
+  registrar('Descuento del ' + pct + '% aplicado al pedido "' + (p.nombre||'') + '"');
+  renderPedidoItems(p); refrescarDescuentoUI(p); guardarDatos(); renderPedidos();
+  toast('Descuento del ' + pct + '% aplicado a todo el pedido');
+}
+function quitarDescuentoPedido(p){
+  for(const it of p.items){
+    if(it.vmAntesDesc !== undefined){ it.ventaManual = it.vmAntesDesc; delete it.vmAntesDesc; }
+  }
+  p.descPedido = null;
+  registrar('Descuento quitado del pedido "' + (p.nombre||'') + '"');
+  renderPedidoItems(p); refrescarDescuentoUI(p); guardarDatos(); renderPedidos();
+  toast('Descuento quitado: vuelven los precios originales');
+}
+function refrescarDescuentoUI(p){
+  const inp = document.getElementById('descPct');
+  const btnA = document.getElementById('btnAplicarDesc');
+  const btnQ = document.getElementById('btnQuitarDesc');
+  if(!inp || !btnA || !btnQ) return;
+  inp.value = p.descPedido || '';
+  btnQ.style.display = p.descPedido ? '' : 'none';
+  btnQ.textContent = '✕ Quitar descuento';
+  btnA.onclick = ()=> aplicarDescuentoPedido(p, inp.value);
+  btnQ.onclick = ()=> dosToques(btnQ, '¿Quitar?', ()=> quitarDescuentoPedido(p));
+}
 function costoItem(i){
   if(i.uv && i.costoM2){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);
@@ -2896,6 +3013,7 @@ function abrirPedido(id){
   renderPedidoTareas(p);
   renderPedidoItems(p);
   renderPedidoEstados(p);
+  refrescarDescuentoUI(p);
   modalPedido.classList.add('abierto');
 }
 function renderPedidoTareas(p){
@@ -3332,7 +3450,8 @@ function renderSenas(p){
   const lista = senasDe(p);
   const tot = totalSenas(p);
   const total = totalPedido(p);
-  if(p.cobro==='pendiente' && !lista.length) return; // nada que mostrar todavía
+  const credCli = p.cliente ? creditoDe(p.cliente) : 0;
+  if(p.cobro==='pendiente' && !lista.length && !(p.creditoAplicado>0.5) && !(credCli>0.5)) return; // nada que mostrar todavía
 
   const caja = document.createElement('div');
   caja.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;padding:10px;margin-top:8px;font-size:.76rem;color:var(--texto2)';
@@ -3343,8 +3462,11 @@ function renderSenas(p){
   if(lista.length){
     h += '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--borde);margin-top:4px;padding-top:6px"><span>Señado</span><b style="color:#5ab8ff">' + plata(tot) + '</b></div>';
   }
+  if((p.creditoAplicado||0) > 0.5){
+    h += '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>💚 Crédito a favor aplicado</span><b style="color:#4cd27d">' + plata(p.creditoAplicado) + '</b></div>';
+  }
   if(p.cobro!=='cobrado'){
-    h += '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>Saldo a cobrar</span><b style="color:var(--ambar)">' + plata(Math.max(0, total - tot)) + '</b></div>';
+    h += '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>Saldo a cobrar</span><b style="color:var(--ambar)">' + plata(saldoPedido(p)) + '</b></div>';
   }
   caja.innerHTML = h;
   if(p.cobro!=='cobrado'){
@@ -3370,12 +3492,25 @@ function renderSenas(p){
           monto, concepto:'Seña — ' + nombreClienteId(p.cliente),
           persona: PERSONAS.find(x=>x[0]===usuarioActual) ? usuarioActual : null,
           quien: p.cliente||null, fecha: hoyISO(), creado: Date.now()});
-        if(p.cobro==='pendiente') p.cobro = 'senado';
         if(p.estadoVenta==='presupuesto') p.estadoVenta = 'confirmado';
         registrar('registró una seña de ' + plata(monto) + ' del pedido de ' + nombreClienteId(p.cliente));
+        const exceso = totalSenas(p) + (p.creditoAplicado||0) - totalPedido(p);
+        if(exceso >= -0.5){
+          p.cobro = 'cobrado';
+          const cc = p.cliente ? clientes.find(x=>x.id===p.cliente) : null;
+          if(exceso > 0.5 && cc){
+            cc.credito = (cc.credito||0) + exceso;
+            registrar('el cobro superó el saldo del pedido: ' + plata(exceso) + ' quedan a favor de ' + cc.nombre + ' (a favor: ' + plata(cc.credito) + ')');
+            toast('Cubierto ✓ ' + plata(exceso) + ' quedan a favor del cliente');
+          }else{
+            toast('Seña de ' + plata(monto) + ' registrada — pedido cobrado ✓');
+          }
+        }else{
+          if(p.cobro==='pendiente') p.cobro = 'senado';
+          toast('Seña de ' + plata(monto) + ' registrada en Caja ✓');
+        }
         guardarDatos();
-        renderPedidoEstados(p); renderPedidos();
-        toast('Seña de ' + plata(monto) + ' registrada en Caja ✓');
+        renderPedidoEstados(p); renderPedidos(); renderCaja();
       };
       const canc = document.createElement('button');
       canc.textContent = '✕';
@@ -3387,6 +3522,13 @@ function renderSenas(p){
     };
     zona.appendChild(btn);
     caja.appendChild(zona);
+    if(credCli > 0.5 && saldoPedido(p) > 0.5){
+      const btnC = document.createElement('button');
+      btnC.textContent = '💚 Aplicar ' + plata(Math.min(credCli, saldoPedido(p))) + ' que el cliente tiene a favor';
+      btnC.style.cssText = 'width:100%;margin-top:6px;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:rgba(76,210,125,.08);border:1px dashed #4cd27d;color:#4cd27d';
+      btnC.onclick = ()=> aplicarCreditoAPedido(p);
+      caja.appendChild(btnC);
+    }
   }
   cont.appendChild(caja);
 }
@@ -3704,10 +3846,46 @@ function senasDe(p){
 function totalSenas(p){
   return senasDe(p).reduce((s,m)=> s+(m.monto||0), 0);
 }
+/* ---------- crédito a favor del cliente (v43) ---------- */
+function creditoDe(id){
+  const c = clientes.find(x=>x.id===id);
+  return c ? (c.credito||0) : 0;
+}
+function saldoPedido(p){
+  return Math.max(0, totalPedido(p) - totalSenas(p) - (p.creditoAplicado||0));
+}
+function creditoNoAplicado(){
+  return clientes.reduce((s,c)=> s + (c.credito||0), 0);
+}
+function sumarCredito(id, monto, motivo){
+  const c = clientes.find(x=>x.id===id);
+  if(!c || !(monto>0)) return;
+  c.credito = (c.credito||0) + monto;
+  registrar('cargó ' + plata(monto) + ' a favor de ' + c.nombre + (motivo ? ' (' + motivo + ')' : '') + ' — queda a favor ' + plata(c.credito));
+}
+function aplicarCreditoAPedido(p){
+  const c = clientes.find(x=>x.id===p.cliente);
+  if(!c) return;
+  const usar = Math.min(c.credito||0, saldoPedido(p));
+  if(usar < 0.5) return;
+  c.credito = (c.credito||0) - usar;
+  p.creditoAplicado = (p.creditoAplicado||0) + usar;
+  if(p.estadoVenta==='presupuesto') p.estadoVenta = 'confirmado';
+  if(saldoPedido(p) < 0.5){
+    p.cobro = 'cobrado';
+    registrarCobroAuto(p);
+  }else if(p.cobro==='pendiente'){
+    p.cobro = 'senado';
+  }
+  registrar('aplicó ' + plata(usar) + ' del crédito a favor de ' + c.nombre + ' al pedido de ' + plata(totalPedido(p)) + ' — le queda a favor ' + plata(c.credito));
+  guardarDatos();
+  renderPedidoEstados(p); renderPedidos(); renderCaja();
+  toast('Crédito de ' + plata(usar) + ' aplicado ✓' + (saldoPedido(p)<0.5 ? ' — pedido cobrado' : ''));
+}
 function registrarCobroAuto(p){
   const idx = movimientos.findIndex(m=> m.pedido===p.id && m.auto && !m.sena);
   if(p.cobro==='cobrado'){
-    const saldo = totalPedido(p) - totalSenas(p);
+    const saldo = totalPedido(p) - totalSenas(p) - (p.creditoAplicado||0);
     if(saldo > 0.5){
       const concepto = totalSenas(p) > 0 ? 'Cobro de pedido (saldo)' : 'Cobro de pedido';
       if(idx<0){
@@ -3723,7 +3901,7 @@ function registrarCobroAuto(p){
     }else if(idx>=0){
       movimientos.splice(idx,1); // las señas ya cubrieron el total
     }else{
-      toast('Total cubierto por las señas ✓');
+      toast('Total cubierto por señas/crédito ✓');
     }
   }else if(idx>=0){
     movimientos.splice(idx,1);
@@ -3781,16 +3959,21 @@ function renderCaja(){
 (function(){
       const deudores = pedidos
         .filter(p=> p.estadoVenta !== 'presupuesto' && p.cobro !== 'cobrado' && totalPedido(p) > 0)
-        .map(p=> ({p, saldo: totalPedido(p) - totalSenas(p)}))
+        .map(p=> ({p, saldo: saldoPedido(p)}))
         .filter(x=> x.saldo > 0.5)
         .sort((a,b)=> b.saldo - a.saldo);
-      if(!deudores.length) return '';
+      const credTot = creditoNoAplicado();
+      if(!deudores.length && credTot < 0.5) return '';
       const total = deudores.reduce((s,x)=>s+x.saldo,0);
       let h = '<div class="caja-card" style="margin-bottom:8px;border-left:4px solid var(--ambar)">' +
         '<div class="cc-mes">💰 Por cobrar (en la calle)</div>' +
         '<div class="cc-linea cc-saldo"><span>' + deudores.length + ' trabajo(s)</span><b style="color:var(--ambar)">' + plata(total) + '</b></div>';
+      if(credTot > 0.5){
+        h += '<div class="cc-linea" style="font-size:.74rem"><span>💚 A favor de clientes (resta)</span><b style="color:#4cd27d">− ' + plata(credTot) + '</b></div>' +
+          '<div class="cc-linea cc-saldo"><span>Neto en la calle</span><b style="color:' + (total-credTot>0.5 ? 'var(--ambar)' : '#4cd27d') + '">' + plata(Math.max(0, total-credTot)) + '</b></div>';
+      }
       deudores.forEach((x, i)=>{
-        h += '<div class="cc-linea pcAbrir' + (i>=5 ? ' pcExtra' : '') + '" data-id="' + x.p.id + '" style="font-size:.76rem;color:var(--texto2);cursor:pointer' + (i>=5 ? ';display:none' : '') + '"><span>› ' + nombreClienteId(x.p.cliente) + (totalSenas(x.p)>0?' (señado)':'') + '</span><span>' + plata(x.saldo) + '</span></div>';
+        h += '<div class="cc-linea pcAbrir' + (i>=5 ? ' pcExtra' : '') + '" data-id="' + x.p.id + '" style="font-size:.76rem;color:var(--texto2);cursor:pointer' + (i>=5 ? ';display:none' : '') + '"><span>› ' + nombreClienteId(x.p.cliente) + ((totalSenas(x.p)+(x.p.creditoAplicado||0))>0?' (a cuenta)':'') + '</span><span>' + plata(x.saldo) + '</span></div>';
       });
       if(deudores.length > 5) h += '<button id="pcVerTodos" style="width:100%;background:none;border:none;font-size:.68rem;color:#5ab8ff;text-align:center;padding:6px;font-weight:700">▾ Ver los ' + deudores.length + '</button>';
       return h + '</div>';
