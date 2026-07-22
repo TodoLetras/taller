@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v44</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v45</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -1148,6 +1148,23 @@ async function cargar(){
       }
       clientes.forEach(c=>delete c.tipo);
       proveedores.forEach(c=>delete c.tipo);
+      // Soldado Ruis: proveedor de impresión UV (lona y vinilo) + sus materiales
+      if(!proveedores.find(x=> normalizarTexto(x.nombre).includes('soldado'))){
+        proveedores.push({id:uid(), nombre:'Soldado Ruis', dir:'', mail:'', notas:'Proveedor de impresión UV (lona y vinilo)'});
+      }
+      if(uv && uv.mats && !uv.mats.find(m=> normalizarTexto(m.nombre||'').includes('soldado'))){
+        const matsSR = [
+          {nombre:'Lona UV 13 oz · Soldado Ruis', costo:6319, instM2:15000},
+          {nombre:'Lona UV 8 oz · Soldado Ruis', costo:4971, instM2:15000},
+          {nombre:'Vinilo UV base blanca · Soldado Ruis', costo:4941},
+          {nombre:'Vinilo UV base gris · Soldado Ruis', costo:5558},
+          {nombre:'Vinilo UV microperforado · Soldado Ruis', costo:11532.15},
+        ];
+        for(const m of matsSR) uv.mats.push({id:uid()+Math.random().toString(36).slice(2,4), ...m});
+      }
+      if(!productos.find(x=> normalizarTexto(x.nombre)==='limpieza de vidriera')){
+        productos.push({id:uid(), nombre:'Limpieza de vidriera', precio:10000, rubro:'Otros'});
+      }
       iniciar(); return;
     }
   }catch(e){}
@@ -3332,7 +3349,7 @@ function renderBuscadorItems(p){
       const inst = tipoInstalacion(m.nombre);
       const opciones = [
         ['🖨 '+m.nombre+' impreso · sin instalación · m²', Math.round(m.costo*uv.multSin)],
-        ['🖨 '+m.nombre+' '+inst+' · m²', Math.round(m.costo*uv.multCon)],
+        ['🖨 '+m.nombre+' '+inst+' · m²', Math.round(m.instM2 ? m.costo*uv.multSin + m.instM2 : m.costo*uv.multCon)],
       ];
       for(const [nom, precio] of opciones){
         const b = document.createElement('button');
@@ -6766,7 +6783,8 @@ function renderUV(){
       '<button class="mini borrarUV">✕</button></div>' +
       '<div class="uv-ventas">' +
       '<span>Sin instalación: <b>'+plata(m.costo*uv.multSin)+'</b></span>' +
-      '<span>'+inst.charAt(0).toUpperCase()+inst.slice(1)+': <b>'+plata(m.costo*uv.multCon)+'</b></span>' +
+      '<span>'+inst.charAt(0).toUpperCase()+inst.slice(1)+': <b>'+plata(m.instM2 ? m.costo*uv.multSin + m.instM2 : m.costo*uv.multCon)+'</b>' +
+      (m.instM2 ? ' <i style="font-size:.62rem;color:var(--texto2);font-style:normal">(×'+uv.multSin+' + '+plata(m.instM2)+' inst./m²)</i>' : '') + '</span>' +
       '</div>';
     f.querySelector('.uv-nombre').textContent = m.nombre;
     f.querySelector('.uv-costo').onclick = function(){
