@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Taller">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Seguimiento · Todo Letras</title>
 <style>
@@ -240,7 +242,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v50</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v56</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -799,7 +801,7 @@ const AD_SEMILLA = {
     gto:    {nombre:'GTO',    W:50, H:34, ctp:6900,
       tarifas:{ hasta170:{post:{1:11000,2:25800,4:47000}, millar:{1:10000,2:12400,4:18000}},
                 mas180:  {post:{1:11000,2:26000,4:47000}, millar:{1:14000,2:18000,4:26000}} }},
-    komori: {nombre:'Komori', W:64, H:46, ctp:10500,
+    komori: {nombre:'Komori', W:64, H:47, ctp:10500,
       tarifas:{ hasta170:{post:{1:14000,2:32700,4:52600}, millar:{1:12700,2:15800,4:23400}},
                 mas180:  {post:{1:14000,2:32700,4:52600}, millar:{1:16900,2:21500,4:31600}} }}
   }
@@ -1180,27 +1182,50 @@ async function guardarDatos(){
   }catch(e){ marcarEstadoGuardado(false); }
 }
 function migrarSoldadoRuis(){
+  // precios de terminaciones de lona (costo por metro lineal; venta = × multSin)
+  if(typeof uv === 'object' && uv){
+    if(uv.costuraCosto === undefined) uv.costuraCosto = 2000;
+    if(uv.varillaCosto === undefined) uv.varillaCosto = 500;
+  }
+  // corrección de medida máxima de la Komori: 64×47 (antes figuraba 64×46)
+  if(typeof adCfg === 'object' && adCfg.maquinas && adCfg.maquinas.komori && adCfg.maquinas.komori.H === 46){
+    adCfg.maquinas.komori.H = 47;
+  }
   // proveedor de impresión UV (lona y vinilo) + sus materiales + limpieza de vidriera
   if(!proveedores.find(x=> normalizarTexto(x.nombre||'').includes('soldado'))){
     proveedores.push({id:uid(), nombre:'Soldado Ruis', dir:'', mail:'', notas:'Proveedor de impresión UV (lona y vinilo)'});
   }
-  if(uv && uv.mats && !uv.mats.find(m=> normalizarTexto(m.nombre||'').includes('soldado'))){
+  if(uv && uv.mats && !uv.mats.find(m=> (m.prov||'').toLowerCase().includes('soldado') || normalizarTexto(m.nombre||'').includes('soldado'))){
     const matsSR = [
-      {nombre:'Lona UV 13 oz · tintas UV alternativas · Soldado Ruis', costo:6319, instM2:15000},
-      {nombre:'Lona UV 8 oz · tintas UV alternativas · Soldado Ruis', costo:4971, instM2:15000},
-      {nombre:'Vinilo UV base blanca · tintas UV alternativas · Soldado Ruis', costo:4941},
-      {nombre:'Vinilo UV base gris · tintas UV alternativas · Soldado Ruis', costo:5558},
-      {nombre:'Vinilo UV microperforado · tintas UV alternativas · Soldado Ruis', costo:11532.15},
+      {nombre:'Lona UV 13 oz · tintas UV alternativas', costo:6319, instM2:15000, prov:'Soldado Ruis'},
+      {nombre:'Lona UV 8 oz · tintas UV alternativas', costo:4971, instM2:15000, prov:'Soldado Ruis'},
+      {nombre:'Vinilo UV base blanca · tintas UV alternativas', costo:4941, prov:'Soldado Ruis'},
+      {nombre:'Vinilo UV base gris · tintas UV alternativas', costo:5558, prov:'Soldado Ruis'},
+      {nombre:'Vinilo UV microperforado · tintas UV alternativas', costo:11532.15, prov:'Soldado Ruis'},
     ];
     for(const m of matsSR) uv.mats.push({id:uid()+Math.random().toString(36).slice(2,4), ...m});
+  }
+  // el proveedor NO va en el nombre (el nombre lo ve el cliente): pasa a campo interno
+  if(uv && uv.mats) for(const m of uv.mats){
+    if(normalizarTexto(m.nombre||'').includes('soldado')){
+      m.prov = 'Soldado Ruis';
+      m.nombre = m.nombre.replace(/\s*·\s*Soldado Rui[sz]/gi, '').trim();
+    }
   }
   // etiquetas de tintas: Soldado Ruis = alternativas, el resto (Pablo) = originales Mimaki
   if(uv && uv.mats) for(const m of uv.mats){
     const n = normalizarTexto(m.nombre||'');
-    if(n.includes('soldado')){
-      if(!n.includes('alternativa')) m.nombre = m.nombre.replace(' · Soldado Ruis','') + ' · tintas UV alternativas · Soldado Ruis';
+    const esSR = (m.prov||'').toLowerCase().includes('soldado');
+    if(esSR){
+      if(!n.includes('alternativa')) m.nombre = m.nombre + ' · tintas UV alternativas';
     }else if(!n.includes('mimaki') && !n.includes('alternativa')){
       m.nombre = m.nombre + ' · tintas originales Mimaki';
+    }
+  }
+  // limpiar el proveedor de los ítems que ya se cargaron en pedidos con el nombre viejo
+  if(typeof pedidos !== 'undefined') for(const p of pedidos){
+    if(p.items) for(const it of p.items){
+      if(it.nombre && /Soldado Rui[sz]/i.test(it.nombre)) it.nombre = it.nombre.replace(/\s*·\s*Soldado Rui[sz]/gi, '').trim();
     }
   }
   if(!productos.find(x=> normalizarTexto(x.nombre||'')==='limpieza de vidriera')){
@@ -2854,13 +2879,7 @@ async function copiarItem(it){
 }
 function subtotalItem(i){
   if(i.ventaManual > 0) return i.ventaManual;
-  if(i.uv){
-    const anchoTotal = (i.base||0) + 2*(i.demAncho||0);   // demasía en ambos lados
-    const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);  // demasía arriba y abajo
-    const m2 = (anchoTotal/100) * (altoTotal/100);        // medidas en cm
-    return m2 * (i.cant||0) * (i.precio||0);
-  }
-  return (i.cant||0)*(i.precio||0);
+  return subtotalFormula(i);
 }
 function medidaImpresion(i){
   return ((i.base||0)+2*(i.demAncho||0)) + '×' + ((i.altura||0)+2*(i.demAlto||0)) + 'cm';
@@ -2875,7 +2894,10 @@ function subtotalFormula(i){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);
     const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);
     const m2 = (anchoTotal/100) * (altoTotal/100);
-    return m2 * (i.cant||0) * (i.precio||0);
+    let s = m2 * (i.cant||0) * (i.precio||0);
+    if(i.costuraM > 0) s += i.costuraM * (uv.costuraCosto||2000) * uv.multSin * (i.cant||0);
+    if(i.varillaM > 0) s += i.varillaM * (uv.varillaCosto||500) * uv.multSin * (i.cant||0);
+    return s;
   }
   return (i.cant||0)*(i.precio||0);
 }
@@ -3181,6 +3203,12 @@ function renderPedidoItems(p){
           '<input class="demA" type="number" inputmode="numeric" min="0" title="demasía ancho"><span>cm ancho ·</span>' +
           '<input class="demH" type="number" inputmode="numeric" min="0" title="demasía alto"><span>cm alto</span>' +
         '</div>' +
+        '<div class="pi-medidas">' +
+          '<button class="togCostura"></button>' +
+          '<input class="costuraM" type="number" inputmode="decimal" step="0.1" min="0" title="metros lineales de vulcanizado" style="width:64px"><span class="lblCostura" style="display:none">m ·</span>' +
+          '<button class="togVarilla"></button>' +
+          '<input class="varillaM" type="number" inputmode="decimal" step="0.1" min="0" title="metros lineales de varilla" style="width:64px"><span class="lblVarilla" style="display:none">m</span>' +
+        '</div>' +
         '<div class="pi-medidas"><span class="pi-impresion"></span>' +
           '<input class="ventaMan" type="number" inputmode="numeric" placeholder="venta pactada $" title="Escribí el precio total que pactaste para este ítem; la fórmula queda de lado. Vaciá el campo para volver al cálculo." style="width:130px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--fondo);border:1px dashed #4cd27d;border-radius:8px;color:#4cd27d">' +
           '<span class="pi-sub"></span></div>';
@@ -3213,6 +3241,29 @@ function renderPedidoItems(p){
         sub.textContent = '= ' + plata(subtotalItem(it));
         actualizarTotal(p); sincronizarPedido();
       };
+      // costura y varilla por metro lineal (perímetro sugerido, editable)
+      const perimIt = ()=> Math.round(2*((it.base||0)+(it.altura||0))/100*10)/10;
+      const tCo = d.querySelector('.togCostura'), iCo = d.querySelector('.costuraM'), lCo = d.querySelector('.lblCostura');
+      const tVa = d.querySelector('.togVarilla'), iVa = d.querySelector('.varillaM'), lVa = d.querySelector('.lblVarilla');
+      const pintarExtras = ()=>{
+        const vCost = Math.round((uv.costuraCosto||2000) * uv.multSin);
+        const vVar  = Math.round((uv.varillaCosto||500) * uv.multSin);
+        tCo.textContent = (it.costuraM>0 ? '☑' : '☐') + ' 🧵 Vulcanizado ' + plata(vCost) + '/m';
+        tCo.style.cssText = 'background:none;border:1px dashed ' + (it.costuraM>0?'#4cd27d':'var(--borde)') + ';border-radius:8px;padding:5px 8px;font-size:.68rem;font-weight:700;color:' + (it.costuraM>0?'#4cd27d':'var(--texto2)');
+        iCo.style.display = it.costuraM>0 ? '' : 'none';
+        lCo.style.display = it.costuraM>0 ? '' : 'none';
+        if(it.costuraM>0) iCo.value = it.costuraM;
+        tVa.textContent = (it.varillaM>0 ? '☑' : '☐') + ' 📏 Varilla 6mm ' + plata(vVar) + '/m';
+        tVa.style.cssText = 'background:none;border:1px dashed ' + (it.varillaM>0?'#4cd27d':'var(--borde)') + ';border-radius:8px;padding:5px 8px;font-size:.68rem;font-weight:700;color:' + (it.varillaM>0?'#4cd27d':'var(--texto2)');
+        iVa.style.display = it.varillaM>0 ? '' : 'none';
+        lVa.style.display = it.varillaM>0 ? '' : 'none';
+        if(it.varillaM>0) iVa.value = it.varillaM;
+      };
+      tCo.onclick = ()=>{ it.costuraM = it.costuraM>0 ? null : perimIt(); pintarExtras(); refrescar(); renderPedidos(); };
+      tVa.onclick = ()=>{ it.varillaM = it.varillaM>0 ? null : perimIt(); pintarExtras(); refrescar(); renderPedidos(); };
+      iCo.addEventListener('change', ()=>{ const v = parseFloat(iCo.value)||0; it.costuraM = v>0 ? v : null; pintarExtras(); refrescar(); renderPedidos(); });
+      iVa.addEventListener('change', ()=>{ const v = parseFloat(iVa.value)||0; it.varillaM = v>0 ? v : null; pintarExtras(); refrescar(); renderPedidos(); });
+      pintarExtras();
       imp.textContent = 'Impresión: ' + medidaImpresion(it);
       sub.textContent = '= ' + plata(subtotalItem(it));
       for(const el of [inB, inA, inC, inDA, inDH]) el.addEventListener('input', refrescar);
@@ -3829,7 +3880,7 @@ document.getElementById('pedPresu').onclick = ()=>{
     if(it.conf===false) continue;
     const sub = subtotalItem(it);
     if(it.uv){
-      texto += '▪ ' + it.nombre + ' · ' + it.base + '×' + it.altura + ' cm' + (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
+      texto += '▪ ' + it.nombre + ' · ' + it.base + '×' + it.altura + ' cm' + (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '') + (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
     }else{
       texto += '▪ ' + it.nombre + (it.cant>1 ? ' × '+it.cant+(it.mo?' h':'') : '') + ': ' + plata(sub) +
         (it.abierto ? ' *' : '') + '\n';
@@ -4331,11 +4382,21 @@ async function dbxSubir(){
   try{
     const t = await dbxToken();
     if(!t){ dbxSubiendo=false; return false; }
+    // CANDADO: si conocemos la revisión, pedimos "guardá solo si nadie lo tocó desde entonces".
+    // Si otro dispositivo guardó en el medio, Dropbox rechaza y NO se pisa nada.
+    const modo = dbxRev ? {'.tag':'update', update: dbxRev} : 'overwrite';
     const r = await fetch('https://content.dropboxapi.com/2/files/upload', {method:'POST',
       headers:{'Authorization':'Bearer '+t,
-        'Dropbox-API-Arg': JSON.stringify({path:'/datos.json', mode:'overwrite', mute:true}),
+        'Dropbox-API-Arg': JSON.stringify({path:'/datos.json', mode: modo, mute:true, autorename:false}),
         'Content-Type':'application/octet-stream'},
       body: datosCompletos()});
+    if(r.status === 409){
+      dbxSubiendo = false;
+      dbxEstado = 'error'; pintarNube();
+      toast('⚠️ Otro dispositivo guardó cambios primero. Sincronizando para no pisar nada…');
+      dbxSincronizar(true);
+      return false;
+    }
     if(r.ok){
       const m = await r.json();
       dbxRev = m.rev;
@@ -5881,7 +5942,7 @@ async function generarPDFPedido(p){
     doc.setFontSize(11);
     const items = p.items.filter(it=> it.conf !== false);
     for(const it of items){
-      const texto = it.nombre + (it.uv ? ' · ' + (it.base||0) + '×' + (it.altura||0) + ' cm' : '') + (it.cant > 1 ? ' × ' + it.cant + (it.mo ? ' h' : (it.uv ? 'u' : '')) : '') + (it.abierto ? ' *' : '');
+      const texto = it.nombre + (it.uv ? ' · ' + (it.base||0) + '×' + (it.altura||0) + ' cm' + (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '') : '') + (it.cant > 1 ? ' × ' + it.cant + (it.mo ? ' h' : (it.uv ? 'u' : '')) : '') + (it.abierto ? ' *' : '');
       const lineas = doc.splitTextToSize(texto, W - margen*2 - 110);
       const alto = lineas.length * 14 + 10;
       saltoSiHaceFalta(alto);
@@ -6007,17 +6068,27 @@ function adEncaje(pw, ph, W, H){
   return d ? d.n : 0;
 }
 // divide la hoja de fábrica en partes iguales (mitades, cuartos, octavos…)
-// buscando el pliego máquina MÁS GRANDE que entre en la máquina
+// buscando el pliego máquina MÁS GRANDE que entre en la máquina.
+// Permite REFILAR hasta adCfg.refile cm por lado (práctica normal de taller:
+// ej. hoja 65×95 cortada en 2 → 65×47.5 se refila a 64×46 para la Komori).
 function adCortePliego(pW, pH, MW, MH){
+  const tol = (adCfg.refile !== undefined ? adCfg.refile : 4);
   let mejor = null;
   for(let nc=1; nc<=8; nc++){
     for(let nf=1; nf<=8; nf++){
       const w = pW/nc, h = pH/nf;
-      const entra = (w <= MW && h <= MH) || (h <= MW && w <= MH);
-      if(!entra) continue;
+      // dos orientaciones posibles del pliego en máquina, con refile permitido
+      const orientaciones = [];
+      if(w <= MW + tol && h <= MH + tol) orientaciones.push({ew: Math.min(w, MW), eh: Math.min(h, MH)});
+      if(h <= MW + tol && w <= MH + tol) orientaciones.push({ew: Math.min(h, MW), eh: Math.min(w, MH)});
+      if(!orientaciones.length) continue;
+      orientaciones.sort((a,b)=> (b.ew*b.eh) - (a.ew*a.eh));
+      const o = orientaciones[0];
+      const refi = (o.ew*o.eh) < (w*h) - 0.01;
       const n = nc*nf;
-      if(!mejor || n < mejor.n || (n === mejor.n && Math.min(w,h) > Math.min(mejor.w, mejor.h))){
-        mejor = {n, w: Math.round(w*100)/100, h: Math.round(h*100)/100, nc, nf};
+      if(!mejor || n < mejor.n || (n === mejor.n && Math.min(o.ew,o.eh) > Math.min(mejor.w, mejor.h))){
+        mejor = {n, w: Math.round(o.ew*100)/100, h: Math.round(o.eh*100)/100,
+                 origW: Math.round(w*100)/100, origH: Math.round(h*100)/100, nc, nf, refi};
       }
     }
   }
@@ -6116,7 +6187,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
       detalle: (v.giro
         ? 'GIRO mariposa: 1 juego de ' + v.chapas + ' chapas · ' + v.poses + ' poses/pliego (' + (v.poses/2) + ' frentes + ' + (v.poses/2) + ' dorsos)'
         : v.posturas + ' juego(s) de chapas (' + v.chapas + ' en total) · ' + v.poses + ' poses/pliego') +
-        ' · hoja ' + papel.W + '×' + papel.H + ' cortada en ' + pliegosPorHoja + ' → pliego máquina ' + plLargo + '×' + plCorto + ' cm (útil ' + (Math.round(utilW*10)/10) + '×' + (Math.round(utilH*10)/10) + ')'};
+        ' · hoja ' + papel.W + '×' + papel.H + ' cortada en ' + pliegosPorHoja + ' → pliego máquina ' + plLargo + '×' + plCorto + ' cm' + (cortePl.refi ? ' (refilado de ' + cortePl.origW + '×' + cortePl.origH + ')' : '') + ' (útil ' + (Math.round(utilW*10)/10) + '×' + (Math.round(utilH*10)/10) + ')'};
     if(!mejor || op.venta < mejor.venta) mejor = op;
   }
   return mejor;
@@ -6864,7 +6935,7 @@ function renderOffset(){
       '<button class="uv-costo">costo '+plata(m.costo)+'</button>' +
       '<button class="mini borrarOff">✕</button></div>' +
       '<div class="uv-ventas"><span>Venta: <b>'+plata(ventaOffset(m))+'</b></span></div>';
-    f.querySelector('.uv-nombre').textContent = m.nombre;
+    f.querySelector('.uv-nombre').textContent = m.nombre + (m.prov ? '  \U0001F3F7 ' + m.prov : '');
     f.querySelector('.uv-costo').onclick = function(){
       const inp = document.createElement('input');
       inp.type = 'number'; inp.inputMode = 'numeric';
@@ -6932,7 +7003,7 @@ function renderUV(){
       '<span>'+inst.charAt(0).toUpperCase()+inst.slice(1)+': <b>'+plata(m.instM2 ? m.costo*uv.multSin + m.instM2 : m.costo*uv.multCon)+'</b>' +
       (m.instM2 ? ' <i style="font-size:.62rem;color:var(--texto2);font-style:normal">(×'+uv.multSin+' + '+plata(m.instM2)+' inst./m²)</i>' : '') + '</span>' +
       '</div>';
-    f.querySelector('.uv-nombre').textContent = m.nombre;
+    f.querySelector('.uv-nombre').textContent = m.nombre + (m.prov ? '  \U0001F3F7 ' + m.prov : '');
     f.querySelector('.uv-costo').onclick = function(){
       const inp = document.createElement('input');
       inp.type = 'number'; inp.inputMode = 'numeric';
