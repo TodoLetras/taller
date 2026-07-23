@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v48</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v50</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -5274,6 +5274,28 @@ function actualizarOffDig(){
       actualizarOffDig();
       toast('Margen del pedido: ' + odPedido.odMargen + '% ✓');
     });
+    // 🖨 ¿Conviene offset tradicional? (solo cotizando por pieza, papel de gramaje equivalente con precio)
+    if(odMeta.porPieza && calc.posado && calc.posado.n > 0 && (odMeta.pzCant||0) > 0 && odMeta.papel !== 'auto'){
+      const colAD = AD_COLORES.find(x=> x[0]===odMeta.modo);
+      const gramOD = parseInt(odMeta.papel);
+      const candidatos = adPapeles.filter(p=> (p.precio||0) > 0 && p.gramaje === gramOD);
+      if(colAD && candidatos.length){
+        let mejor = null;
+        for(const p of candidatos){
+          const o = adMejorOpcion(p, colAD[1], colAD[2], odMeta.pzAncho, odMeta.pzAlto, {tipo:'cantidad', q: odMeta.pzCant});
+          if(o && o.piezas > 0 && (!mejor || o.venta < mejor.o.venta)) mejor = {p, o};
+        }
+        if(mejor){
+          const conviene = mejor.o.venta < calc.venta;
+          r.insertAdjacentHTML('beforeend',
+            '<div style="margin-top:9px;padding:8px 10px;border-radius:9px;font-size:.72rem;line-height:1.6;background:' + (conviene ? 'rgba(199,146,234,.1)' : 'var(--fondo)') + ';border:1px dashed ' + (conviene ? '#c792ea' : 'var(--borde)') + '">' +
+            '🖨 <b style="color:#c792ea">Offset tradicional:</b> ' + mejor.o.piezas.toLocaleString('es-AR') + ' piezas en ' + mejor.p.nombre + ' ' + mejor.p.W + '×' + mejor.p.H +
+            ' → <b>' + plata(mejor.o.venta) + '</b> (' + plata(Math.round(mejor.o.unitario*100)/100) + ' c/u)' +
+            (conviene ? ' <b style="color:#4cd27d">✓ conviene tradicional</b>' : ' · digital sigue ganando') +
+            '</div>');
+        }
+      }
+    }
   }else{
     r.innerHTML = 'Completá la cantidad para ver el precio.';
   }
@@ -5730,6 +5752,69 @@ async function prepararPDFLibs(){
   await cargarScript('pdf-assets.js');
   pdfLibsListas = true;
 }
+async function generarPDFAd(){
+  if(!adUltimasOpciones || !adUltimasOpciones.length || !adUltimoCtx) return;
+  const btn = document.getElementById('adBtnPdf');
+  const txtOrig = btn ? btn.textContent : '';
+  if(btn) btn.textContent = '⏳';
+  try{
+    await prepararPDFLibs();
+    const A = window.PDF_ASSETS;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'a4'});
+    doc.addFileToVFS('Fira.ttf', A.firaReg); doc.addFont('Fira.ttf', 'Fira', 'normal');
+    doc.addFileToVFS('FiraB.ttf', A.firaBold); doc.addFont('FiraB.ttf', 'Fira', 'bold');
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const margen = 46;
+    const cabAltoPt = W * A.cabAlto / A.cabAncho;
+    const pieAltoPt = W * A.pieAlto / A.pieAncho;
+    doc.addImage(A.cabecera, 'JPEG', 0, 0, W, cabAltoPt);
+    doc.addImage(A.pie, 'JPEG', 0, H - pieAltoPt, W, pieAltoPt);
+    const c = adUltimoCtx;
+    let y = cabAltoPt + 36;
+    doc.setFont('Fira','bold'); doc.setFontSize(15); doc.setTextColor(30,30,30);
+    doc.text('PRESUPUESTO', margen, y);
+    doc.setFont('Fira','normal'); doc.setFontSize(9); doc.setTextColor(120,120,120);
+    doc.text(new Date().toLocaleDateString('es-AR'), W - margen, y, {align:'right'});
+    y += 20;
+    doc.setFontSize(10.5); doc.setTextColor(60,60,60);
+    doc.text('Impresión offset · pieza ' + c.pzW + '×' + c.pzH + ' cm · ' + c.colTxt + ' colores · ' + (c.papel.nombre||''), margen, y);
+    y += 18;
+    if(adPdfConPosado){
+      const cv = document.getElementById('adEsquema');
+      if(cv && cv.width){
+        try{
+          const img = cv.toDataURL('image/png');
+          const iw = 290, ih = iw * cv.height / cv.width;
+          doc.addImage(img, 'PNG', (W - iw)/2, y, iw, ih);
+          y += ih + 18;
+        }catch(e){}
+      }
+    }
+    const colCant = margen, colUnit = W - margen - 140, colTot = W - margen;
+    doc.setFont('Fira','bold'); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
+    doc.text('CANTIDAD', colCant, y);
+    doc.text('UNITARIO', colUnit, y, {align:'right'});
+    doc.text('TOTAL', colTot, y, {align:'right'});
+    y += 6;
+    doc.setDrawColor(190,190,190); doc.line(margen, y, W - margen, y);
+    y += 17;
+    doc.setFontSize(11);
+    for(const {op} of adUltimasOpciones){
+      doc.setFont('Fira','normal'); doc.setTextColor(30,30,30);
+      doc.text(op.piezas.toLocaleString('es-AR') + ' unidades', colCant, y);
+      doc.text(plata(Math.round(op.unitario*100)/100) + ' c/u', colUnit, y, {align:'right'});
+      doc.setFont('Fira','bold');
+      doc.text(plata(op.venta), colTot, y, {align:'right'});
+      y += 20;
+    }
+    y += 8;
+    doc.setFont('Fira','normal'); doc.setFontSize(8.5); doc.setTextColor(130,130,130);
+    doc.text('Precios finales según cantidad. Presupuesto sujeto a confirmación de stock de papel.', margen, y);
+    doc.save('Presupuesto offset ' + c.pzW + 'x' + c.pzH + '.pdf');
+  }catch(e){ toast('No pude generar el PDF: ' + e.message); }
+  if(btn) btn.textContent = txtOrig;
+}
 function cargarImagenDims(dataUrl){
   return new Promise((res)=>{
     const im = new Image();
@@ -5896,6 +5981,7 @@ document.getElementById('pedPDF').onclick = ()=>{
 /* ---------- offset tradicional AD (GTO / Komori) ---------- */
 const modalAd = document.getElementById('modalAd');
 let adPedido = null, adColSel = '4/4';
+let adPdfConPosado = false, adUltimasOpciones = null, adUltimoCtx = null;
 const AD_COLORES = [['1/0',1,0],['1/1',1,1],['2/0',2,0],['2/2',2,2],['4/0',4,0],['4/1',4,1],['4/4',4,4]];
 function adEncajeDet(pw, ph, W, H){
   function o(a, b, rot){
@@ -6201,6 +6287,10 @@ function calcularAd(){
       '<td><button class="adUsar" data-etq="' + etq + '" style="background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:6px 9px;font-weight:800;font-size:.72rem">＋</button></td></tr>';
   }
   h += '</table></div>';
+  h += '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">' +
+    '<button id="adBtnPdf" style="background:var(--panel2);border:1px dashed #4cd27d;color:#4cd27d;border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem">📄 PDF para el cliente</button>' +
+    '<button id="adTogglePosado" style="background:var(--panel2);border:1px dashed var(--borde);border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;color:' + (adPdfConPosado ? '#4cd27d' : 'var(--texto2)') + '">' + (adPdfConPosado ? '☑' : '☐') + ' incluir esquema de posado</button>' +
+    '<span style="font-size:.62rem;color:var(--texto2)">El PDF muestra solo cantidades, unitario y total (sin costos internos).</span></div>';
   // sugerencia: mismo gramaje en otros formatos de hoja, ¿alguno da mejor unitario?
   if(q > 0 && opciones.length){
     const base = opciones[0].op;
@@ -6223,8 +6313,53 @@ function calcularAd(){
         '💡 <b>Mismo gramaje, otros formatos:</b> ' + partes.join('  ·  ') + '</div>';
     }
   }
+  // ⚡ ¿Conviene offset digital para tiradas cortas? (cantidades de hojas editables)
+  if(OD_MODOS.find(m=> m[0]===adColSel)){
+    const posOD = odPosado(pzW, pzH);
+    if(posOD && posOD.n > 0){
+      const keys = Object.keys(od.tabla).map(Number);
+      const gram = papel.gramaje || 0;
+      const key = keys.reduce((mj,k)=> Math.abs(k-gram) < Math.abs(mj-gram) ? k : mj, keys[0]);
+      if(!adCfg.odCants) adCfg.odCants = '10, 25, 30, 50';
+      const cantsOD = String(adCfg.odCants).split(/[^0-9]+/).map(Number).filter(x=>x>0).slice(0,8);
+      const colOD = OD_MODOS.findIndex(m=> m[0]===adColSel);
+      const costoHojaOD = od.tabla[String(key)][colOD];
+      const unitAdBase = (q > 0 && opciones[0].op) ? opciones[0].op.unitario : null;
+      let filasOD = '';
+      for(const hb of cantsOD){
+        const ventaOD = Math.round((hb + 1) * costoHojaOD * (1 + od.margen/100)); // +1 hoja de armado
+        const piezasOD = hb * posOD.n;
+        const unitOD = ventaOD / piezasOD;
+        const gana = unitAdBase !== null && unitOD < unitAdBase - 0.005;
+        filasOD += '<tr style="border-top:1px dashed var(--borde);text-align:right">' +
+          '<td style="text-align:left;padding:6px 4px"><b>' + hb + ' hojas</b></td>' +
+          '<td>' + piezasOD.toLocaleString('es-AR') + '</td>' +
+          '<td style="color:#5ab8ff;font-weight:800;white-space:nowrap">' + plata(ventaOD) + '</td>' +
+          '<td style="white-space:nowrap">' + plata(Math.round(unitOD*100)/100) + (gana ? ' <span style="color:#4cd27d;font-weight:700">✓</span>' : '') + '</td></tr>';
+      }
+      h += '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(90,184,255,.06);border:1px dashed rgba(90,184,255,.45)">' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:.72rem">' +
+        '<b style="color:#5ab8ff">⚡ Alternativa en offset digital</b>' +
+        '<span style="color:var(--texto2)">' + posOD.n + ' poses/hoja · papel ' + key + 'g' + (key !== gram ? ' (el más cercano a ' + gram + 'g)' : '') + ' · ' + adColSel + ' · margen ' + od.margen + '%</span>' +
+        '<span style="color:var(--texto2)">hojas:</span>' +
+        '<input id="adOdCants" value="' + adCfg.odCants + '" style="width:140px;margin:0;padding:6px;font-size:12px;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
+        '</div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:.7rem">' +
+        '<tr style="color:var(--texto2);text-transform:uppercase;font-size:.6rem;letter-spacing:.05em;text-align:right"><td style="text-align:left;padding:4px">Hojas digitales</td><td>Piezas</td><td style="color:#5ab8ff">VENTA</td><td>Unit.</td></tr>' +
+        filasOD + '</table>' +
+        '<div style="font-size:.6rem;color:var(--texto2);margin-top:4px">✓ = unitario mejor que tu pedido en tradicional. Sin corte ni terminaciones; editá las cantidades separadas por coma.</div></div>';
+    }
+  }
   res.innerHTML = h;
   dibujarEsquemaAd(opciones[0].op);
+  const inOdCants = document.getElementById('adOdCants');
+  if(inOdCants) inOdCants.addEventListener('change', ()=>{ adCfg.odCants = inOdCants.value; guardarDatos(); calcularAd(); });
+  adUltimasOpciones = opciones;
+  adUltimoCtx = {pzW, pzH, papel, colTxt: adColSel};
+  const bpdf = document.getElementById('adBtnPdf');
+  if(bpdf) bpdf.onclick = ()=> generarPDFAd();
+  const tpos = document.getElementById('adTogglePosado');
+  if(tpos) tpos.onclick = ()=>{ adPdfConPosado = !adPdfConPosado; calcularAd(); };
   const lista = opciones;
   res.querySelectorAll('.adUsar').forEach((btn, i)=>{
     btn.onclick = ()=>{
