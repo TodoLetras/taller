@@ -1,4 +1,4 @@
-const CACHE = 'taller-v7';
+const CACHE = 'taller-v10';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-180.png', './cotizador.html', './pdf-assets.js'];
 
 self.addEventListener('install', e => {

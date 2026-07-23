@@ -240,7 +240,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v45</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v48</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -1148,23 +1148,6 @@ async function cargar(){
       }
       clientes.forEach(c=>delete c.tipo);
       proveedores.forEach(c=>delete c.tipo);
-      // Soldado Ruis: proveedor de impresión UV (lona y vinilo) + sus materiales
-      if(!proveedores.find(x=> normalizarTexto(x.nombre).includes('soldado'))){
-        proveedores.push({id:uid(), nombre:'Soldado Ruis', dir:'', mail:'', notas:'Proveedor de impresión UV (lona y vinilo)'});
-      }
-      if(uv && uv.mats && !uv.mats.find(m=> normalizarTexto(m.nombre||'').includes('soldado'))){
-        const matsSR = [
-          {nombre:'Lona UV 13 oz · Soldado Ruis', costo:6319, instM2:15000},
-          {nombre:'Lona UV 8 oz · Soldado Ruis', costo:4971, instM2:15000},
-          {nombre:'Vinilo UV base blanca · Soldado Ruis', costo:4941},
-          {nombre:'Vinilo UV base gris · Soldado Ruis', costo:5558},
-          {nombre:'Vinilo UV microperforado · Soldado Ruis', costo:11532.15},
-        ];
-        for(const m of matsSR) uv.mats.push({id:uid()+Math.random().toString(36).slice(2,4), ...m});
-      }
-      if(!productos.find(x=> normalizarTexto(x.nombre)==='limpieza de vidriera')){
-        productos.push({id:uid(), nombre:'Limpieza de vidriera', precio:10000, rubro:'Otros'});
-      }
       iniciar(); return;
     }
   }catch(e){}
@@ -1196,7 +1179,35 @@ async function guardarDatos(){
     marcarEstadoGuardado(ok);
   }catch(e){ marcarEstadoGuardado(false); }
 }
-function iniciar(){ migrarClientes(); asegurarOrden(); renderFiltros(); render(); renderCalendario(); renderClientes(); }
+function migrarSoldadoRuis(){
+  // proveedor de impresión UV (lona y vinilo) + sus materiales + limpieza de vidriera
+  if(!proveedores.find(x=> normalizarTexto(x.nombre||'').includes('soldado'))){
+    proveedores.push({id:uid(), nombre:'Soldado Ruis', dir:'', mail:'', notas:'Proveedor de impresión UV (lona y vinilo)'});
+  }
+  if(uv && uv.mats && !uv.mats.find(m=> normalizarTexto(m.nombre||'').includes('soldado'))){
+    const matsSR = [
+      {nombre:'Lona UV 13 oz · tintas UV alternativas · Soldado Ruis', costo:6319, instM2:15000},
+      {nombre:'Lona UV 8 oz · tintas UV alternativas · Soldado Ruis', costo:4971, instM2:15000},
+      {nombre:'Vinilo UV base blanca · tintas UV alternativas · Soldado Ruis', costo:4941},
+      {nombre:'Vinilo UV base gris · tintas UV alternativas · Soldado Ruis', costo:5558},
+      {nombre:'Vinilo UV microperforado · tintas UV alternativas · Soldado Ruis', costo:11532.15},
+    ];
+    for(const m of matsSR) uv.mats.push({id:uid()+Math.random().toString(36).slice(2,4), ...m});
+  }
+  // etiquetas de tintas: Soldado Ruis = alternativas, el resto (Pablo) = originales Mimaki
+  if(uv && uv.mats) for(const m of uv.mats){
+    const n = normalizarTexto(m.nombre||'');
+    if(n.includes('soldado')){
+      if(!n.includes('alternativa')) m.nombre = m.nombre.replace(' · Soldado Ruis','') + ' · tintas UV alternativas · Soldado Ruis';
+    }else if(!n.includes('mimaki') && !n.includes('alternativa')){
+      m.nombre = m.nombre + ' · tintas originales Mimaki';
+    }
+  }
+  if(!productos.find(x=> normalizarTexto(x.nombre||'')==='limpieza de vidriera')){
+    productos.push({id:uid(), nombre:'Limpieza de vidriera', precio:10000, rubro:'Otros'});
+  }
+}
+function iniciar(){ migrarClientes(); migrarSoldadoRuis(); asegurarOrden(); renderFiltros(); render(); renderCalendario(); renderClientes(); }
 function migrarClientes(){
   let cambio = false;
   for(const t of tareas){
@@ -5785,7 +5796,7 @@ async function generarPDFPedido(p){
     doc.setFontSize(11);
     const items = p.items.filter(it=> it.conf !== false);
     for(const it of items){
-      const texto = it.nombre + (it.cant > 1 ? ' × ' + it.cant + (it.mo ? ' h' : '') : '') + (it.abierto ? ' *' : '');
+      const texto = it.nombre + (it.uv ? ' · ' + (it.base||0) + '×' + (it.altura||0) + ' cm' : '') + (it.cant > 1 ? ' × ' + it.cant + (it.mo ? ' h' : (it.uv ? 'u' : '')) : '') + (it.abierto ? ' *' : '');
       const lineas = doc.splitTextToSize(texto, W - margen*2 - 110);
       const alto = lineas.length * 14 + 10;
       saltoSiHaceFalta(alto);
