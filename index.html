@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v68</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v69</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -314,7 +314,10 @@
   <div class="hoja">
     <h2>🧾 Pedido</h2>
     <label>Nombre del trabajo</label>
-    <input id="pedNombre" class="buscador-cli" placeholder="Ej: Cartel entrada · Banderas · Menú verano…" style="margin-bottom:6px">
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <input id="pedNombre" class="buscador-cli" placeholder="Ej: Cartel entrada · Banderas · Menú verano…" style="margin-bottom:0;flex:1">
+      <button id="pedChat" title="Chat del trabajo: notas, fotos y audios compartidos con Gastón" style="background:var(--panel2);border:1px solid var(--borde);border-radius:10px;padding:9px 13px;font-size:1rem">💬</button>
+    </div>
     <label>Cliente</label>
     <div class="cats-pick" id="pedCliente"></div>
     <label>Tareas del trabajo</label>
@@ -3306,6 +3309,23 @@ function abrirPedido(id){
   const inNom = document.getElementById('pedNombre');
   inNom.value = p.nombre || '';
   inNom.oninput = ()=>{ p.nombre = inNom.value.trim(); guardarDatos(); renderPedidos(); };
+  const bChat = document.getElementById('pedChat');
+  if(bChat) bChat.onclick = ()=>{
+    // chat del trabajo: usa la tarea vinculada; si el pedido no tiene, la crea al toque
+    let t = tareas.filter(x=> x.pedido === p.id).sort((a,b)=> (a.orden||0)-(b.orden||0))[0];
+    if(!t){
+      const minOrden = tareas.length ? Math.min(...tareas.map(x=> x.orden||0)) : 0;
+      t = {id: uid(),
+        texto: (p.nombre ? p.nombre : 'Trabajo') + ' · ' + (nombreClienteId(p.cliente)||'sin cliente'),
+        cliente: p.cliente || null, pedido: p.id, cat: null, fecha: null,
+        adj: 0, orden: minOrden - 10, creado: Date.now()};
+      tareas.unshift(t);
+      registrar('creó la ficha de chat del trabajo "' + t.texto.slice(0,50) + '"');
+      guardarDatos(); render();
+    }
+    modalPedido.classList.remove('abierto');
+    abrirDetalle(t.id);
+  };
   renderPedidoItems(p);
   renderPedidoEstados(p);
   renderEtapaEtiquetas(p);
