@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v66</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v67</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -575,6 +575,12 @@
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
       <label style="font-size:.74rem;color:var(--texto2);margin:0">✂️ Corte guillotina $</label>
       <input id="adCorte" type="number" inputmode="numeric" placeholder="0 (AD no cobra ≤16 poses)" style="flex:1;margin:0">
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <label style="font-size:.74rem;color:var(--texto2);margin:0">📑 Intercalado $</label>
+      <input id="adIntercalado" type="number" inputmode="numeric" placeholder="0 (a mano por ahora)" style="flex:1;margin:0">
+      <label style="font-size:.74rem;color:var(--texto2);margin:0">📘 Binder $</label>
+      <input id="adBinder" type="number" inputmode="numeric" placeholder="0 (a mano por ahora)" style="flex:1;margin:0">
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <label style="font-size:.74rem;color:var(--texto2);margin:0">✨ Plastificado / barniz</label>
@@ -6509,14 +6515,18 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
         nota = (nota ? nota + ' · ' : '') + '✨ ' + plastNombre;
       }
     }
-    const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto + plastCosto;
+    const intercaladoCosto = parseFloat((document.getElementById('adIntercalado')||{}).value)||0;
+    const binderCosto = parseFloat((document.getElementById('adBinder')||{}).value)||0;
+    if(intercaladoCosto > 0) nota = (nota ? nota + ' · ' : '') + '📑 intercalado';
+    if(binderCosto > 0) nota = (nota ? nota + ' · ' : '') + '📘 binder';
+    const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto + plastCosto + intercaladoCosto + binderCosto;
     const margen = adMargen(paquetes);
     const venta = Math.round(costo * (1 + margen/100));
     const paqDec = Math.round((hojas / papel.hojas) * 100) / 100;
     const op = {maquina: maq.nombre, plW: plLargo, plH: plCorto, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes, paqDec,
       piezas, costo, margen, venta, unitario: piezas>0 ? venta/piezas : 0, nota, millares, pasadasN, pliegosNetos,
       layout: posesManual > 0 ? null : layoutDet, pinza, marg, pzW, pzH,
-      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, plastCosto, plastNombre, millares, millarUnit,
+      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, plastCosto, plastNombre, intercaladoCosto, binderCosto, millares, millarUnit,
       posturas: v.posturas, chapas: v.chapas, pliegosPorHoja, papelCosto,
       detalle: (v.libro ? '📖 LIBRO: ' + v.libro.hojas + ' hojas (' + (v.libro.hojas*2) + ' páginas) · ' + v.juegos + ' pliegos tipo (' + v.libro.plColor + ' a ' + v.libro.colN + '/' + v.libro.colN + ' + ' + v.libro.plBN + ' a 1/1) · cantidad = ejemplares · ' : '') + (v.giro
         ? 'GIRO mariposa: 1 juego de ' + v.chapas + ' chapas · ' + v.poses + ' poses/pliego (' + (v.poses/2) + ' frentes + ' + (v.poses/2) + ' dorsos)'
@@ -6853,7 +6863,7 @@ function calcularAd(){
     };
   });
 }
-for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg','adOriginales','adHojasColor']) document.getElementById(id).addEventListener('input', calcularAd);
+for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg','adOriginales','adHojasColor','adIntercalado','adBinder']) document.getElementById(id).addEventListener('input', calcularAd);
 document.getElementById('adRecargoChk').addEventListener('change', calcularAd);
 document.getElementById('adPapAgregar').onclick = ()=>{
   const n = document.getElementById('adPapNombre').value.trim();
