@@ -242,7 +242,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v56</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v61</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
@@ -541,7 +541,7 @@
       <input id="adW" type="number" inputmode="decimal" placeholder="Ancho" style="flex:1;margin:0">
       <span style="color:var(--texto2)">×</span>
       <input id="adH" type="number" inputmode="decimal" placeholder="Alto" style="flex:1;margin:0">
-      <input id="adCant" type="number" inputmode="numeric" placeholder="Cantidad" style="flex:1;margin:0">
+      <input id="adCant" type="text" inputmode="numeric" placeholder="Cantidad (una o varias: 250, 500, 750, 1000)" style="flex:1;margin:0">
       <input id="adPoses" type="number" inputmode="numeric" placeholder="Poses (auto)" title="Dejalo vacío para el cálculo automático, o escribí las poses reales de tu imposición" style="flex:1;margin:0">
       <input id="adPinza" type="number" inputmode="decimal" value="1.5" title="Pinza (cm): franja que toma la máquina a lo largo del lado largo del pliego" style="width:70px;margin:0">
       <input id="adMarg" type="number" inputmode="decimal" value="1" title="Margen lateral (cm) por costado" style="width:64px;margin:0">
@@ -1186,6 +1186,39 @@ function migrarSoldadoRuis(){
   if(typeof uv === 'object' && uv){
     if(uv.costuraCosto === undefined) uv.costuraCosto = 2000;
     if(uv.varillaCosto === undefined) uv.varillaCosto = 500;
+  }
+  // Lista LMK 01/08/2026 · columna Mimaki UV-LED Premium (sin IVA, salido de máquina).
+  // Actualiza UNA sola vez los costos de los materiales propios (no toca los de Soldado Ruis).
+  if(typeof uv === 'object' && uv && uv.mats && !uv.lmk0826){
+    const reglas = [
+      [['medio corte'], 26808],
+      [['lona front'], 15886],
+      [['lona back'], 18848],
+      [['lona mesh','mesh'], 17780],
+      [['blackout'], 19104],
+      [['brillante'], 15437],
+      [['transparente'], 16016],
+      [['lg1810','arlon'], 20386],
+      [['2710','intermedio'], 22633],
+      [['oracal','vehicular'], 38163],
+      [['thermo'], 66875],
+      [['microperforado'], 22185],
+      [['esmerilado'], 34604],
+      [['tela de bandera','bandera'], 34433],
+      [['ecocuero'], 47401],
+      [['vinilo mate'], 15662],
+    ];
+    for(const m of uv.mats){
+      if((m.prov||'').toLowerCase().includes('soldado')) continue;
+      const n = normalizarTexto(m.nombre||'');
+      for(const [claves, costo] of reglas){
+        if(claves.some(c=> n.includes(c))){
+          if(m.costo !== costo){ m.costoAnterior = m.costo; m.costo = costo; }
+          break;
+        }
+      }
+    }
+    uv.lmk0826 = true;
   }
   // corrección de medida máxima de la Komori: 64×47 (antes figuraba 64×46)
   if(typeof adCfg === 'object' && adCfg.maquinas && adCfg.maquinas.komori && adCfg.maquinas.komori.H === 46){
@@ -3208,6 +3241,7 @@ function renderPedidoItems(p){
           '<input class="costuraM" type="number" inputmode="decimal" step="0.1" min="0" title="metros lineales de vulcanizado" style="width:64px"><span class="lblCostura" style="display:none">m ·</span>' +
           '<button class="togVarilla"></button>' +
           '<input class="varillaM" type="number" inputmode="decimal" step="0.1" min="0" title="metros lineales de varilla" style="width:64px"><span class="lblVarilla" style="display:none">m</span>' +
+          '<button class="uvCostoBtn" title="Costo real del trabajo (lo que te cobra el proveedor). Tocá para corregirlo."></button>' +
         '</div>' +
         '<div class="pi-medidas"><span class="pi-impresion"></span>' +
           '<input class="ventaMan" type="number" inputmode="numeric" placeholder="venta pactada $" title="Escribí el precio total que pactaste para este ítem; la fórmula queda de lado. Vaciá el campo para volver al cálculo." style="width:130px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--fondo);border:1px dashed #4cd27d;border-radius:8px;color:#4cd27d">' +
@@ -3264,6 +3298,39 @@ function renderPedidoItems(p){
       iCo.addEventListener('change', ()=>{ const v = parseFloat(iCo.value)||0; it.costuraM = v>0 ? v : null; pintarExtras(); refrescar(); renderPedidos(); });
       iVa.addEventListener('change', ()=>{ const v = parseFloat(iVa.value)||0; it.varillaM = v>0 ? v : null; pintarExtras(); refrescar(); renderPedidos(); });
       pintarExtras();
+      // costo real del trabajo (editable, para cuando el proveedor pasa otro precio)
+      const bCosto = d.querySelector('.uvCostoBtn');
+      const pintarCosto = ()=>{
+        const c = costoItem(it);
+        bCosto.textContent = '🧾 costo ' + (c===null ? '—' : plata(c)) + (it.uvCostoAjustado ? ' ✓' : '');
+        bCosto.style.cssText = 'background:none;border:1px dashed ' + (it.uvCostoAjustado?'#4cd27d':'var(--borde)') + ';border-radius:8px;padding:5px 8px;font-size:.68rem;font-weight:700;color:' + (it.uvCostoAjustado?'#4cd27d':'var(--texto2)') + ';white-space:nowrap';
+      };
+      bCosto.onclick = ()=>{
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.inputMode = 'numeric';
+        const cAct = costoItem(it);
+        inp.value = cAct===null ? '' : Math.round(cAct);
+        inp.placeholder = 'costo total $';
+        inp.style.cssText = 'width:110px;margin:0;font-size:13px;padding:5px 8px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+        bCosto.replaceWith(inp); inp.focus();
+        const confirmar = ()=>{
+          const nuevo = parseFloat(inp.value)||0;
+          if(nuevo > 0){
+            const aT = (it.base||0) + 2*(it.demAncho||0);
+            const hT = (it.altura||0) + 2*(it.demAlto||0);
+            const m2tot = (aT/100)*(hT/100)*(it.cant||1);
+            if(m2tot > 0){
+              it.costoM2 = nuevo/m2tot;
+              it.uvCostoAjustado = true;
+              registrar('corrigió el costo real de "' + (it.nombre||'ítem UV') + '" a ' + plata(nuevo));
+            }
+          }
+          guardarDatos(); renderPedidoItems(p); renderPedidos();
+        };
+        inp.addEventListener('change', confirmar);
+        inp.addEventListener('blur', confirmar);
+      };
+      pintarCosto();
       imp.textContent = 'Impresión: ' + medidaImpresion(it);
       sub.textContent = '= ' + plata(subtotalItem(it));
       for(const el of [inB, inA, inC, inDA, inDH]) el.addEventListener('input', refrescar);
@@ -5853,21 +5920,39 @@ async function generarPDFAd(){
       }
     }
     const colCant = margen, colUnit = W - margen - 140, colTot = W - margen;
-    doc.setFont('Fira','bold'); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
-    doc.text('CANTIDAD', colCant, y);
-    doc.text('UNITARIO', colUnit, y, {align:'right'});
-    doc.text('TOTAL', colTot, y, {align:'right'});
-    y += 6;
-    doc.setDrawColor(190,190,190); doc.line(margen, y, W - margen, y);
-    y += 17;
-    doc.setFontSize(11);
-    for(const {op} of adUltimasOpciones){
-      doc.setFont('Fira','normal'); doc.setTextColor(30,30,30);
+    const pedidoOps = adUltimasOpciones.filter(x=> x.etq && x.etq.startsWith('Tu pedido'));
+    const otrasOps  = adUltimasOpciones.filter(x=> !(x.etq && x.etq.startsWith('Tu pedido')));
+    const encabezadoTabla = ()=>{
+      doc.setFont('Fira','bold'); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
+      doc.text('CANTIDAD', colCant, y);
+      doc.text('UNITARIO', colUnit, y, {align:'right'});
+      doc.text('TOTAL', colTot, y, {align:'right'});
+      y += 6;
+      doc.setDrawColor(190,190,190); doc.line(margen, y, W - margen, y);
+      y += 17;
+    };
+    const filaOp = (op, destacada)=>{
+      doc.setFontSize(destacada ? 12 : 11);
+      doc.setFont('Fira', destacada ? 'bold' : 'normal'); doc.setTextColor(30,30,30);
       doc.text(op.piezas.toLocaleString('es-AR') + ' unidades', colCant, y);
+      doc.setFont('Fira','normal');
       doc.text(plata(Math.round(op.unitario*100)/100) + ' c/u', colUnit, y, {align:'right'});
       doc.setFont('Fira','bold');
       doc.text(plata(op.venta), colTot, y, {align:'right'});
-      y += 20;
+      y += destacada ? 22 : 20;
+    };
+    if(pedidoOps.length){
+      doc.setFont('Fira','bold'); doc.setFontSize(11); doc.setTextColor(30,30,30);
+      doc.text(pedidoOps.length > 1 ? 'Cantidades solicitadas' : 'Su pedido', margen, y); y += 15;
+      encabezadoTabla();
+      for(const {op} of pedidoOps) filaOp(op, true);
+      y += 6;
+    }
+    if(otrasOps.length){
+      doc.setFont('Fira','bold'); doc.setFontSize(11); doc.setTextColor(30,30,30);
+      doc.text('Otras cantidades — precios por escala', margen, y); y += 15;
+      encabezadoTabla();
+      for(const {op} of otrasOps) filaOp(op, false);
     }
     y += 8;
     doc.setFont('Fira','normal'); doc.setFontSize(8.5); doc.setTextColor(130,130,130);
@@ -6042,7 +6127,7 @@ document.getElementById('pedPDF').onclick = ()=>{
 /* ---------- offset tradicional AD (GTO / Komori) ---------- */
 const modalAd = document.getElementById('modalAd');
 let adPedido = null, adColSel = '4/4';
-let adPdfConPosado = false, adUltimasOpciones = null, adUltimoCtx = null;
+let adPdfConPosado = false, adUltimasOpciones = null, adUltimoCtx = null, adSinGiro = false;
 const AD_COLORES = [['1/0',1,0],['1/1',1,1],['2/0',2,0],['2/2',2,2],['4/0',4,0],['4/1',4,1],['4/4',4,4]];
 function adEncajeDet(pw, ph, W, H){
   function o(a, b, rot){
@@ -6132,7 +6217,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
     // giro mariposa: mitad frentes, mitad dorsos en la MISMA chapa; tras las dos
     // pasadas cada pliego rinde TODAS las poses como piezas terminadas
     const posesPar = poses - (poses % 2);
-    variantes.push({giro:true, poses: posesPar, posturas:1, chapas: cf,
+    if(!adSinGiro) variantes.push({giro:true, poses: posesPar, posturas:1, chapas: cf,
       postCosto: tar.post[cf]||0,
       pasadas: [{t: tar.millar[cf]||0, n:2}]});
   }
@@ -6165,12 +6250,13 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
       }
     }
     const pliegosNetos = Math.max(0, pliegos - adCfg.demasia * v.posturas);
-    let millarCosto = 0, millares = 0, millarUnit = 0;
+    let millarCosto = 0, millares = 0, millarUnit = 0, pasadasN = 0;
     for(const g of v.pasadas){
       const mi = Math.ceil(pliegosNetos * g.n / 1000);
       millares += mi;
       millarCosto += mi * g.t;
       millarUnit = g.t; // si hay una sola tarifa, es esta; si hay dos, abajo se promedia
+      pasadasN += g.n;
     }
     if(v.pasadas.length > 1 && millares > 0) millarUnit = Math.round(millarCosto / millares);
     const chapasCosto = v.chapas * maq.ctp;
@@ -6180,7 +6266,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
     const venta = Math.round(costo * (1 + margen/100));
     const paqDec = Math.round((hojas / papel.hojas) * 100) / 100;
     const op = {maquina: maq.nombre, plW: plLargo, plH: plCorto, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes, paqDec,
-      piezas, costo, margen, venta, unitario: piezas>0 ? venta/piezas : 0, nota,
+      piezas, costo, margen, venta, unitario: piezas>0 ? venta/piezas : 0, nota, millares, pasadasN, pliegosNetos,
       layout: posesManual > 0 ? null : layoutDet, pinza, marg, pzW, pzH,
       postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, millares, millarUnit,
       posturas: v.posturas, chapas: v.chapas, pliegosPorHoja, papelCosto,
@@ -6320,16 +6406,17 @@ function calcularAd(){
   const res = document.getElementById('adResultado');
   const pzW = parseFloat(document.getElementById('adW').value)||0;
   const pzH = parseFloat(document.getElementById('adH').value)||0;
-  const q = parseInt(document.getElementById('adCant').value)||0;
+  const qLista = String(document.getElementById('adCant').value||'').replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1').split(/[^0-9]+/).map(Number).filter(x=>x>0).slice(0,10);
+  const q = qLista[0]||0;
   const papel = adPapeles.find(x=>x.id===document.getElementById('adPapel').value);
   const col = AD_COLORES.find(c=>c[0]===adColSel);
   if(!pzW || !pzH || !papel || !col){ res.innerHTML = '<div class="vacio" style="padding:10px">Completá pieza, colores y papel.</div>'; return; }
   if(!papel.precio){ res.innerHTML = '<div class="vacio" style="padding:10px;color:#ff7a7a">⚠️ Ese papel no tiene precio cargado: ponéselo en ⚙️ Papeles (mirá papeles.net).</div>'; return; }
   const [, cf, cd] = col;
   const opciones = [];
-  if(q > 0){
-    const op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'cantidad', q});
-    if(op) opciones.push({etq: 'Tu pedido: ' + q + ' u', op, piezasFix: q});
+  for(const qi of qLista){
+    const op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'cantidad', q: qi});
+    if(op) opciones.push({etq: 'Tu pedido: ' + qi + ' u', op, piezasFix: qi});
   }
   for(let n=1; n<=4; n++){
     const op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'paquetes', n});
@@ -6347,7 +6434,7 @@ function calcularAd(){
       '<td>' + op.pliegos.toLocaleString('es-AR') + '</td>' +
       '<td><b>' + op.piezas.toLocaleString('es-AR') + '</b></td>' +
       '<td>' + plata(op.papelCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.paqDec.toLocaleString('es-AR') + ' paq</span></td>' +
-      '<td>' + plata(op.millarCosto) + '</td>' +
+      '<td>' + plata(op.millarCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.millares + ' mill · ' + op.pliegosNetos.toLocaleString('es-AR') + ' pl × ' + op.pasadasN + (op.pasadasN>1?' pasadas':' pasada') + '</span></td>' +
       '<td>' + plata(op.chapasCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.chapas + ' ch</span></td>' +
       '<td>' + plata(op.postCosto) + '</td>' +
       '<td>' + plata(op.corteCosto) + '</td>' +
@@ -6361,6 +6448,7 @@ function calcularAd(){
   h += '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">' +
     '<button id="adBtnPdf" style="background:var(--panel2);border:1px dashed #4cd27d;color:#4cd27d;border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem">📄 PDF para el cliente</button>' +
     '<button id="adTogglePosado" style="background:var(--panel2);border:1px dashed var(--borde);border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;color:' + (adPdfConPosado ? '#4cd27d' : 'var(--texto2)') + '">' + (adPdfConPosado ? '☑' : '☐') + ' incluir esquema de posado</button>' +
+    '<button id="adToggleGiro" style="background:var(--panel2);border:1px dashed ' + (adSinGiro ? '#ff7a7a' : 'var(--borde)') + ';border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;color:' + (adSinGiro ? '#ff7a7a' : 'var(--texto2)') + '">' + (adSinGiro ? '🚫 sin giro mariposa (chapas separadas)' : '🦋 giro mariposa permitido') + '</button>' +
     '<span style="font-size:.62rem;color:var(--texto2)">El PDF muestra solo cantidades, unitario y total (sin costos internos).</span></div>';
   // sugerencia: mismo gramaje en otros formatos de hoja, ¿alguno da mejor unitario?
   if(q > 0 && opciones.length){
@@ -6431,6 +6519,8 @@ function calcularAd(){
   if(bpdf) bpdf.onclick = ()=> generarPDFAd();
   const tpos = document.getElementById('adTogglePosado');
   if(tpos) tpos.onclick = ()=>{ adPdfConPosado = !adPdfConPosado; calcularAd(); };
+  const tgiro = document.getElementById('adToggleGiro');
+  if(tgiro) tgiro.onclick = ()=>{ adSinGiro = !adSinGiro; calcularAd(); };
   const lista = opciones;
   res.querySelectorAll('.adUsar').forEach((btn, i)=>{
     btn.onclick = ()=>{
