@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v67</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v68</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -6520,6 +6520,33 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     if(intercaladoCosto > 0) nota = (nota ? nota + ' · ' : '') + '📑 intercalado';
     if(binderCosto > 0) nota = (nota ? nota + ' · ' : '') + '📘 binder';
     const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto + plastCosto + intercaladoCosto + binderCosto;
+    // ===== DESGLOSE AUDITABLE: cada renglón con su cuenta =====
+    const des = [];
+    des.push('✂️ Corte de hoja: ' + papel.W + '×' + papel.H + ' cortada en ' + pliegosPorHoja + ' (' + cortePl.nc + '×' + cortePl.nf + ') → pliego máquina ' + plLargo + '×' + plCorto + ' cm' + (cortePl.refi ? ' (refilado de ' + cortePl.origW + '×' + cortePl.origH + ')' : ''));
+    if(v.libro){
+      des.push('📖 Libro: ' + v.libro.hojas + ' hojas (' + (v.libro.hojas*2) + ' páginas), ' + v.libro.hojasColor + ' hojas a color · ' + v.poses + ' hojas por pliego → ' + v.juegos + ' pliegos tipo: ' + v.libro.plColor + ' a ' + v.libro.colN + '/' + v.libro.colN + ' + ' + v.libro.plBN + ' a 1/1');
+      des.push('📄 Pliegos máquina: ' + v.juegos + ' tipos × ' + piezas.toLocaleString('es-AR') + ' ejemplares = ' + pliegosNetos.toLocaleString('es-AR') + ' netos + demasía ' + adCfg.demasia + ' × ' + v.posturas + ' posturas = ' + pliegos.toLocaleString('es-AR') + ' totales');
+    }else{
+      des.push('📄 Pliegos máquina: ' + (modo.tipo==='paquetes' ? pliegos.toLocaleString('es-AR') + ' (por papel)' : Math.ceil(modo.q / v.poses).toLocaleString('es-AR') + ' netos (' + modo.q.toLocaleString('es-AR') + ' piezas ÷ ' + v.poses + ' poses) + demasía ' + (adCfg.demasia*v.posturas) + ' = ' + pliegos.toLocaleString('es-AR') + ' totales'));
+    }
+    des.push('🧻 Papel: ' + pliegos.toLocaleString('es-AR') + ' pliegos ÷ ' + pliegosPorHoja + ' por hoja = ' + hojas.toLocaleString('es-AR') + ' hojas (' + (Math.round(hojas/papel.hojas*100)/100) + ' paq de ' + papel.hojas + 'h a ' + plata(papel.precio||0) + ') → ' + plata(papelCosto) + (nota.includes('papel abierto') ? ' (' + (nota.split(' · ')[0]) + ')' : ''));
+    if(v.libro){
+      des.push('🔩 Chapas: ' + v.libro.plColor + ' pliegos color × 2 caras × ' + v.libro.colN + ' = ' + (v.libro.plColor*2*v.libro.colN) + ' a color + ' + v.libro.plBN + ' × 2 × 1 = ' + (v.libro.plBN*2) + ' a negro → ' + v.chapas + ' chapas × ' + plata(maq.ctp) + ' = ' + plata(chapasCosto));
+      des.push('⚙️ Posturas: ' + (v.libro.plColor*2) + ' a color × ' + plata(tar.post[v.libro.colN]||0) + ' + ' + (v.libro.plBN*2) + ' a negro × ' + plata(tar.post[1]||0) + ' = ' + plata(v.postCosto));
+    }else{
+      des.push('🔩 Chapas: ' + v.chapas + ' × ' + plata(maq.ctp) + ' = ' + plata(chapasCosto));
+      des.push('⚙️ Posturas: ' + v.posturas + ' → ' + plata(v.postCosto));
+    }
+    for(const g of v.pasadas){
+      const pas = Math.round(pliegosNetos * g.n);
+      const mi = Math.ceil(pliegosNetos * g.n / 1000);
+      des.push('🖨 Millar' + (v.libro && v.pasadas.length>1 ? (g.t===(tar.millar[v.libro.colN]||0) ? ' COLOR' : ' NEGRO') : '') + ': ' + pas.toLocaleString('es-AR') + ' pasadas → ' + mi + ' millar(es) × ' + plata(g.t) + ' = ' + plata(mi*g.t));
+    }
+    if(corteCosto > 0) des.push('✂️ Corte guillotina: ' + plata(corteCosto));
+    if(plastCosto > 0) des.push('✨ Plastificado ' + plastNombre + ': ' + pliegosNetos.toLocaleString('es-AR') + ' pliegos × ' + (Math.round((plLargo/100)*(plCorto/100)*1000)/1000) + ' m² × tarifa' + (pliegosNetos < 1000 ? ' + $12.000 enganche' : '') + (/reserva/i.test(plastNombre) ? ' + $25.000 cama' : '') + ' = ' + plata(plastCosto));
+    if(intercaladoCosto > 0) des.push('📑 Intercalado: ' + plata(intercaladoCosto));
+    if(binderCosto > 0) des.push('📘 Binder: ' + plata(binderCosto));
+    des.push('Σ COSTO: ' + plata(costo));
     const margen = adMargen(paquetes);
     const venta = Math.round(costo * (1 + margen/100));
     const paqDec = Math.round((hojas / papel.hojas) * 100) / 100;
@@ -6528,6 +6555,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
       layout: posesManual > 0 ? null : layoutDet, pinza, marg, pzW, pzH,
       postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, plastCosto, plastNombre, intercaladoCosto, binderCosto, millares, millarUnit,
       posturas: v.posturas, chapas: v.chapas, pliegosPorHoja, papelCosto,
+      desglose: des.concat(['📈 Margen: +' + margen + '% → VENTA ' + plata(venta) + (piezas>0 ? ' (' + plata(Math.round(venta/piezas*100)/100) + ' por ' + (v.libro ? 'ejemplar' : 'pieza') + ')' : '')]),
       detalle: (v.libro ? '📖 LIBRO: ' + v.libro.hojas + ' hojas (' + (v.libro.hojas*2) + ' páginas) · ' + v.juegos + ' pliegos tipo (' + v.libro.plColor + ' a ' + v.libro.colN + '/' + v.libro.colN + ' + ' + v.libro.plBN + ' a 1/1) · cantidad = ejemplares · ' : '') + (v.giro
         ? 'GIRO mariposa: 1 juego de ' + v.chapas + ' chapas · ' + v.poses + ' poses/pliego (' + (v.poses/2) + ' frentes + ' + (v.poses/2) + ' dorsos)'
         : v.posturas + ' juego(s) de chapas (' + v.chapas + ' en total) · ' + v.poses + ' poses/pliego') +
@@ -6730,6 +6758,7 @@ function calcularAd(){
           venta: op.venta + opT.venta,
           unitario: qi > 0 ? (op.venta + opT.venta)/qi : 0,
           nota: (op.nota ? op.nota + ' · ' : '') + '📕 tapa ' + plata(opT.venta),
+          desglose: (op.desglose||[]).concat(['— — — 📕 TAPA (' + tapaCfg.papel.nombre + ') — — —']).concat(opT.desglose||[]).concat(['Σ INTERIOR + TAPA: costo ' + plata(op.costo + opT.costo) + ' → VENTA ' + plata(op.venta + opT.venta)]),
           detalle: op.detalle + ' — 📕 TAPA (' + tapaCfg.papel.nombre + ' ' + tapaCfg.W + '×' + tapaCfg.H + (tapaCfg.plast ? ' · ' + tapaCfg.plast : '') + '): ' + opT.detalle};
       }
     }
@@ -6760,7 +6789,8 @@ function calcularAd(){
       '<td>+' + op.margen + '</td>' +
       '<td style="color:#4cd27d;font-weight:800;white-space:nowrap">' + plata(op.venta) + '</td>' +
       '<td style="white-space:nowrap">' + plata(Math.round(op.unitario*100)/100) + '</td>' +
-      '<td><button class="adUsar" data-etq="' + etq + '" style="background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:6px 9px;font-weight:800;font-size:.72rem">＋</button></td></tr>';
+      '<td style="white-space:nowrap"><button class="adVer" style="background:none;border:1px dashed var(--borde);color:var(--texto2);border-radius:8px;padding:6px 8px;font-weight:800;font-size:.72rem">🔍</button> <button class="adUsar" data-etq="' + etq + '" style="background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:6px 9px;font-weight:800;font-size:.72rem">＋</button></td></tr>' +
+      '<tr class="adDetFila" style="display:none"><td colspan="12" style="padding:8px 10px;background:var(--fondo);border-radius:8px"><div style="font-size:.68rem;line-height:1.8;color:var(--texto)">' + (op.desglose||[]).map(l=> '<div>' + l + '</div>').join('') + '</div></td></tr>';
   }
   h += '</table></div>';
   h += '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">' +
@@ -6840,6 +6870,17 @@ function calcularAd(){
   const tgiro = document.getElementById('adToggleGiro');
   if(tgiro) tgiro.onclick = ()=>{ adSinGiro = !adSinGiro; calcularAd(); };
   const lista = opciones;
+  res.querySelectorAll('.adVer').forEach((btn)=>{
+    btn.onclick = ()=>{
+      const fila = btn.closest('tr').nextElementSibling;
+      if(fila && fila.classList.contains('adDetFila')){
+        const abierta = fila.style.display !== 'none';
+        fila.style.display = abierta ? 'none' : '';
+        btn.style.color = abierta ? 'var(--texto2)' : 'var(--ambar)';
+        btn.style.borderColor = abierta ? 'var(--borde)' : 'var(--ambar)';
+      }
+    };
+  });
   res.querySelectorAll('.adUsar').forEach((btn, i)=>{
     btn.onclick = ()=>{
       const {etq, op} = lista[i];
