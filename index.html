@@ -18,6 +18,11 @@
     --fondo:#16181d; --panel:#1f2229; --panel2:#262a33; --borde:#333844;
     --texto:#eef0f4; --texto2:#9aa1b0; --ambar:#ffb020; --radio:14px;
   }
+  body.tema-claro{
+    --fondo:#eceef1; --panel:#f9fafb; --panel2:#e2e5ea; --borde:#b9bfc9;
+    --texto:#20242c; --texto2:#59616e; --ambar:#c47a00;
+  }
+  body.tema-claro header{background:linear-gradient(180deg,#f4f5f7,#eceef1)}
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   body{background:var(--fondo);color:var(--texto);
     font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -242,8 +247,10 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v61</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v63</span></h1>
     <div style="display:flex;gap:6px">
+      <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
+      <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
     </div>
@@ -297,6 +304,8 @@
     <button id="btnProductos" style="flex:1;background:var(--panel);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:12px;font-weight:700;font-size:.78rem">📦 Productos</button>
     <button id="btnCotizador" style="flex:1;background:var(--panel);border:1px solid #ffa730;color:#ffa730;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem">🔤 Corpóreas</button>
   </div>
+  <input id="buscarPedidos" class="buscador-cli" placeholder="🔍 Buscar pedido, cliente, ítem…" style="margin-bottom:8px">
+  <div class="filtros" id="filtrosPedidos" style="padding:0 0 8px"></div>
   <div id="listaPedidos"></div>
 </div>
 
@@ -326,6 +335,10 @@
     </div>
     <label>Estado del presupuesto</label>
     <div class="cats-pick" id="pedEstadoVenta"></div>
+    <label>Etapa del trabajo</label>
+    <div class="cats-pick" id="pedEtapa"></div>
+    <label>Etiquetas</label>
+    <div class="cats-pick" id="pedEtiquetas"></div>
     <label>Cobro</label>
     <div class="cats-pick" id="pedCobro"></div>
     <div id="pedSenas"></div>
@@ -1182,6 +1195,10 @@ async function guardarDatos(){
   }catch(e){ marcarEstadoGuardado(false); }
 }
 function migrarSoldadoRuis(){
+  // etiquetas iniciales de pedidos (agregables desde el pedido)
+  if(typeof adCfg === 'object' && adCfg && !adCfg.etiquetasCat){
+    adCfg.etiquetasCat = ['⏳ Esperando respuesta del cliente','📦 Esperando respuesta del proveedor','🤝 Preguntar al socio'];
+  }
   // precios de terminaciones de lona (costo por metro lineal; venta = × multSin)
   if(typeof uv === 'object' && uv){
     if(uv.costuraCosto === undefined) uv.costuraCosto = 2000;
@@ -1265,6 +1282,35 @@ function migrarSoldadoRuis(){
     productos.push({id:uid(), nombre:'Limpieza de vidriera', precio:10000, rubro:'Otros'});
   }
 }
+/* preferencias visuales POR DISPOSITIVO (no van a Dropbox): tamaño de letra y tema */
+const ZOOMS = [[1,'normal'],[1.15,'grande'],[1.3,'muy grande']];
+function aplicarPrefVisuales(){
+  const z = parseFloat(localStorage.getItem('ui-zoom')||'1');
+  document.body.style.zoom = z;
+  const claro = localStorage.getItem('ui-tema')==='claro';
+  document.body.classList.toggle('tema-claro', claro);
+  const bt = document.getElementById('btnTema');
+  if(bt) bt.textContent = claro ? '🌙' : '☀️';
+}
+(function(){
+  aplicarPrefVisuales();
+  const bl = document.getElementById('btnLetra');
+  if(bl) bl.onclick = ()=>{
+    const z = parseFloat(localStorage.getItem('ui-zoom')||'1');
+    let i = ZOOMS.findIndex(x=> Math.abs(x[0]-z) < 0.01);
+    i = (i+1) % ZOOMS.length;
+    localStorage.setItem('ui-zoom', ZOOMS[i][0]);
+    aplicarPrefVisuales();
+    toast('Letra: ' + ZOOMS[i][1]);
+  };
+  const bt = document.getElementById('btnTema');
+  if(bt) bt.onclick = ()=>{
+    const claro = localStorage.getItem('ui-tema')==='claro';
+    localStorage.setItem('ui-tema', claro ? 'oscuro' : 'claro');
+    aplicarPrefVisuales();
+    toast(claro ? 'Tema oscuro' : 'Tema claro');
+  };
+})();
 function iniciar(){ migrarClientes(); migrarSoldadoRuis(); asegurarOrden(); renderFiltros(); render(); renderCalendario(); renderClientes(); }
 function migrarClientes(){
   let cambio = false;
@@ -3001,6 +3047,103 @@ function nombreClienteId(id){
   const c = clientes.find(x=>x.id===id) || proveedores.find(x=>x.id===id);
   return c ? c.nombre : '(borrado)';
 }
+const ETAPAS = [
+  ['presupuesto','📝 Presupuesto','#9aa1b0'],
+  ['diseno','🎨 Diseño pendiente','#c792ea'],
+  ['impresion','🖨 En impresión','#5ab8ff'],
+  ['instalar','🔧 Para instalar','#ffb020'],
+  ['entregado','📦 Instalado / entregado','#35b8a0'],
+  ['terminado','✅ Terminado','#4cd27d'],
+];
+// etapa efectiva: "presupuesto" es automática mientras no esté confirmado;
+// al confirmar, arranca en "diseño pendiente" hasta que la muevas a mano
+function etapaDe(p){
+  if((p.estadoVenta||'confirmado') === 'presupuesto') return 'presupuesto';
+  return p.etapa && p.etapa !== 'presupuesto' ? p.etapa : 'diseno';
+}
+function faltaCobrar(p){ return (p.estadoVenta||'confirmado') !== 'presupuesto' && p.cobro !== 'cobrado'; }
+let filtroPedidos = 'todos';
+
+function renderFiltrosPedidos(){
+  const f = document.getElementById('filtrosPedidos');
+  if(!f) return;
+  f.innerHTML = '';
+  const mk = (clave, texto, color)=>{
+    const b = document.createElement('button');
+    b.textContent = texto;
+    if(filtroPedidos===clave) b.classList.add('activo');
+    if(color && filtroPedidos===clave){ b.style.background = color+'26'; b.style.color = color; b.style.borderColor = color; }
+    b.onclick = ()=>{ filtroPedidos = (filtroPedidos===clave ? 'todos' : clave); renderPedidos(); };
+    f.appendChild(b);
+  };
+  mk('todos','Todos');
+  mk('cobrar','💰 Falta cobrar','#ffb020');
+  for(const [id,label,color] of ETAPAS) mk('etapa:'+id, label, color);
+  for(const tag of (adCfg.etiquetasCat||[])) mk('tag:'+tag, tag);
+}
+
+function renderEtapaEtiquetas(p){
+  const ce = document.getElementById('pedEtapa');
+  const ct = document.getElementById('pedEtiquetas');
+  if(!ce || !ct) return;
+  const esPresu = (p.estadoVenta||'confirmado') === 'presupuesto';
+  ce.innerHTML = '';
+  for(const [id,label,color] of ETAPAS){
+    const b = document.createElement('button');
+    b.textContent = label;
+    const activa = etapaDe(p)===id;
+    b.style.cssText = 'border-radius:10px;padding:8px 10px;font-weight:700;font-size:.72rem;border:1px ' + (activa?'solid':'dashed') + ' ' + (activa?color:'var(--borde)') + ';background:' + (activa?color+'26':'var(--panel2)') + ';color:' + (activa?color:'var(--texto2)');
+    if(id==='presupuesto'){
+      b.title = 'Se maneja sola con el estado del presupuesto';
+      b.disabled = true; b.style.opacity = activa ? '1' : '.45';
+    }else{
+      b.onclick = ()=>{
+        if(esPresu){ toast('Confirmá el presupuesto primero: mientras tanto la etapa es 📝'); return; }
+        p.etapa = id;
+        registrar('pasó "' + (nombreClienteId(p.cliente)||'pedido') + '" a etapa ' + label);
+        guardarDatos(); renderEtapaEtiquetas(p); renderPedidos();
+      };
+    }
+    ce.appendChild(b);
+  }
+  ct.innerHTML = '';
+  p.etiquetas = p.etiquetas || [];
+  for(const tag of (adCfg.etiquetasCat||[])){
+    const b = document.createElement('button');
+    const activa = p.etiquetas.includes(tag);
+    b.textContent = (activa?'✓ ':'') + tag;
+    b.style.cssText = 'border-radius:10px;padding:8px 10px;font-weight:700;font-size:.72rem;border:1px ' + (activa?'solid #4cd27d':'dashed var(--borde)') + ';background:' + (activa?'rgba(76,210,125,.12)':'var(--panel2)') + ';color:' + (activa?'#4cd27d':'var(--texto2)');
+    b.onclick = ()=>{
+      if(activa) p.etiquetas = p.etiquetas.filter(x=>x!==tag);
+      else p.etiquetas.push(tag);
+      guardarDatos(); renderEtapaEtiquetas(p); renderPedidos();
+    };
+    ct.appendChild(b);
+  }
+  const nueva = document.createElement('button');
+  nueva.textContent = '＋ nueva etiqueta…';
+  nueva.style.cssText = 'border-radius:10px;padding:8px 10px;font-weight:700;font-size:.72rem;border:1px dashed var(--ambar);background:var(--panel2);color:var(--ambar)';
+  nueva.onclick = ()=>{
+    const inp = document.createElement('input');
+    inp.placeholder = 'nombre de la etiqueta';
+    inp.style.cssText = 'margin:0;padding:8px;font-size:13px;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto);width:180px';
+    nueva.replaceWith(inp); inp.focus();
+    const conf = ()=>{
+      const t = (inp.value||'').trim();
+      if(t && !(adCfg.etiquetasCat||[]).includes(t)){
+        adCfg.etiquetasCat = adCfg.etiquetasCat || [];
+        adCfg.etiquetasCat.push(t);
+        p.etiquetas.push(t);
+        registrar('creó la etiqueta "' + t + '"');
+        guardarDatos();
+      }
+      renderEtapaEtiquetas(p); renderFiltrosPedidos(); renderPedidos();
+    };
+    inp.addEventListener('change', conf); inp.addEventListener('blur', conf);
+  };
+  ct.appendChild(nueva);
+}
+
 function renderPedidos(){
   const cont = document.getElementById('listaPedidos');
   if(!cont) return;
@@ -3017,7 +3160,24 @@ function renderPedidos(){
     cont.innerHTML = '<div class="vacio">Sin pedidos todavía. Creá el primero con ＋.</div>';
     return;
   }
-  const ordenados = pedidos.slice().sort((a,b)=> (b.creado||0)-(a.creado||0));
+  renderFiltrosPedidos();
+  const buscado = normalizarTexto((document.getElementById('buscarPedidos')||{}).value||'');
+  let ordenados = pedidos.slice().sort((a,b)=> (b.creado||0)-(a.creado||0));
+  if(filtroPedidos === 'cobrar') ordenados = ordenados.filter(faltaCobrar);
+  else if(filtroPedidos.startsWith('etapa:')) ordenados = ordenados.filter(p=> etapaDe(p) === filtroPedidos.slice(6));
+  else if(filtroPedidos.startsWith('tag:')) ordenados = ordenados.filter(p=> (p.etiquetas||[]).includes(filtroPedidos.slice(4)));
+  if(buscado){
+    ordenados = ordenados.filter(p=>{
+      const textos = [nombreClienteId(p.cliente)||'']
+        .concat((p.items||[]).map(i=> i.nombre||''))
+        .concat(tareas.filter(t=> t.pedido===p.id).map(t=> t.texto||t.nombre||''));
+      return normalizarTexto(textos.join(' ')).includes(buscado);
+    });
+  }
+  if(!ordenados.length){
+    cont.innerHTML += '<div class="vacio">Nada que coincida con la búsqueda o el filtro.</div>';
+    return;
+  }
   for(const p of ordenados){
     const f = document.createElement('div');
     f.className = 'pedido-fila';
@@ -3034,12 +3194,20 @@ function renderPedidos(){
         (p.estadoVenta!=='confirmado' ? '<span class="chip" style="background:'+ev[2]+'26;color:'+ev[2]+'">'+ev[1]+'</span> ' : '') +
         '<span class="chip" style="background:'+ec[2]+'26;color:'+ec[2]+'">'+ec[1]+'</span> ' +
         '<span class="chip" style="background:'+ef[2]+'26;color:'+ef[2]+'">'+ef[1]+'</span>' +
+        (function(){
+          const et = ETAPAS.find(x=>x[0]===etapaDe(p));
+          let h = et && et[0]!=='presupuesto' ? ' <span class="chip" style="background:'+et[2]+'26;color:'+et[2]+'">'+et[1]+'</span>' : '';
+          for(const tag of (p.etiquetas||[])) h += ' <span class="chip" style="background:rgba(154,161,176,.15);color:var(--texto2)">🏷 '+tag+'</span>';
+          return h;
+        })() +
       '</div>';
     f.querySelector('.ped-cli').textContent = nombreClienteId(p.cliente);
     f.onclick = ()=> abrirPedido(p.id);
     cont.appendChild(f);
   }
 }
+const _bp = document.getElementById('buscarPedidos');
+if(_bp) _bp.addEventListener('input', renderPedidos);
 document.getElementById('btnCotizador').onclick = ()=>{ location.href = 'cotizador.html'; };
 async function procesarBandejaCotizador(){
   try{
@@ -3096,6 +3264,7 @@ function abrirPedido(id){
   renderPedidoTareas(p);
   renderPedidoItems(p);
   renderPedidoEstados(p);
+  renderEtapaEtiquetas(p);
   refrescarDescuentoUI(p);
   modalPedido.classList.add('abierto');
 }
@@ -3523,7 +3692,7 @@ function renderPedidoEstadoVenta(p){
     b.onclick = ()=>{
       p.estadoVenta = val;
       registrar('marcó el pedido de ' + nombreClienteId(p.cliente) + ' como ' + nom.replace(/^[^\s]+\s/,''));
-      renderPedidoEstadoVenta(p); guardarDatos(); renderPedidos();
+      renderPedidoEstadoVenta(p); renderEtapaEtiquetas(p); guardarDatos(); renderPedidos();
     };
     cont.appendChild(b);
   }
@@ -3538,7 +3707,7 @@ function renderPedidoEstados(p){
     b.onclick = ()=>{ p.cobro = val;
       registrar('cambió el cobro del pedido de ' + nombreClienteId(p.cliente) + ' a ' + nom);
       if((val==='cobrado' || val==='senado') && p.estadoVenta==='presupuesto'){ p.estadoVenta = 'confirmado'; }
-      registrarCobroAuto(p); registrar('marcó "' + nom.replace(/^[^ ]+ /,'') + '" el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ')'); renderPedidoEstados(p); guardarDatos(); renderPedidos(); };
+      registrarCobroAuto(p); registrar('marcó "' + nom.replace(/^[^ ]+ /,'') + '" el pedido de ' + nombreClienteId(p.cliente) + ' (' + plata(totalPedido(p)) + ')'); renderPedidoEstados(p); renderEtapaEtiquetas(p); guardarDatos(); renderPedidos(); };
     cobro.appendChild(b);
   }
   renderSenas(p);
