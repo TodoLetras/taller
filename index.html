@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v63</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v66</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -313,6 +313,8 @@
 <div class="modal" id="modalPedido">
   <div class="hoja">
     <h2>🧾 Pedido</h2>
+    <label>Nombre del trabajo</label>
+    <input id="pedNombre" class="buscador-cli" placeholder="Ej: Cartel entrada · Banderas · Menú verano…" style="margin-bottom:6px">
     <label>Cliente</label>
     <div class="cats-pick" id="pedCliente"></div>
     <label>Tareas del trabajo</label>
@@ -555,6 +557,8 @@
       <span style="color:var(--texto2)">×</span>
       <input id="adH" type="number" inputmode="decimal" placeholder="Alto" style="flex:1;margin:0">
       <input id="adCant" type="text" inputmode="numeric" placeholder="Cantidad (una o varias: 250, 500, 750, 1000)" style="flex:1;margin:0">
+      <input id="adOriginales" type="number" inputmode="numeric" min="1" placeholder="📖 hojas libro (1)" title="Cantidad de HOJAS distintas del libro (cada hoja = frente y dorso = 2 páginas). Con más de 1, la Cantidad pasa a ser ejemplares." style="width:126px;margin:0">
+      <input id="adHojasColor" type="number" inputmode="numeric" min="0" placeholder="🎨 hojas a color (0)" title="Cuántas de esas hojas van a color, AGRUPADAS en la imposición. Regla: si una página de un pliego va a color, todo el pliego máquina va a color (usa los colores elegidos arriba); el resto va 1/1. Si las hojas a color están salteadas y ocupan más pliegos, subí este número." style="width:136px;margin:0">
       <input id="adPoses" type="number" inputmode="numeric" placeholder="Poses (auto)" title="Dejalo vacío para el cálculo automático, o escribí las poses reales de tu imposición" style="flex:1;margin:0">
       <input id="adPinza" type="number" inputmode="decimal" value="1.5" title="Pinza (cm): franja que toma la máquina a lo largo del lado largo del pliego" style="width:70px;margin:0">
       <input id="adMarg" type="number" inputmode="decimal" value="1" title="Margen lateral (cm) por costado" style="width:64px;margin:0">
@@ -571,6 +575,24 @@
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
       <label style="font-size:.74rem;color:var(--texto2);margin:0">✂️ Corte guillotina $</label>
       <input id="adCorte" type="number" inputmode="numeric" placeholder="0 (AD no cobra ≤16 poses)" style="flex:1;margin:0">
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <label style="font-size:.74rem;color:var(--texto2);margin:0">✨ Plastificado / barniz</label>
+      <select id="adPlast" style="flex:1;min-width:170px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
+      <select id="adPlastFaz" style="width:96px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)">
+        <option value="1">1 faz</option><option value="2">2 faces</option>
+      </select>
+    </div>
+    <div id="adTapaRow" style="display:none;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;padding:8px;border:1px dashed #c792ea;border-radius:10px">
+      <label style="font-size:.74rem;color:#c792ea;margin:0;font-weight:700"><input type="checkbox" id="adTapaChk" style="width:auto;margin:0 4px 0 0">📕 Tapa aparte</label>
+      <select id="adTapaPapel" style="flex:1;min-width:150px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
+      <input id="adTapaW" type="number" inputmode="decimal" title="ancho de la tapa extendida (auto: 2× ancho de hoja; sumale el lomo si hace falta)" style="width:78px;margin:0">
+      <span style="color:var(--texto2)">×</span>
+      <input id="adTapaH" type="number" inputmode="decimal" title="alto de la tapa" style="width:78px;margin:0">
+      <select id="adTapaPlast" style="flex:1;min-width:150px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
+      <select id="adTapaFaz" style="width:96px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)">
+        <option value="1">1 faz</option><option value="2">2 faces</option>
+      </select>
     </div>
     <input id="adDesc" placeholder="Ej: folletos 10x15 full color">
     <div id="adResultado" style="margin-top:10px"></div>
@@ -1195,6 +1217,19 @@ async function guardarDatos(){
   }catch(e){ marcarEstadoGuardado(false); }
 }
 function migrarSoldadoRuis(){
+  // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
+  if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
+    adCfg.plastificados = [
+      {nombre:'OPP brillante', m2:600},
+      {nombre:'OPP mate', m2:600},
+      {nombre:'OPP oro', m2:1000},
+      {nombre:'OPP plata', m2:1000},
+      {nombre:'OPP hologramado', m2:1500},
+      {nombre:'OPP mate touch', m2:1000},
+      {nombre:'Barniz UV brillante completo', m2:350},
+      {nombre:'Barniz UV brillante con reserva', m2:380},
+    ];
+  }
   // etiquetas iniciales de pedidos (agregables desde el pedido)
   if(typeof adCfg === 'object' && adCfg && !adCfg.etiquetasCat){
     adCfg.etiquetasCat = ['⏳ Esperando respuesta del cliente','📦 Esperando respuesta del proveedor','🤝 Preguntar al socio'];
@@ -2481,7 +2516,7 @@ function renderPedidosContacto(id){
       '<div class="mv-info"><div class="mv-concepto" style="font-size:.76rem"></div><div class="mv-quien"></div></div>' +
       '<span class="mv-monto" style="color:var(--texto)">' + plata(totalPedido(p)) + '</span>';
     const primero = (p.items.find(i=>i.conf!==false) || p.items[0]);
-    f.querySelector('.mv-concepto').textContent = primero ? primero.nombre.slice(0,60) + (p.items.length>1 ? ' (+' + (p.items.length-1) + ')' : '') : '(sin ítems)';
+    f.querySelector('.mv-concepto').textContent = (p.nombre ? p.nombre + ' — ' : '') + (primero ? primero.nombre.slice(0,60) + (p.items.length>1 ? ' (+' + (p.items.length-1) + ')' : '') : '(sin ítems)');
     f.querySelector('.mv-quien').textContent = fechaLinda(new Date(p.creado||Date.now()).toISOString().slice(0,10)) + ' · ' + est + cob;
     if(esPresu){
       const conf = document.createElement('button');
@@ -3168,7 +3203,7 @@ function renderPedidos(){
   else if(filtroPedidos.startsWith('tag:')) ordenados = ordenados.filter(p=> (p.etiquetas||[]).includes(filtroPedidos.slice(4)));
   if(buscado){
     ordenados = ordenados.filter(p=>{
-      const textos = [nombreClienteId(p.cliente)||'']
+      const textos = [nombreClienteId(p.cliente)||'', p.nombre||'']
         .concat((p.items||[]).map(i=> i.nombre||''))
         .concat(tareas.filter(t=> t.pedido===p.id).map(t=> t.texto||t.nombre||''));
       return normalizarTexto(textos.join(' ')).includes(buscado);
@@ -3201,7 +3236,7 @@ function renderPedidos(){
           return h;
         })() +
       '</div>';
-    f.querySelector('.ped-cli').textContent = nombreClienteId(p.cliente);
+    f.querySelector('.ped-cli').textContent = nombreClienteId(p.cliente) + (p.nombre ? ' · ' + p.nombre : '');
     f.onclick = ()=> abrirPedido(p.id);
     cont.appendChild(f);
   }
@@ -3262,6 +3297,9 @@ function abrirPedido(id){
   renderPedidoCliente(p);
   renderPedidoEstadoVenta(p);
   renderPedidoTareas(p);
+  const inNom = document.getElementById('pedNombre');
+  inNom.value = p.nombre || '';
+  inNom.oninput = ()=>{ p.nombre = inNom.value.trim(); guardarDatos(); renderPedidos(); };
   renderPedidoItems(p);
   renderPedidoEstados(p);
   renderEtapaEtiquetas(p);
@@ -6357,7 +6395,8 @@ function adTarifa(maq, gramaje){
   return gramaje <= 170 ? maq.tarifas.hasta170 : maq.tarifas.mas180;
 }
 // calcula una opción: modo {tipo:'paquetes', n} o {tipo:'cantidad', q}
-function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
+function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
+  orig = Math.max(1, parseInt(orig)||1);
   const maq = adCfg.maquinas[maqKey];
   const posesManual = parseInt((document.getElementById('adPoses')||{}).value)||0;
   const pinza = parseFloat((document.getElementById('adPinza')||{}).value)||0;
@@ -6391,7 +6430,28 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
       pasadas: [{t: tar.millar[cf]||0, n:2}]});
   }
   let mejor = null;
-  for(const v of variantes){
+  // MODO LIBRO (orig = HOJAS del libro; cada hoja = frente y dorso).
+  // Cada pliego tipo lleva "poses" hojas y se imprime de ambos lados (2 posturas, 2 pasadas).
+  // Regla de color: si una página de un pliego va a color, TODO el pliego máquina va a color;
+  // los pliegos a color usan los colores elegidos arriba y el resto va 1/1 (negro).
+  let vs = variantes;
+  if(orig > 1){
+    const juegos = Math.ceil(orig / poses);
+    const hojasColorIn = Math.max(0, parseInt((document.getElementById('adHojasColor')||{}).value)||0);
+    const hojasColor = Math.min(orig, hojasColorIn);
+    const colN = Math.max(cf, cd||0) || 1;                 // colores de los pliegos a color
+    const plColor = Math.min(juegos, Math.ceil(hojasColor / poses));
+    const plBN = juegos - plColor;
+    const pasadasLibro = [];
+    if(plColor > 0) pasadasLibro.push({t: tar.millar[colN]||0, n: 2*plColor/juegos});
+    if(plBN > 0)    pasadasLibro.push({t: tar.millar[1]||0,   n: 2*plBN/juegos});
+    vs = [{giro:false, poses, juegos, posturas: juegos*2,
+      chapas: plColor*2*colN + plBN*2*1,
+      postCosto: plColor*2*(tar.post[colN]||0) + plBN*2*(tar.post[1]||0),
+      pasadas: pasadasLibro,
+      libro: {hojas: orig, hojasColor, plColor, plBN, colN}}];
+  }
+  for(const v of vs){
     let pliegos, hojas, papelCosto, piezas, paquetes, nota='';
     if(modo.tipo==='paquetes'){
       paquetes = modo.n;
@@ -6401,7 +6461,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
       piezas = netos * v.poses;
       papelCosto = paquetes * (papel.precio||0);
     }else{
-      const pliegosNec = Math.ceil(modo.q / v.poses) + adCfg.demasia * v.posturas;
+      const pliegosNec = ((v.juegos||1) > 1 ? modo.q * v.juegos : Math.ceil(modo.q / v.poses)) + adCfg.demasia * v.posturas;
       hojas = Math.ceil(pliegosNec / pliegosPorHoja);
       pliegos = pliegosNec;
       piezas = modo.q;
@@ -6430,16 +6490,35 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo){
     if(v.pasadas.length > 1 && millares > 0) millarUnit = Math.round(millarCosto / millares);
     const chapasCosto = v.chapas * maq.ctp;
     const corteCosto = parseFloat((document.getElementById('adCorte')||{}).value)||0;
-    const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto;
+    // plastificado / barniz: por m² de pliego sobre los pliegos buenos.
+    // Regla del proveedor: < 1.000 pliegos suma $12.000 de enganche; la reserva (cama) suma $25.000 de arreglo.
+    let plastCosto = 0, plastNombre = '';
+    const plastSel = (plastOver !== undefined) ? plastOver : ((document.getElementById('adPlast')||{}).value||'');
+    if(plastSel){
+      const pl = (adCfg.plastificados||[]).find(x=> x.nombre===plastSel);
+      if(pl){
+        const faces = (plastOver !== undefined)
+          ? (parseInt((document.getElementById('adTapaFaz')||{}).value)||1)
+          : (parseInt((document.getElementById('adPlastFaz')||{}).value)||1);
+        const m2pl = (plLargo/100) * (plCorto/100);
+        plastCosto = pliegosNetos * m2pl * pl.m2 * faces;
+        if(pliegosNetos < 1000) plastCosto += 12000;
+        if(/reserva/i.test(pl.nombre)) plastCosto += 25000;
+        plastCosto = Math.round(plastCosto);
+        plastNombre = pl.nombre + ' ×' + faces;
+        nota = (nota ? nota + ' · ' : '') + '✨ ' + plastNombre;
+      }
+    }
+    const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto + plastCosto;
     const margen = adMargen(paquetes);
     const venta = Math.round(costo * (1 + margen/100));
     const paqDec = Math.round((hojas / papel.hojas) * 100) / 100;
     const op = {maquina: maq.nombre, plW: plLargo, plH: plCorto, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes, paqDec,
       piezas, costo, margen, venta, unitario: piezas>0 ? venta/piezas : 0, nota, millares, pasadasN, pliegosNetos,
       layout: posesManual > 0 ? null : layoutDet, pinza, marg, pzW, pzH,
-      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, millares, millarUnit,
+      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, plastCosto, plastNombre, millares, millarUnit,
       posturas: v.posturas, chapas: v.chapas, pliegosPorHoja, papelCosto,
-      detalle: (v.giro
+      detalle: (v.libro ? '📖 LIBRO: ' + v.libro.hojas + ' hojas (' + (v.libro.hojas*2) + ' páginas) · ' + v.juegos + ' pliegos tipo (' + v.libro.plColor + ' a ' + v.libro.colN + '/' + v.libro.colN + ' + ' + v.libro.plBN + ' a 1/1) · cantidad = ejemplares · ' : '') + (v.giro
         ? 'GIRO mariposa: 1 juego de ' + v.chapas + ' chapas · ' + v.poses + ' poses/pliego (' + (v.poses/2) + ' frentes + ' + (v.poses/2) + ' dorsos)'
         : v.posturas + ' juego(s) de chapas (' + v.chapas + ' en total) · ' + v.poses + ' poses/pliego') +
         ' · hoja ' + papel.W + '×' + papel.H + ' cortada en ' + pliegosPorHoja + ' → pliego máquina ' + plLargo + '×' + plCorto + ' cm' + (cortePl.refi ? ' (refilado de ' + cortePl.origW + '×' + cortePl.origH + ')' : '') + ' (útil ' + (Math.round(utilW*10)/10) + '×' + (Math.round(utilH*10)/10) + ')'};
@@ -6514,9 +6593,9 @@ function dibujarEsquemaAd(op){
   ctx.fillStyle = '#9aa1b0'; ctx.font = '11px sans-serif';
   ctx.fillText(op.maquina + ' · pliego máquina ' + op.plW + '×' + op.plH + ' cm · pieza ' + op.pzW + '×' + op.pzH + ' · ' + op.poses + ' poses' + (op.giro ? ' (giro: mitad frentes, mitad dorsos)' : ''), ox, oy + H + 16);
 }
-function adMejorOpcion(papel, cf, cd, pzW, pzH, modo){
-  const a = adCalcular('gto', papel, cf, cd, pzW, pzH, modo);
-  const b = adCalcular('komori', papel, cf, cd, pzW, pzH, modo);
+function adMejorOpcion(papel, cf, cd, pzW, pzH, modo, orig, plastOver){
+  const a = adCalcular('gto', papel, cf, cd, pzW, pzH, modo, orig, plastOver);
+  const b = adCalcular('komori', papel, cf, cd, pzW, pzH, modo, orig, plastOver);
   if(a && b) return a.venta <= b.venta ? a : b;
   return a || b;
 }
@@ -6543,6 +6622,38 @@ function renderAd(){
   }
   if(prev && adPapeles.find(x=>x.id===prev)) sel.value = prev;
   sel.onchange = calcularAd;
+  // selects de plastificado (general y de tapa) + papel de tapa
+  const llenarPlast = (id)=>{
+    const sp = document.getElementById(id); if(!sp) return;
+    const ant = sp.value;
+    sp.innerHTML = '<option value="">— sin plastificar —</option>';
+    for(const pl of (adCfg.plastificados||[])){
+      const o = document.createElement('option');
+      o.value = pl.nombre; o.textContent = '✨ ' + pl.nombre + ' ($' + pl.m2 + '/m²)';
+      sp.appendChild(o);
+    }
+    if(ant) sp.value = ant;
+    if(!sp.dataset.ok){ sp.dataset.ok = '1'; sp.onchange = calcularAd; }
+  };
+  llenarPlast('adPlast'); llenarPlast('adTapaPlast');
+  const st = document.getElementById('adTapaPapel');
+  if(st){
+    const antT = st.value;
+    st.innerHTML = '<option value="">papel de tapa…</option>';
+    for(const p of adPapeles){
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.nombre + ' · ' + p.W + '×' + p.H + (p.precio ? '' : ' ⚠️ sin precio');
+      st.appendChild(o);
+    }
+    if(antT && adPapeles.find(x=>x.id===antT)) st.value = antT;
+    if(!st.dataset.ok){ st.dataset.ok = '1'; st.onchange = calcularAd;
+      document.getElementById('adTapaChk').onchange = calcularAd;
+      document.getElementById('adTapaW').addEventListener('input', calcularAd);
+      document.getElementById('adTapaH').addEventListener('input', calcularAd);
+      document.getElementById('adTapaFaz').onchange = calcularAd;
+    }
+  }
   // lista de papeles editable
   const lp = document.getElementById('adListaPapeles');
   lp.innerHTML = '';
@@ -6577,17 +6688,45 @@ function calcularAd(){
   const pzH = parseFloat(document.getElementById('adH').value)||0;
   const qLista = String(document.getElementById('adCant').value||'').replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1').split(/[^0-9]+/).map(Number).filter(x=>x>0).slice(0,10);
   const q = qLista[0]||0;
+  const adOrig = Math.max(1, parseInt((document.getElementById('adOriginales')||{}).value)||1);
   const papel = adPapeles.find(x=>x.id===document.getElementById('adPapel').value);
   const col = AD_COLORES.find(c=>c[0]===adColSel);
   if(!pzW || !pzH || !papel || !col){ res.innerHTML = '<div class="vacio" style="padding:10px">Completá pieza, colores y papel.</div>'; return; }
   if(!papel.precio){ res.innerHTML = '<div class="vacio" style="padding:10px;color:#ff7a7a">⚠️ Ese papel no tiene precio cargado: ponéselo en ⚙️ Papeles (mirá papeles.net).</div>'; return; }
   const [, cf, cd] = col;
   const opciones = [];
+  const rowTapa = document.getElementById('adTapaRow');
+  if(rowTapa) rowTapa.style.display = adOrig > 1 ? 'flex' : 'none';
+  let tapaCfg = null;
+  if(adOrig > 1){
+    const iTW = document.getElementById('adTapaW'), iTH = document.getElementById('adTapaH');
+    if(iTW && !iTW.value && pzW) iTW.value = Math.round(pzW*2*10)/10;   // tapa extendida: 2 anchos (sumale lomo si corresponde)
+    if(iTH && !iTH.value && pzH) iTH.value = pzH;
+    const chk = (document.getElementById('adTapaChk')||{}).checked;
+    const pT = adPapeles.find(x=> x.id === (document.getElementById('adTapaPapel')||{}).value);
+    if(chk && pT && pT.precio){
+      tapaCfg = {papel: pT,
+        W: parseFloat(iTW.value)||pzW*2, H: parseFloat(iTH.value)||pzH,
+        plast: (document.getElementById('adTapaPlast')||{}).value||''};
+    }
+  }
   for(const qi of qLista){
-    const op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'cantidad', q: qi});
-    if(op) opciones.push({etq: 'Tu pedido: ' + qi + ' u', op, piezasFix: qi});
+    let op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'cantidad', q: qi}, adOrig);
+    if(op && tapaCfg){
+      const opT = adMejorOpcion(tapaCfg.papel, cf, cd, tapaCfg.W, tapaCfg.H, {tipo:'cantidad', q: qi}, 1, tapaCfg.plast);
+      if(opT){
+        op = {...op,
+          costo: op.costo + opT.costo,
+          venta: op.venta + opT.venta,
+          unitario: qi > 0 ? (op.venta + opT.venta)/qi : 0,
+          nota: (op.nota ? op.nota + ' · ' : '') + '📕 tapa ' + plata(opT.venta),
+          detalle: op.detalle + ' — 📕 TAPA (' + tapaCfg.papel.nombre + ' ' + tapaCfg.W + '×' + tapaCfg.H + (tapaCfg.plast ? ' · ' + tapaCfg.plast : '') + '): ' + opT.detalle};
+      }
+    }
+    if(op) opciones.push({etq: 'Tu pedido: ' + qi + (adOrig>1 ? ' ej.' : ' u'), op, piezasFix: qi});
   }
   for(let n=1; n<=4; n++){
+    if(adOrig > 1) break; // en modo libro las opciones por paquete no aplican
     const op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'paquetes', n});
     if(op && op.piezas > 0) opciones.push({etq: n + ' paquete' + (n>1?'s':''), op});
   }
@@ -6642,7 +6781,7 @@ function calcularAd(){
     }
   }
   // ⚡ ¿Conviene offset digital para tiradas cortas? (cantidades de hojas editables)
-  if(OD_MODOS.find(m=> m[0]===adColSel)){
+  if(adOrig === 1 && OD_MODOS.find(m=> m[0]===adColSel)){
     const posOD = odPosado(pzW, pzH);
     if(posOD && posOD.n > 0){
       const keys = Object.keys(od.tabla).map(Number);
@@ -6714,7 +6853,7 @@ function calcularAd(){
     };
   });
 }
-for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg']) document.getElementById(id).addEventListener('input', calcularAd);
+for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg','adOriginales','adHojasColor']) document.getElementById(id).addEventListener('input', calcularAd);
 document.getElementById('adRecargoChk').addEventListener('change', calcularAd);
 document.getElementById('adPapAgregar').onclick = ()=>{
   const n = document.getElementById('adPapNombre').value.trim();
