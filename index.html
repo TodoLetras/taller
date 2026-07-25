@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v72</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v74</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -529,7 +529,8 @@
       <label style="font-size:.72rem;color:var(--texto2);margin:0">ploteado (instalado) ×</label>
       <input id="vcMultCon" type="number" step="0.1" style="width:70px;margin:0">
     </div>
-    <div id="vcResultado" style="margin-bottom:12px"></div>
+    <div id="vcResultado" style="margin-bottom:4px"></div>
+    <div style="font-size:.64rem;color:var(--texto2);margin-bottom:12px">💡 Los botones ＋ agregan el ítem al pedido (eso es guardar). Lo que cargás acá queda además como borrador del pedido: cerrá tranquilo, al volver está todo.</div>
     <label>🧹 Desploteado (retirar vinilo viejo)</label>
     <div id="vcDesMedidas"></div>
     <button id="vcAgregarDes" style="width:100%;margin-bottom:8px;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)">＋ Agregar medida a desplotear</button>
@@ -3637,7 +3638,7 @@ function renderPedidoItems(p){
         '<div class="pi-nombre"></div>' +
         '<input class="cant" type="text" inputmode="decimal">' +
         '<input class="precio" type="number" inputmode="numeric" min="0">' +
-        (it.adTr && it.adMeta ? '<button class="adReal" title="Cargar lo cobrado real por AD y la papelera">🧾</button>' : '') +
+        (it.adTr && it.adMeta ? '<button class="adReal" title="Cargar lo cobrado real por AD y la papelera">🧾</button>' : (it.costoU !== undefined && !it.mo ? '<button class="costoReal" title="Costo real del trabajo (lo que te cobra el proveedor). Tocá para corregirlo si te cobró distinto al presupuesto.">🧾</button>' : '')) +
         '<button class="copiar-item">📋</button>' +
         '<button class="quitar-item">✕</button>';
       d.querySelector('.pi-nombre').textContent = it.nombre;
@@ -3647,6 +3648,28 @@ function renderPedidoItems(p){
       inPrecio.value = it.precio;
       const btnReal = d.querySelector('.adReal');
       if(btnReal) btnReal.onclick = ()=> editarAdReal(it, p);
+      const btnCR = d.querySelector('.costoReal');
+      if(btnCR){
+        if(it.costoAjustado){ btnCR.style.color = '#4cd27d'; btnCR.style.textShadow = '0 0 6px rgba(76,210,125,.5)'; }
+        btnCR.onclick = ()=>{
+          const inp = document.createElement('input');
+          inp.type = 'number'; inp.inputMode = 'numeric';
+          inp.value = Math.round((it.costoU||0) * (it.cant||1));
+          inp.placeholder = 'costo total $';
+          inp.style.cssText = 'width:110px;margin:0;font-size:13px;padding:5px 8px;text-align:right;background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+          btnCR.replaceWith(inp); inp.focus();
+          const conf = ()=>{
+            const nuevo = parseFloat(inp.value)||0;
+            if(nuevo > 0){
+              it.costoU = nuevo / (it.cant||1);
+              it.costoAjustado = true;
+              registrar('corrigió el costo real de "' + (it.nombre||'').slice(0,40) + '" a ' + plata(nuevo));
+            }
+            guardarDatos(); renderPedidoItems(p); renderPedidos();
+          };
+          inp.addEventListener('change', conf); inp.addEventListener('blur', conf);
+        };
+      }
       inCant.addEventListener('input', ()=>{ it.cant = parseFloat(String(inCant.value).replace(',', '.'))||1; actualizarTotal(p); sincronizarPedido(); });
       inPrecio.addEventListener('input', ()=>{
         it.precio = parseFloat(inPrecio.value)||0;
@@ -7051,17 +7074,22 @@ function vcMejorRollo(mat, w, h){
   return mejor;
 }
 function abrirViniloCorte(p){
-  vcPedido = p; vcPzs = [{w:'',h:'',cant:1}]; vcDes = [];
+  vcPedido = p;
+  const b = p.vcBorrador;
+  vcPzs = (b && b.pzs && b.pzs.length) ? b.pzs.map(x=>({...x})) : [{w:'',h:'',cant:1}];
+  vcDes = (b && b.des) ? b.des.map(x=>({...x})) : [];
   const sel = document.getElementById('vcMat');
   sel.innerHTML = '';
   for(const m of adCfg.vc.materiales){
     const o = document.createElement('option'); o.value = m.nombre; o.textContent = m.nombre; sel.appendChild(o);
   }
   sel.onchange = vcCalcular;
-  document.getElementById('vcMultSin').value = adCfg.vc.multSin;
-  document.getElementById('vcMultCon').value = adCfg.vc.multCon;
-  document.getElementById('vcDesHoras').value = adCfg.vc.desplote.horas;
-  document.getElementById('vcDesHora$').value = adCfg.vc.desplote.ventaHora;
+  if(b && b.mat && adCfg.vc.materiales.find(m=>m.nombre===b.mat)) sel.value = b.mat;
+  document.getElementById('vcMultSin').value = (b && b.mSin) || adCfg.vc.multSin;
+  document.getElementById('vcMultCon').value = (b && b.mCon) || adCfg.vc.multCon;
+  document.getElementById('vcDesHoras').value = (b && b.horas !== undefined) ? b.horas : adCfg.vc.desplote.horas;
+  document.getElementById('vcDesHora$').value = (b && b.vHora) || adCfg.vc.desplote.ventaHora;
+  document.getElementById('vcBlancoMl').value = (b && b.blanco) || '';
   vcRenderPiezas(); vcRenderDes(); vcRenderConfig(); vcCalcular();
   document.getElementById('modalViniloCorte').classList.add('abierto');
 }
@@ -7189,6 +7217,13 @@ function vcCalcular(){
   document.getElementById('vcDesInfo').textContent = m2 > 0 ? ('superficie: ' + (Math.round(m2*100)/100) + ' m²') : '';
   const horas = parseFloat(document.getElementById('vcDesHoras').value) || 0;
   const vHora = parseFloat(document.getElementById('vcDesHora$').value) || 0;
+  // borrador automático: lo cargado queda guardado en el pedido
+  if(vcPedido){
+    vcPedido.vcBorrador = {mat: mat.nombre, mSin, mCon, horas, vHora,
+      blanco: parseFloat((document.getElementById('vcBlancoMl')||{}).value)||0,
+      pzs: vcPzs.map(x=>({...x})), des: vcDes.map(x=>({...x}))};
+    guardarDatos();
+  }
   const resD = document.getElementById('vcDesResultado');
   if(horas > 0 && (m2 > 0 || vcDes.length)){
     const venta = Math.round(horas * vHora);
@@ -7208,8 +7243,8 @@ function vcRenderConfig(){
   c.innerHTML = '';
   const fila = (label, obj, campo, ancho)=>{
     const d = document.createElement('div');
-    d.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:5px';
-    d.innerHTML = '<span style="font-size:.7rem;color:var(--texto2);flex:1">' + label + '</span><input type="number" step="0.1" style="width:' + (ancho||100) + 'px;margin:0" value="' + obj[campo] + '">';
+    d.style.cssText = 'display:flex;gap:10px;align-items:center;margin-bottom:5px;max-width:430px';
+    d.innerHTML = '<span style="font-size:.7rem;color:var(--texto2);flex:1;border-bottom:1px dotted var(--borde);padding-bottom:2px">' + label + '</span><input type="number" step="0.1" style="width:' + (ancho||100) + 'px;margin:0" value="' + obj[campo] + '">';
     d.querySelector('input').addEventListener('change', (e)=>{ obj[campo] = parseFloat(e.target.value)||obj[campo]; guardarDatos(); vcCalcular(); });
     c.appendChild(d);
   };
