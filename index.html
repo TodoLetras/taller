@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v75</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v76</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -7182,8 +7182,6 @@ function vcCalcular(){
       abrirPedido(vcPedido.id);
       toast('🪟 Vinilo agregado al pedido ✓ (mirá la lista de ítems)');
     };
-    const bs = document.getElementById('vcUsarSin'); if(bs) bs.onclick = ()=> agregarItem(false, Math.round(costo*mSin));
-    const bc = document.getElementById('vcUsarCon'); if(bc) bc.onclick = ()=> agregarItem(true, Math.round(costo*mCon));
     // comparar las mismas piezas en TODAS las calidades (para ofrecerle opciones al cliente)
     if(adCfg.vc.materiales.length > 1){
       let comp = '<div style="margin-top:8px;font-size:.68rem;color:var(--texto2);font-weight:700">Otras calidades con las mismas piezas (tocá para cambiar):</div>';
@@ -7208,6 +7206,9 @@ function vcCalcular(){
         b.onclick = ()=>{ document.getElementById('vcMat').value = b.dataset.mat; vcCalcular(); };
       });
     }
+    // IMPORTANTE: los handlers van al FINAL, después de todo cambio de innerHTML (si no, se pierden)
+    const bs = document.getElementById('vcUsarSin'); if(bs) bs.onclick = ()=> agregarItem(false, Math.round(costo*mSin));
+    const bc = document.getElementById('vcUsarCon'); if(bc) bc.onclick = ()=> agregarItem(true, Math.round(costo*mCon));
   }else res.innerHTML = '<div class="vacio" style="padding:8px">Cargá al menos una pieza.</div>';
   // desploteado
   let m2 = 0;
