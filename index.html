@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v69</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v71</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -331,6 +331,7 @@
       <button id="btnAdOff" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #c792ea;color:#c792ea">🖨 Offset AD</button>
       <button id="btnCompraPed" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #4cd27d;color:#4cd27d">🛒 Compra</button>
       <button id="btnCorpPed" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">🔤 Corpóreas</button>
+      <button id="btnViniloCorte" style="flex:1;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #35b8a0;color:#35b8a0">🪟 Vinilo corte</button>
     </div>
     <div class="ped-total" id="pedTotal"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
@@ -509,6 +510,43 @@
 </div>
 
 <!-- modal armador offset digital -->
+<div class="modal" id="modalViniloCorte">
+  <div class="hoja">
+    <h2>🪟 Vinilo de corte · vidrieras</h2>
+    <label>Material</label>
+    <select id="vcMat" style="width:100%;margin:0 0 8px;padding:10px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
+    <label>Piezas (ancho × alto en cm × cantidad)</label>
+    <div id="vcPiezas"></div>
+    <button id="vcAgregarPieza" style="width:100%;margin-bottom:8px;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed #35b8a0;color:#35b8a0">＋ Agregar pieza</button>
+    <div id="vcBlancoRow" style="display:none;gap:8px;align-items:center;margin-bottom:8px">
+      <label style="font-size:.72rem;color:var(--texto2);margin:0">⬜ Metros SIN imprimir (espacios)</label>
+      <input id="vcBlancoMl" type="number" step="0.1" min="0" placeholder="0" style="width:90px;margin:0">
+      <span id="vcBlancoInfo" style="font-size:.68rem;color:var(--texto2)"></span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <label style="font-size:.72rem;color:var(--texto2);margin:0">Multiplicadores: plotear (sin instalar) ×</label>
+      <input id="vcMultSin" type="number" step="0.1" style="width:70px;margin:0">
+      <label style="font-size:.72rem;color:var(--texto2);margin:0">ploteado (instalado) ×</label>
+      <input id="vcMultCon" type="number" step="0.1" style="width:70px;margin:0">
+    </div>
+    <div id="vcResultado" style="margin-bottom:12px"></div>
+    <label>🧹 Desploteado (retirar vinilo viejo)</label>
+    <div id="vcDesMedidas"></div>
+    <button id="vcAgregarDes" style="width:100%;margin-bottom:8px;border-radius:10px;padding:10px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)">＋ Agregar medida a desplotear</button>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <label style="font-size:.72rem;color:var(--texto2);margin:0">Horas</label>
+      <input id="vcDesHoras" type="number" step="0.25" style="width:76px;margin:0">
+      <label style="font-size:.72rem;color:var(--texto2);margin:0">$ hora (venta)</label>
+      <input id="vcDesHora$" type="number" style="width:110px;margin:0">
+      <span id="vcDesInfo" style="font-size:.7rem;color:var(--texto2)"></span>
+    </div>
+    <div id="vcDesResultado" style="margin-bottom:12px"></div>
+    <details style="margin-bottom:10px"><summary style="font-size:.74rem;color:var(--texto2);cursor:pointer">⚙️ Precios y medidas (editar como el papel)</summary>
+      <div id="vcConfig" style="padding:8px 0"></div>
+    </details>
+    <button id="vcCerrar" style="width:100%;border-radius:12px;padding:12px;font-weight:700;background:var(--panel2);border:1px solid var(--borde);color:var(--texto)">Cerrar</button>
+  </div>
+</div>
 <div class="modal" id="modalOffDig">
   <div class="hoja">
     <h2>🖨 Offset digital</h2>
@@ -581,9 +619,9 @@
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
       <label style="font-size:.74rem;color:var(--texto2);margin:0">📑 Intercalado $</label>
-      <input id="adIntercalado" type="number" inputmode="numeric" placeholder="0 (a mano por ahora)" style="flex:1;margin:0">
+      <input id="adIntercalado" type="text" inputmode="numeric" placeholder="0 · o uno por cantidad: 8000, 12000, 15000" title="Se cobra UNA vez por trabajo (solo interior). Un valor para todas las cantidades, o una lista en el mismo orden que las cantidades." style="flex:1;margin:0">
       <label style="font-size:.74rem;color:var(--texto2);margin:0">📘 Binder $</label>
-      <input id="adBinder" type="number" inputmode="numeric" placeholder="0 (a mano por ahora)" style="flex:1;margin:0">
+      <input id="adBinder" type="text" inputmode="numeric" placeholder="0 · o uno por cantidad" title="Armado del libro con pegamento y tapa. Se cobra UNA vez por trabajo (no se duplica en la tapa). Un valor o una lista en el orden de las cantidades." style="flex:1;margin:0">
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <label style="font-size:.74rem;color:var(--texto2);margin:0">✨ Plastificado / barniz</label>
@@ -1226,6 +1264,33 @@ async function guardarDatos(){
   }catch(e){ marcarEstadoGuardado(false); }
 }
 function migrarSoldadoRuis(){
+  // vinilo de corte para vidrieras (esmerilado): rollos, corte por ml, desploteado y multiplicadores
+  if(typeof adCfg === 'object' && adCfg && !adCfg.vc){
+    adCfg.vc = {
+      multSin: 2, multCon: 3,
+      desplote: {horas: 0.5, ventaHora: 20000, costoHora: 9000},
+      cortes: [{hasta: 65, precio: 6000}, {hasta: 125, precio: 8000}, {hasta: 999, precio: 10000}],
+      materiales: [
+        {nombre: 'Vinilo esmerilado', anchos: [
+          {cm: 61, precio: 4700}, {cm: 91, precio: 6900},
+          {cm: 122, precio: 9300}, {cm: 152, precio: 11500},
+        ]},
+      ],
+    };
+  }
+  // vc incremental: margen del plotter + proveedor Tigre (látex impreso con medio corte)
+  if(typeof adCfg === 'object' && adCfg && adCfg.vc){
+    if(adCfg.vc.margenPlotter === undefined) adCfg.vc.margenPlotter = 1;   // cm que come el plotter POR LADO (editable)
+    if(!adCfg.vc.materiales.find(m=> (m.nombre||'').toLowerCase().includes('tigre'))){
+      adCfg.vc.materiales.push({
+        nombre: 'Vinilo impreso látex base blanca · Tigre',
+        tipo: 'impreso',
+        anchos: [{cm: 152, precio: 11900}],   // $ por ml IMPRESO (confirmar ancho del rollo)
+        blancoMl: 3800,                        // $ por ml SIN imprimir (espacios)
+        corteMl: 6000,                         // corte con registro, $ por ml (tarifa propia de Tigre)
+      });
+    }
+  }
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
   if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
     adCfg.plastificados = [
@@ -6445,15 +6510,15 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
   variantes.push({giro:false, poses, posturas: dorso?2:1, chapas: cf + (dorso?cd:0),
     postCosto: (tar.post[cf]||0) + (dorso ? (tar.post[cd]||0) : 0),
     pasadas: dorso
-      ? (cf===cd ? [{t: tar.millar[cf]||0, n:2}] : [{t: tar.millar[cf]||0, n:1}, {t: tar.millar[cd]||0, n:1}])
-      : [{t: tar.millar[cf]||0, n:1}]});
+      ? (cf===cd ? [{t: tar.millar[cf]||0, n:2, cambios:2}] : [{t: tar.millar[cf]||0, n:1, cambios:1}, {t: tar.millar[cd]||0, n:1, cambios:1}])
+      : [{t: tar.millar[cf]||0, n:1, cambios:1}]});
   if(dorso && cf===cd && poses>=2){
     // giro mariposa: mitad frentes, mitad dorsos en la MISMA chapa; tras las dos
     // pasadas cada pliego rinde TODAS las poses como piezas terminadas
     const posesPar = poses - (poses % 2);
     if(!adSinGiro) variantes.push({giro:true, poses: posesPar, posturas:1, chapas: cf,
       postCosto: tar.post[cf]||0,
-      pasadas: [{t: tar.millar[cf]||0, n:2}]});
+      pasadas: [{t: tar.millar[cf]||0, n:2, cambios:1}]});
   }
   let mejor = null;
   // MODO LIBRO (orig = HOJAS del libro; cada hoja = frente y dorso).
@@ -6469,8 +6534,8 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     const plColor = Math.min(juegos, Math.ceil(hojasColor / poses));
     const plBN = juegos - plColor;
     const pasadasLibro = [];
-    if(plColor > 0) pasadasLibro.push({t: tar.millar[colN]||0, n: 2*plColor/juegos});
-    if(plBN > 0)    pasadasLibro.push({t: tar.millar[1]||0,   n: 2*plBN/juegos});
+    if(plColor > 0) pasadasLibro.push({t: tar.millar[colN]||0, n: 2*plColor/juegos, cambios: 2*plColor});
+    if(plBN > 0)    pasadasLibro.push({t: tar.millar[1]||0,   n: 2*plBN/juegos,   cambios: 2*plBN});
     vs = [{giro:false, poses, juegos, posturas: juegos*2,
       chapas: plColor*2*colN + plBN*2*1,
       postCosto: plColor*2*(tar.post[colN]||0) + plBN*2*(tar.post[1]||0),
@@ -6505,9 +6570,14 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
       }
     }
     const pliegosNetos = Math.max(0, pliegos - adCfg.demasia * v.posturas);
+    // REGLA DEL MILLAR: cada CAMBIO DE CHAPA arranca su propia cuenta.
+    // Hasta 1.000 pliegos de esa tirada = 1 millar; hasta 2.000 = 2; etc.
     let millarCosto = 0, millares = 0, millarUnit = 0, pasadasN = 0;
     for(const g of v.pasadas){
-      const mi = Math.ceil(pliegosNetos * g.n / 1000);
+      const cambios = g.cambios || 1;
+      const porCambio = pliegosNetos * g.n / cambios;
+      const mi = cambios * Math.ceil(porCambio / 1000);
+      g._mi = mi; g._porCambio = porCambio; // para el desglose
       millares += mi;
       millarCosto += mi * g.t;
       millarUnit = g.t; // si hay una sola tarifa, es esta; si hay dos, abajo se promedia
@@ -6535,8 +6605,11 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
         nota = (nota ? nota + ' · ' : '') + '✨ ' + plastNombre;
       }
     }
-    const intercaladoCosto = parseFloat((document.getElementById('adIntercalado')||{}).value)||0;
-    const binderCosto = parseFloat((document.getElementById('adBinder')||{}).value)||0;
+    // intercalado y binder: se pagan UNA sola vez por trabajo (solo interior, nunca en la tapa)
+    // y pueden variar por cantidad: se pasan por fila desde calcularAd (modo.inter / modo.bind)
+    const esTapa = (plastOver !== undefined);
+    const intercaladoCosto = esTapa ? 0 : (modo.inter != null ? modo.inter : (parseFloat((document.getElementById('adIntercalado')||{}).value)||0));
+    const binderCosto = esTapa ? 0 : (modo.bind != null ? modo.bind : (parseFloat((document.getElementById('adBinder')||{}).value)||0));
     if(intercaladoCosto > 0) nota = (nota ? nota + ' · ' : '') + '📑 intercalado';
     if(binderCosto > 0) nota = (nota ? nota + ' · ' : '') + '📘 binder';
     const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto + plastCosto + intercaladoCosto + binderCosto;
@@ -6558,9 +6631,8 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
       des.push('⚙️ Posturas: ' + v.posturas + ' → ' + plata(v.postCosto));
     }
     for(const g of v.pasadas){
-      const pas = Math.round(pliegosNetos * g.n);
-      const mi = Math.ceil(pliegosNetos * g.n / 1000);
-      des.push('🖨 Millar' + (v.libro && v.pasadas.length>1 ? (g.t===(tar.millar[v.libro.colN]||0) ? ' COLOR' : ' NEGRO') : '') + ': ' + pas.toLocaleString('es-AR') + ' pasadas → ' + mi + ' millar(es) × ' + plata(g.t) + ' = ' + plata(mi*g.t));
+      const cambios = g.cambios || 1;
+      des.push('🖨 Millar' + (v.libro && v.pasadas.length>1 ? (g.t===(tar.millar[v.libro.colN]||0) ? ' COLOR' : ' NEGRO') : '') + ': ' + cambios + ' cambio(s) de chapa × ' + Math.round(g._porCambio).toLocaleString('es-AR') + ' pliegos c/u (mín. 1 millar por cambio) → ' + g._mi + ' millar(es) × ' + plata(g.t) + ' = ' + plata(g._mi*g.t));
     }
     if(corteCosto > 0) des.push('✂️ Corte guillotina: ' + plata(corteCosto));
     if(plastCosto > 0) des.push('✨ Plastificado ' + plastNombre + ': ' + pliegosNetos.toLocaleString('es-AR') + ' pliegos × ' + (Math.round((plLargo/100)*(plCorto/100)*1000)/1000) + ' m² × tarifa' + (pliegosNetos < 1000 ? ' + $12.000 enganche' : '') + (/reserva/i.test(plastNombre) ? ' + $25.000 cama' : '') + ' = ' + plata(plastCosto));
@@ -6768,8 +6840,15 @@ function calcularAd(){
         plast: (document.getElementById('adTapaPlast')||{}).value||''};
     }
   }
+  const parseLista = id => String((document.getElementById(id)||{}).value||'').replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1').split(/[^0-9]+/).map(Number).filter(x=>x>=0);
+  const interL = parseLista('adIntercalado').filter(x=>x>0);
+  const bindL = parseLista('adBinder').filter(x=>x>0);
+  let idxQ = -1;
   for(const qi of qLista){
-    let op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'cantidad', q: qi}, adOrig);
+    idxQ++;
+    const interQ = interL.length ? (interL[idxQ] != null ? interL[idxQ] : interL[interL.length-1]) : null;
+    const bindQ  = bindL.length  ? (bindL[idxQ]  != null ? bindL[idxQ]  : bindL[bindL.length-1])  : null;
+    let op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'cantidad', q: qi, inter: interQ, bind: bindQ}, adOrig);
     if(op && tapaCfg){
       const opT = adMejorOpcion(tapaCfg.papel, cf, cd, tapaCfg.W, tapaCfg.H, {tipo:'cantidad', q: qi}, 1, tapaCfg.plast);
       if(opT){
@@ -6942,6 +7021,243 @@ document.getElementById('adPapAgregar').onclick = ()=>{
 document.getElementById('adCerrar').onclick = ()=>{ modalAd.classList.remove('abierto'); if(adPedido) abrirPedido(adPedido.id); };
 modalAd.addEventListener('click', e=>{ if(e.target===modalAd){ modalAd.classList.remove('abierto'); if(adPedido) abrirPedido(adPedido.id); } });
 document.getElementById('btnCompraPed').onclick = ()=>{ if(pedidoAbierto) abrirCompra(pedidoAbierto); };
+
+/* ============ VINILO DE CORTE (vidrieras) ============ */
+let vcPedido = null, vcPzs = [], vcDes = [];
+function vcCortePrecio(anchoCm){
+  for(const c of (adCfg.vc.cortes||[])) if(anchoCm <= c.hasta) return c.precio;
+  return (adCfg.vc.cortes||[]).length ? adCfg.vc.cortes[adCfg.vc.cortes.length-1].precio : 0;
+}
+function vcMejorRollo(mat, w, h){
+  // elige el rollo más barato donde entre la pieza (probando también rotada); largo del rollo: hasta 50 m.
+  // El plotter come margen por lado: el ancho útil es rollo − 2×margen.
+  // Si el material tiene corte propio (ej. Tigre: corte con registro), usa ese en vez de la tabla por ancho.
+  let mejor = null;
+  const marg = adCfg.vc.margenPlotter || 0;
+  for(const rot of [false, true]){
+    const a = rot ? h : w, largoCm = rot ? w : h;
+    if(largoCm > 5000) continue;
+    for(const r of (mat.anchos||[]).slice().sort((x,y)=> x.cm - y.cm)){
+      const util = r.cm - 2*marg;
+      if(a <= util + 0.001){
+        const ml = largoCm / 100;
+        const corteMl = (mat.corteMl !== undefined) ? mat.corteMl : vcCortePrecio(r.cm);
+        const costo = ml * (r.precio + corteMl);
+        if(!mejor || costo < mejor.costo) mejor = {rollo: r.cm, util, ml, costo, rot, precioMl: r.precio, corteMl};
+        break;
+      }
+    }
+  }
+  return mejor;
+}
+function abrirViniloCorte(p){
+  vcPedido = p; vcPzs = [{w:'',h:'',cant:1}]; vcDes = [];
+  const sel = document.getElementById('vcMat');
+  sel.innerHTML = '';
+  for(const m of adCfg.vc.materiales){
+    const o = document.createElement('option'); o.value = m.nombre; o.textContent = m.nombre; sel.appendChild(o);
+  }
+  sel.onchange = vcCalcular;
+  document.getElementById('vcMultSin').value = adCfg.vc.multSin;
+  document.getElementById('vcMultCon').value = adCfg.vc.multCon;
+  document.getElementById('vcDesHoras').value = adCfg.vc.desplote.horas;
+  document.getElementById('vcDesHora$').value = adCfg.vc.desplote.ventaHora;
+  vcRenderPiezas(); vcRenderDes(); vcRenderConfig(); vcCalcular();
+  document.getElementById('modalViniloCorte').classList.add('abierto');
+}
+function vcRenderPiezas(){
+  const cont = document.getElementById('vcPiezas');
+  cont.innerHTML = '';
+  vcPzs.forEach((pz, i)=>{
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
+    f.innerHTML = '<input class="w" type="number" inputmode="decimal" placeholder="ancho" style="width:82px;margin:0" value="'+(pz.w||'')+'">' +
+      '<span style="color:var(--texto2)">×</span>' +
+      '<input class="h" type="number" inputmode="decimal" placeholder="alto" style="width:82px;margin:0" value="'+(pz.h||'')+'">' +
+      '<span style="color:var(--texto2)">cm ×</span>' +
+      '<input class="c" type="number" inputmode="numeric" min="1" style="width:64px;margin:0" value="'+(pz.cant||1)+'">' +
+      '<span class="det" style="flex:1;font-size:.66rem;color:var(--texto2)"></span>' +
+      '<button class="x" style="background:none;border:none;color:#ff7a7a;font-size:1rem">✕</button>';
+    const upd = ()=>{ pz.w = parseFloat(f.querySelector('.w').value)||0; pz.h = parseFloat(f.querySelector('.h').value)||0; pz.cant = parseInt(f.querySelector('.c').value)||1; vcCalcular(); };
+    f.querySelector('.w').addEventListener('input', upd);
+    f.querySelector('.h').addEventListener('input', upd);
+    f.querySelector('.c').addEventListener('input', upd);
+    f.querySelector('.x').onclick = ()=>{ vcPzs.splice(i,1); if(!vcPzs.length) vcPzs.push({w:'',h:'',cant:1}); vcRenderPiezas(); vcCalcular(); };
+    cont.appendChild(f);
+  });
+}
+function vcRenderDes(){
+  const cont = document.getElementById('vcDesMedidas');
+  cont.innerHTML = '';
+  vcDes.forEach((d, i)=>{
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
+    f.innerHTML = '<input class="w" type="number" inputmode="decimal" placeholder="ancho" style="width:82px;margin:0" value="'+(d.w||'')+'">' +
+      '<span style="color:var(--texto2)">×</span>' +
+      '<input class="h" type="number" inputmode="decimal" placeholder="alto" style="width:82px;margin:0" value="'+(d.h||'')+'">' +
+      '<span style="color:var(--texto2)">cm</span>' +
+      '<span class="det" style="flex:1;font-size:.66rem;color:var(--texto2)"></span>' +
+      '<button class="x" style="background:none;border:none;color:#ff7a7a;font-size:1rem">✕</button>';
+    const upd = ()=>{ d.w = parseFloat(f.querySelector('.w').value)||0; d.h = parseFloat(f.querySelector('.h').value)||0; vcCalcular(); };
+    f.querySelector('.w').addEventListener('input', upd);
+    f.querySelector('.h').addEventListener('input', upd);
+    f.querySelector('.x').onclick = ()=>{ vcDes.splice(i,1); vcRenderDes(); vcCalcular(); };
+    cont.appendChild(f);
+  });
+}
+function vcCalcular(){
+  const mat = adCfg.vc.materiales.find(m=> m.nombre === document.getElementById('vcMat').value) || adCfg.vc.materiales[0];
+  const mSin = parseFloat(document.getElementById('vcMultSin').value) || adCfg.vc.multSin;
+  const mCon = parseFloat(document.getElementById('vcMultCon').value) || adCfg.vc.multCon;
+  let costo = 0, mlTot = 0, ok = 0, det = [];
+  document.querySelectorAll('#vcPiezas > div').forEach((f, i)=>{
+    const pz = vcPzs[i]; if(!pz) return;
+    const el = f.querySelector('.det');
+    if(pz.w > 0 && pz.h > 0){
+      const r = vcMejorRollo(mat, pz.w, pz.h);
+      if(r){
+        const cU = Math.round(r.costo);
+        costo += cU * (pz.cant||1); mlTot += r.ml * (pz.cant||1); ok += (pz.cant||1);
+        el.textContent = 'rollo ' + r.rollo + 'cm' + (r.rot ? ' (rotada)' : '') + ' · ' + (Math.round(r.ml*100)/100) + ' ml · costo ' + plata(cU) + '/u';
+      }else el.textContent = '⚠️ no entra en ningún rollo';
+    }else el.textContent = '';
+  });
+  // metros sin imprimir (solo materiales de impresión tipo Tigre)
+  const rowB = document.getElementById('vcBlancoRow');
+  const esImpreso = mat.tipo === 'impreso';
+  if(rowB) rowB.style.display = esImpreso ? 'flex' : 'none';
+  let blancoCosto = 0;
+  if(esImpreso){
+    const bMl = parseFloat((document.getElementById('vcBlancoMl')||{}).value) || 0;
+    blancoCosto = Math.round(bMl * (mat.blancoMl||0));
+    document.getElementById('vcBlancoInfo').textContent = bMl > 0 ? ('× ' + plata(mat.blancoMl||0) + '/ml = ' + plata(blancoCosto)) : ('a ' + plata(mat.blancoMl||0) + '/ml');
+    costo += blancoCosto;
+  }
+  const res = document.getElementById('vcResultado');
+  if(ok > 0){
+    const vSin = Math.round(costo * mSin), vCon = Math.round(costo * mCon);
+    res.innerHTML = '<div style="padding:10px;border-radius:10px;background:rgba(53,184,160,.08);border:1px dashed #35b8a0;font-size:.76rem;line-height:1.8">' +
+      ok + ' pieza(s) · ' + (Math.round(mlTot*100)/100) + ' ml de rollo · costo ' + plata(costo) +
+      '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">' +
+      '<button id="vcUsarSin" style="flex:1;background:var(--panel2);border:1px dashed #35b8a0;color:#35b8a0;border-radius:10px;padding:10px;font-weight:800;font-size:.74rem">＋ Plotear (sin instalar): ' + plata(vSin) + '</button>' +
+      '<button id="vcUsarCon" style="flex:1;background:#35b8a0;border:none;color:#06251f;border-radius:10px;padding:10px;font-weight:800;font-size:.74rem">＋ Ploteado (instalado): ' + plata(vCon) + '</button>' +
+      '</div></div>';
+    const agregarItem = (inst, venta)=>{
+      if(!vcPedido) return;
+      const nom = '🪟 ' + mat.nombre + ' × ' + ok + ' pieza(s) · ' + (inst ? 'ploteado (instalado)' : 'plotear (sin instalar)') + ' · ' +
+        vcPzs.filter(p=>p.w>0&&p.h>0).map(p=> p.w + '×' + p.h + (p.cant>1 ? ' ×' + p.cant : '')).join(' + ');
+      vcPedido.items.push({prod:null, vc:true, nombre:nom, cant:1, precio:venta, costoU:costo});
+      registrar('agregó vinilo de corte ' + plata(venta) + ' al pedido');
+      guardarDatos(); renderPedidoItems(vcPedido); actualizarTotal(vcPedido); renderPedidos();
+      toast('🪟 Vinilo agregado al pedido ✓');
+    };
+    const bs = document.getElementById('vcUsarSin'); if(bs) bs.onclick = ()=> agregarItem(false, Math.round(costo*mSin));
+    const bc = document.getElementById('vcUsarCon'); if(bc) bc.onclick = ()=> agregarItem(true, Math.round(costo*mCon));
+    // comparar las mismas piezas en TODAS las calidades (para ofrecerle opciones al cliente)
+    if(adCfg.vc.materiales.length > 1){
+      let comp = '<div style="margin-top:8px;font-size:.68rem;color:var(--texto2);font-weight:700">Otras calidades con las mismas piezas (tocá para cambiar):</div>';
+      for(const m2 of adCfg.vc.materiales){
+        let c2 = 0, ok2 = 0;
+        for(const pz of vcPzs){
+          if(!(pz.w > 0 && pz.h > 0)) continue;
+          const r2 = vcMejorRollo(m2, pz.w, pz.h);
+          if(r2){ c2 += Math.round(r2.costo) * (pz.cant||1); ok2 += (pz.cant||1); }
+        }
+        if(m2.tipo === 'impreso'){
+          const bMl2 = parseFloat((document.getElementById('vcBlancoMl')||{}).value) || 0;
+          c2 += Math.round(bMl2 * (m2.blancoMl||0));
+        }
+        if(!ok2) continue;
+        const act = m2.nombre === mat.nombre;
+        comp += '<button class="vcComp" data-mat="' + m2.nombre.replace(/"/g,'&quot;') + '" style="display:block;width:100%;text-align:left;margin-top:4px;border-radius:9px;padding:8px 10px;font-size:.7rem;background:' + (act ? 'rgba(53,184,160,.14)' : 'var(--panel2)') + ';border:1px ' + (act ? 'solid #35b8a0' : 'dashed var(--borde)') + ';color:var(--texto)">' +
+          (act ? '✓ ' : '') + m2.nombre + ' → plotear ' + plata(Math.round(c2*mSin)) + ' · ploteado ' + plata(Math.round(c2*mCon)) + '</button>';
+      }
+      res.innerHTML += comp;
+      res.querySelectorAll('.vcComp').forEach(b=>{
+        b.onclick = ()=>{ document.getElementById('vcMat').value = b.dataset.mat; vcCalcular(); };
+      });
+    }
+  }else res.innerHTML = '<div class="vacio" style="padding:8px">Cargá al menos una pieza.</div>';
+  // desploteado
+  let m2 = 0;
+  document.querySelectorAll('#vcDesMedidas > div').forEach((f, i)=>{
+    const d = vcDes[i]; if(!d) return;
+    const el = f.querySelector('.det');
+    if(d.w > 0 && d.h > 0){ const a = (d.w/100)*(d.h/100); m2 += a; el.textContent = (Math.round(a*100)/100) + ' m²'; }
+    else el.textContent = '';
+  });
+  document.getElementById('vcDesInfo').textContent = m2 > 0 ? ('superficie: ' + (Math.round(m2*100)/100) + ' m²') : '';
+  const horas = parseFloat(document.getElementById('vcDesHoras').value) || 0;
+  const vHora = parseFloat(document.getElementById('vcDesHora$').value) || 0;
+  const resD = document.getElementById('vcDesResultado');
+  if(horas > 0 && (m2 > 0 || vcDes.length)){
+    const venta = Math.round(horas * vHora);
+    const costoD = Math.round(horas * (adCfg.vc.desplote.costoHora||0));
+    resD.innerHTML = '<button id="vcUsarDes" style="width:100%;background:var(--panel2);border:1px dashed var(--texto2);color:var(--texto);border-radius:10px;padding:10px;font-weight:800;font-size:.74rem">＋ Desploteado: ' + horas + ' h × ' + plata(vHora) + ' = ' + plata(venta) + '</button>';
+    document.getElementById('vcUsarDes').onclick = ()=>{
+      if(!vcPedido) return;
+      vcPedido.items.push({prod:null, vc:true, nombre:'🧹 Desploteado ' + (m2>0 ? (Math.round(m2*100)/100) + ' m² ' : '') + '(' + horas + ' h)', cant:1, precio:venta, costoU:costoD});
+      registrar('agregó desploteado ' + plata(venta) + ' al pedido');
+      guardarDatos(); renderPedidoItems(vcPedido); actualizarTotal(vcPedido); renderPedidos();
+      toast('🧹 Desploteado agregado ✓');
+    };
+  }else resD.innerHTML = '';
+}
+function vcRenderConfig(){
+  const c = document.getElementById('vcConfig');
+  c.innerHTML = '';
+  const fila = (label, obj, campo, ancho)=>{
+    const d = document.createElement('div');
+    d.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:5px';
+    d.innerHTML = '<span style="font-size:.7rem;color:var(--texto2);flex:1">' + label + '</span><input type="number" step="0.1" style="width:' + (ancho||100) + 'px;margin:0" value="' + obj[campo] + '">';
+    d.querySelector('input').addEventListener('change', (e)=>{ obj[campo] = parseFloat(e.target.value)||obj[campo]; guardarDatos(); vcCalcular(); });
+    c.appendChild(d);
+  };
+  fila('✂️ Margen del plotter (cm por lado que come)', adCfg.vc, 'margenPlotter', 76);
+  for(const m of adCfg.vc.materiales){
+    const t = document.createElement('div'); t.style.cssText='font-size:.72rem;font-weight:700;color:#35b8a0;margin:6px 0 4px'; t.textContent = m.nombre + (m.tipo==='impreso' ? ' (impreso)' : '') + ' — $ por metro lineal según ancho de rollo'; c.appendChild(t);
+    for(const a of m.anchos){ fila('Rollo ' + a.cm + ' cm — ancho', a, 'cm', 70); fila('Rollo ' + a.cm + ' cm — $ impreso/ml', a, 'precio'); }
+    if(m.tipo === 'impreso'){
+      fila('⬜ $ ml SIN imprimir', m, 'blancoMl');
+      fila('✂️ $ ml corte con registro', m, 'corteMl');
+    }
+    const bA = document.createElement('button');
+    bA.textContent = '＋ ancho de rollo'; bA.style.cssText = 'margin:2px 0 6px;border-radius:8px;padding:6px 10px;font-size:.68rem;font-weight:700;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)';
+    bA.onclick = ()=>{ m.anchos.push({cm:100, precio:0}); guardarDatos(); vcRenderConfig(); vcCalcular(); };
+    c.appendChild(bA);
+  }
+  const bM = document.createElement('button');
+  bM.textContent = '＋ material / proveedor nuevo';
+  bM.style.cssText = 'margin:4px 0 8px;border-radius:8px;padding:8px 10px;font-size:.7rem;font-weight:700;background:var(--panel2);border:1px dashed #35b8a0;color:#35b8a0';
+  bM.onclick = ()=>{
+    const inp = document.createElement('input');
+    inp.placeholder = 'nombre del vinilo · proveedor';
+    inp.style.cssText = 'margin:0 0 6px;padding:8px;font-size:13px;background:var(--fondo);border:1px solid #35b8a0;border-radius:8px;color:var(--texto);width:100%';
+    bM.replaceWith(inp); inp.focus();
+    const conf = ()=>{
+      const t = (inp.value||'').trim();
+      if(t){ adCfg.vc.materiales.push({nombre:t, anchos:[{cm:100, precio:0}]}); guardarDatos(); }
+      vcRenderConfig(); abrirViniloCorte(vcPedido);
+    };
+    inp.addEventListener('change', conf); inp.addEventListener('blur', conf);
+  };
+  c.appendChild(bM);
+  const t2 = document.createElement('div'); t2.style.cssText='font-size:.72rem;font-weight:700;color:#35b8a0;margin:8px 0 4px'; t2.textContent = 'Corte — $ por metro lineal según ancho'; c.appendChild(t2);
+  for(const ct of adCfg.vc.cortes) fila('Hasta ' + ct.hasta + ' cm', ct, 'precio');
+  const t3 = document.createElement('div'); t3.style.cssText='font-size:.72rem;font-weight:700;color:#35b8a0;margin:8px 0 4px'; t3.textContent = 'Desploteado'; c.appendChild(t3);
+  fila('Horas por defecto', adCfg.vc.desplote, 'horas', 76);
+  fila('$ hora venta', adCfg.vc.desplote, 'ventaHora');
+  fila('$ hora costo', adCfg.vc.desplote, 'costoHora');
+  const t4 = document.createElement('div'); t4.style.cssText='font-size:.72rem;font-weight:700;color:#35b8a0;margin:8px 0 4px'; t4.textContent = 'Multiplicadores por defecto'; c.appendChild(t4);
+  fila('× plotear (sin instalar)', adCfg.vc, 'multSin', 76);
+  fila('× ploteado (instalado)', adCfg.vc, 'multCon', 76);
+}
+document.getElementById('btnViniloCorte').onclick = ()=>{ if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirViniloCorte(p); } };
+document.getElementById('vcCerrar').onclick = ()=>{ document.getElementById('modalViniloCorte').classList.remove('abierto'); if(vcPedido) abrirPedido(vcPedido.id); };
+document.getElementById('vcAgregarPieza').onclick = ()=>{ vcPzs.push({w:'',h:'',cant:1}); vcRenderPiezas(); };
+document.getElementById('vcAgregarDes').onclick = ()=>{ vcDes.push({w:'',h:''}); vcRenderDes(); };
+document.getElementById('vcBlancoMl').addEventListener('input', ()=>{ if(typeof vcCalcular === 'function') vcCalcular(); });
+for(const id of ['vcMultSin','vcMultCon','vcDesHoras','vcDesHora$']) document.getElementById(id).addEventListener('input', vcCalcular);
 document.getElementById('btnAdOff').onclick = ()=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
   if(!p) return;
