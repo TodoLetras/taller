@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v76</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v77</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -545,7 +545,7 @@
     <details style="margin-bottom:10px"><summary style="font-size:.74rem;color:var(--texto2);cursor:pointer">⚙️ Precios y medidas (editar como el papel)</summary>
       <div id="vcConfig" style="padding:8px 0"></div>
     </details>
-    <button id="vcCerrar" style="width:100%;border-radius:12px;padding:12px;font-weight:700;background:var(--panel2);border:1px solid var(--borde);color:var(--texto)">Cerrar</button>
+    <button id="vcCerrar" style="width:100%;border-radius:12px;padding:13px;font-weight:800;background:#35b8a0;border:none;color:#06251f;font-size:.85rem">✓ LISTO — volver al pedido</button>
   </div>
 </div>
 <div class="modal" id="modalOffDig">
@@ -7046,7 +7046,19 @@ modalAd.addEventListener('click', e=>{ if(e.target===modalAd){ modalAd.classList
 document.getElementById('btnCompraPed').onclick = ()=>{ if(pedidoAbierto) abrirCompra(pedidoAbierto); };
 
 /* ============ VINILO DE CORTE (vidrieras) ============ */
-let vcPedido = null, vcPzs = [], vcDes = [];
+let vcPedido = null, vcPzs = [], vcDes = [], vcAccSin = null, vcAccCon = null;
+(function(){
+  const res = document.getElementById('vcResultado');
+  if(res && !res.dataset.deleg){
+    res.dataset.deleg = '1';
+    res.addEventListener('click', (e)=>{
+      if(e.target.closest('#vcUsarSin')){ if(vcAccSin) vcAccSin(); return; }
+      if(e.target.closest('#vcUsarCon')){ if(vcAccCon) vcAccCon(); return; }
+      const bComp = e.target.closest('.vcComp');
+      if(bComp){ document.getElementById('vcMat').value = bComp.dataset.mat; vcCalcular(); }
+    });
+  }
+})();
 function vcCortePrecio(anchoCm){
   for(const c of (adCfg.vc.cortes||[])) if(anchoCm <= c.hasta) return c.precio;
   return (adCfg.vc.cortes||[]).length ? adCfg.vc.cortes[adCfg.vc.cortes.length-1].precio : 0;
@@ -7168,8 +7180,8 @@ function vcCalcular(){
       ok + ' pieza(s) · ' + (Math.round(mlTot*100)/100) + ' ml de rollo · costo ' + plata(costo) +
       '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">' +
       '<div style="width:100%;font-size:.7rem;font-weight:800;color:#35b8a0;margin-bottom:2px">👇 TOCÁ UNA OPCIÓN PARA AGREGARLA AL PEDIDO:</div>' +
-      '<button id="vcUsarSin" style="flex:1;background:var(--panel2);border:1px dashed #35b8a0;color:#35b8a0;border-radius:10px;padding:12px;font-weight:800;font-size:.74rem">➕ AGREGAR: plotear (sin instalar)<br>' + plata(vSin) + '</button>' +
-      '<button id="vcUsarCon" style="flex:1;background:#35b8a0;border:none;color:#06251f;border-radius:10px;padding:12px;font-weight:800;font-size:.74rem">➕ AGREGAR: ploteado (instalado)<br>' + plata(vCon) + '</button>' +
+      '<button id="vcUsarSin" style="flex:1;background:var(--panel2);border:1px dashed #35b8a0;color:#35b8a0;border-radius:10px;padding:12px;font-weight:800;font-size:.74rem">➕ Agregar ' + mat.nombre + '<br>plotear (sin instalar) · ' + plata(vSin) + '</button>' +
+      '<button id="vcUsarCon" style="flex:1;background:#35b8a0;border:none;color:#06251f;border-radius:10px;padding:12px;font-weight:800;font-size:.74rem">➕ Agregar ' + mat.nombre + '<br>ploteado (instalado) · ' + plata(vCon) + '</button>' +
       '</div></div>';
     const agregarItem = (inst, venta)=>{
       if(!vcPedido) return;
@@ -7178,9 +7190,7 @@ function vcCalcular(){
       vcPedido.items.push({prod:null, vc:true, nombre:nom, cant:1, precio:venta, costoU:costo});
       registrar('agregó vinilo de corte ' + plata(venta) + ' al pedido');
       guardarDatos(); renderPedidos();
-      document.getElementById('modalViniloCorte').classList.remove('abierto');
-      abrirPedido(vcPedido.id);
-      toast('🪟 Vinilo agregado al pedido ✓ (mirá la lista de ítems)');
+      toast('✓ Agregado al pedido (' + vcPedido.items.length + ' ítems) · seguí cargando y tocá LISTO al final');
     };
     // comparar las mismas piezas en TODAS las calidades (para ofrecerle opciones al cliente)
     if(adCfg.vc.materiales.length > 1){
@@ -7202,14 +7212,11 @@ function vcCalcular(){
           (act ? '✓ ' : '') + m2.nombre + ' → plotear ' + plata(Math.round(c2*mSin)) + ' · ploteado ' + plata(Math.round(c2*mCon)) + '</button>';
       }
       res.innerHTML += comp;
-      res.querySelectorAll('.vcComp').forEach(b=>{
-        b.onclick = ()=>{ document.getElementById('vcMat').value = b.dataset.mat; vcCalcular(); };
-      });
     }
-    // IMPORTANTE: los handlers van al FINAL, después de todo cambio de innerHTML (si no, se pierden)
-    const bs = document.getElementById('vcUsarSin'); if(bs) bs.onclick = ()=> agregarItem(false, Math.round(costo*mSin));
-    const bc = document.getElementById('vcUsarCon'); if(bc) bc.onclick = ()=> agregarItem(true, Math.round(costo*mCon));
-  }else res.innerHTML = '<div class="vacio" style="padding:8px">Cargá al menos una pieza.</div>';
+    // acciones vigentes de este cálculo (los clicks se resuelven por delegación, inmune a redibujados)
+    vcAccSin = ()=> agregarItem(false, Math.round(costo*mSin));
+    vcAccCon = ()=> agregarItem(true, Math.round(costo*mCon));
+  }else{ res.innerHTML = '<div class="vacio" style="padding:8px">Cargá al menos una pieza.</div>'; vcAccSin = vcAccCon = null; }
   // desploteado
   let m2 = 0;
   document.querySelectorAll('#vcDesMedidas > div').forEach((f, i)=>{
@@ -7238,9 +7245,7 @@ function vcCalcular(){
       vcPedido.items.push({prod:null, vc:true, nombre:'🧹 Desploteado ' + (m2>0 ? (Math.round(m2*100)/100) + ' m² ' : '') + '(' + horas + ' h)', cant:1, precio:venta, costoU:costoD});
       registrar('agregó desploteado ' + plata(venta) + ' al pedido');
       guardarDatos(); renderPedidos();
-      document.getElementById('modalViniloCorte').classList.remove('abierto');
-      abrirPedido(vcPedido.id);
-      toast('🧹 Desploteado agregado ✓ (mirá la lista de ítems)');
+      toast('✓ Desploteado agregado (' + vcPedido.items.length + ' ítems) · tocá LISTO al final');
     };
   }else resD.innerHTML = '';
 }
