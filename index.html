@@ -247,7 +247,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v77</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v79</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -528,6 +528,13 @@
       <input id="vcMultSin" type="number" step="0.1" style="width:70px;margin:0">
       <label style="font-size:.72rem;color:var(--texto2);margin:0">ploteado (instalado) ×</label>
       <input id="vcMultCon" type="number" step="0.1" style="width:70px;margin:0">
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <label style="font-size:.72rem;color:var(--texto2);margin:0">🚗 Locales / shoppings extra</label>
+      <input id="vcExtraCant" type="number" inputmode="numeric" min="0" placeholder="0" style="width:70px;margin:0">
+      <label style="font-size:.72rem;color:var(--texto2);margin:0">× $</label>
+      <input id="vcExtra$" type="number" inputmode="numeric" style="width:100px;margin:0">
+      <span style="font-size:.64rem;color:var(--texto2)">(se suma solo al instalado)</span>
     </div>
     <div id="vcResultado" style="margin-bottom:4px"></div>
     <div style="font-size:.64rem;color:var(--texto2);margin-bottom:12px">💡 Los botones ＋ agregan el ítem al pedido (eso es guardar). Lo que cargás acá queda además como borrador del pedido: cerrá tranquilo, al volver está todo.</div>
@@ -1282,6 +1289,26 @@ function migrarSoldadoRuis(){
   // vc incremental: margen del plotter + proveedor Tigre (látex impreso con medio corte)
   if(typeof adCfg === 'object' && adCfg && adCfg.vc){
     if(adCfg.vc.margenPlotter === undefined) adCfg.vc.margenPlotter = 1;   // cm que come el plotter POR LADO (editable)
+    if(adCfg.vc.extraInstalacion === undefined) adCfg.vc.extraInstalacion = 25000;  // $ por local/shopping extra
+    // el proveedor no va en el nombre (lo ve el cliente): pasa a campo interno
+    for(const m of adCfg.vc.materiales){
+      if(/tigre/i.test(m.nombre||'')){
+        m.prov = 'Tigre';
+        m.nombre = m.nombre.replace(/\s*·?\s*Tigre/gi, '').trim();
+      }
+    }
+    if(typeof pedidos !== 'undefined') for(const p of pedidos){
+      if(p.items) for(const it of p.items){
+        if(!it.vc) continue;
+        if(/tigre/i.test(it.nombre||'')) it.nombre = it.nombre.replace(/\s*·?\s*Tigre/gi, '').trim();
+        if(/^🧹 Desploteado/.test(it.nombre||'') && /m²|\(.*h\)/.test(it.nombre)) it.nombre = '🧹 Desploteado (retiro de vinilo existente)';
+        // medidas sin "cm": 86.5708×67 → 86.6×67 cm
+        it.nombre = (it.nombre||'').replace(/(\d+(?:[.,]\d+)?)×(\d+(?:[.,]\d+)?)(?!\s*cm)/g, (m, a, b)=>{
+          const r = x => Math.round(parseFloat(String(x).replace(',', '.'))*10)/10;
+          return r(a) + '×' + r(b) + ' cm';
+        });
+      }
+    }
     if(!adCfg.vc.materiales.find(m=> (m.nombre||'').toLowerCase().includes('tigre'))){
       adCfg.vc.materiales.push({
         nombre: 'Vinilo impreso látex base blanca · Tigre',
@@ -7093,7 +7120,7 @@ function abrirViniloCorte(p){
   const sel = document.getElementById('vcMat');
   sel.innerHTML = '';
   for(const m of adCfg.vc.materiales){
-    const o = document.createElement('option'); o.value = m.nombre; o.textContent = m.nombre; sel.appendChild(o);
+    const o = document.createElement('option'); o.value = m.nombre; o.textContent = m.nombre + (m.prov ? '  🏷 ' + m.prov : ''); sel.appendChild(o);
   }
   sel.onchange = vcCalcular;
   if(b && b.mat && adCfg.vc.materiales.find(m=>m.nombre===b.mat)) sel.value = b.mat;
@@ -7102,6 +7129,8 @@ function abrirViniloCorte(p){
   document.getElementById('vcDesHoras').value = (b && b.horas !== undefined) ? b.horas : adCfg.vc.desplote.horas;
   document.getElementById('vcDesHora$').value = (b && b.vHora) || adCfg.vc.desplote.ventaHora;
   document.getElementById('vcBlancoMl').value = (b && b.blanco) || '';
+  document.getElementById('vcExtraCant').value = (b && b.extraCant) || '';
+  document.getElementById('vcExtra$').value = (b && b.extraVal) || adCfg.vc.extraInstalacion;
   vcRenderPiezas(); vcRenderDes(); vcRenderConfig(); vcCalcular();
   document.getElementById('modalViniloCorte').classList.add('abierto');
 }
@@ -7173,9 +7202,12 @@ function vcCalcular(){
     document.getElementById('vcBlancoInfo').textContent = bMl > 0 ? ('× ' + plata(mat.blancoMl||0) + '/ml = ' + plata(blancoCosto)) : ('a ' + plata(mat.blancoMl||0) + '/ml');
     costo += blancoCosto;
   }
+  const extraCant = parseInt((document.getElementById('vcExtraCant')||{}).value)||0;
+  const extraVal = parseFloat((document.getElementById('vcExtra$')||{}).value)||0;
+  const extraTot = extraCant * extraVal;
   const res = document.getElementById('vcResultado');
   if(ok > 0){
-    const vSin = Math.round(costo * mSin), vCon = Math.round(costo * mCon);
+    const vSin = Math.round(costo * mSin), vCon = Math.round(costo * mCon) + extraTot;
     res.innerHTML = '<div style="padding:10px;border-radius:10px;background:rgba(53,184,160,.08);border:1px dashed #35b8a0;font-size:.76rem;line-height:1.8">' +
       ok + ' pieza(s) · ' + (Math.round(mlTot*100)/100) + ' ml de rollo · costo ' + plata(costo) +
       '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">' +
@@ -7186,7 +7218,8 @@ function vcCalcular(){
     const agregarItem = (inst, venta)=>{
       if(!vcPedido) return;
       const nom = '🪟 ' + mat.nombre + ' × ' + ok + ' pieza(s) · ' + (inst ? 'ploteado (instalado)' : 'plotear (sin instalar)') + ' · ' +
-        vcPzs.filter(p=>p.w>0&&p.h>0).map(p=> p.w + '×' + p.h + (p.cant>1 ? ' ×' + p.cant : '')).join(' + ');
+        vcPzs.filter(p=>p.w>0&&p.h>0).map(p=> (Math.round(p.w*10)/10) + '×' + (Math.round(p.h*10)/10) + ' cm' + (p.cant>1 ? ' ×' + p.cant : '')).join(' + ') +
+        (inst && extraCant > 0 ? ' · instalación en ' + extraCant + ' local(es)' : '');
       vcPedido.items.push({prod:null, vc:true, nombre:nom, cant:1, precio:venta, costoU:costo});
       registrar('agregó vinilo de corte ' + plata(venta) + ' al pedido');
       guardarDatos(); renderPedidos();
@@ -7209,13 +7242,13 @@ function vcCalcular(){
         if(!ok2) continue;
         const act = m2.nombre === mat.nombre;
         comp += '<button class="vcComp" data-mat="' + m2.nombre.replace(/"/g,'&quot;') + '" style="display:block;width:100%;text-align:left;margin-top:4px;border-radius:9px;padding:8px 10px;font-size:.7rem;background:' + (act ? 'rgba(53,184,160,.14)' : 'var(--panel2)') + ';border:1px ' + (act ? 'solid #35b8a0' : 'dashed var(--borde)') + ';color:var(--texto)">' +
-          (act ? '✓ ' : '') + m2.nombre + ' → plotear ' + plata(Math.round(c2*mSin)) + ' · ploteado ' + plata(Math.round(c2*mCon)) + '</button>';
+          (act ? '✓ ' : '') + m2.nombre + (m2.prov ? ' 🏷' + m2.prov : '') + ' → plotear ' + plata(Math.round(c2*mSin)) + ' · ploteado ' + plata(Math.round(c2*mCon) + extraTot) + '</button>';
       }
       res.innerHTML += comp;
     }
     // acciones vigentes de este cálculo (los clicks se resuelven por delegación, inmune a redibujados)
     vcAccSin = ()=> agregarItem(false, Math.round(costo*mSin));
-    vcAccCon = ()=> agregarItem(true, Math.round(costo*mCon));
+    vcAccCon = ()=> agregarItem(true, Math.round(costo*mCon) + extraTot);
   }else{ res.innerHTML = '<div class="vacio" style="padding:8px">Cargá al menos una pieza.</div>'; vcAccSin = vcAccCon = null; }
   // desploteado
   let m2 = 0;
@@ -7232,6 +7265,7 @@ function vcCalcular(){
   if(vcPedido){
     vcPedido.vcBorrador = {mat: mat.nombre, mSin, mCon, horas, vHora,
       blanco: parseFloat((document.getElementById('vcBlancoMl')||{}).value)||0,
+      extraCant, extraVal,
       pzs: vcPzs.map(x=>({...x})), des: vcDes.map(x=>({...x}))};
     guardarDatos();
   }
@@ -7242,7 +7276,7 @@ function vcCalcular(){
     resD.innerHTML = '<button id="vcUsarDes" style="width:100%;background:var(--panel2);border:1px dashed var(--texto2);color:var(--texto);border-radius:10px;padding:12px;font-weight:800;font-size:.74rem">➕ AGREGAR AL PEDIDO: desploteado ' + horas + ' h × ' + plata(vHora) + ' = ' + plata(venta) + '</button>';
     document.getElementById('vcUsarDes').onclick = ()=>{
       if(!vcPedido) return;
-      vcPedido.items.push({prod:null, vc:true, nombre:'🧹 Desploteado ' + (m2>0 ? (Math.round(m2*100)/100) + ' m² ' : '') + '(' + horas + ' h)', cant:1, precio:venta, costoU:costoD});
+      vcPedido.items.push({prod:null, vc:true, nombre:'🧹 Desploteado (retiro de vinilo existente)', cant:1, precio:venta, costoU:costoD});
       registrar('agregó desploteado ' + plata(venta) + ' al pedido');
       guardarDatos(); renderPedidos();
       toast('✓ Desploteado agregado (' + vcPedido.items.length + ' ítems) · tocá LISTO al final');
@@ -7260,6 +7294,7 @@ function vcRenderConfig(){
     c.appendChild(d);
   };
   fila('✂️ Margen del plotter (cm por lado que come)', adCfg.vc, 'margenPlotter', 76);
+  fila('🚗 $ extra instalación por local (por defecto)', adCfg.vc, 'extraInstalacion');
   for(const m of adCfg.vc.materiales){
     const t = document.createElement('div'); t.style.cssText='font-size:.72rem;font-weight:700;color:#35b8a0;margin:6px 0 4px'; t.textContent = m.nombre + (m.tipo==='impreso' ? ' (impreso)' : '') + ' — $ por metro lineal según ancho de rollo'; c.appendChild(t);
     for(const a of m.anchos){ fila('Rollo ' + a.cm + ' cm — ancho', a, 'cm', 70); fila('Rollo ' + a.cm + ' cm — $ impreso/ml', a, 'precio'); }
@@ -7303,6 +7338,8 @@ document.getElementById('vcCerrar').onclick = ()=>{ document.getElementById('mod
 document.getElementById('vcAgregarPieza').onclick = ()=>{ vcPzs.push({w:'',h:'',cant:1}); vcRenderPiezas(); };
 document.getElementById('vcAgregarDes').onclick = ()=>{ vcDes.push({w:'',h:''}); vcRenderDes(); };
 document.getElementById('vcBlancoMl').addEventListener('input', ()=>{ if(typeof vcCalcular === 'function') vcCalcular(); });
+document.getElementById('vcExtraCant').addEventListener('input', ()=>{ if(typeof vcCalcular === 'function') vcCalcular(); });
+document.getElementById('vcExtra$').addEventListener('input', ()=>{ if(typeof vcCalcular === 'function') vcCalcular(); });
 for(const id of ['vcMultSin','vcMultCon','vcDesHoras','vcDesHora$']) document.getElementById(id).addEventListener('input', vcCalcular);
 document.getElementById('btnAdOff').onclick = ()=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
