@@ -279,7 +279,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v83</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v86</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -301,6 +301,9 @@
 <div id="buscadorTareasWrap" style="padding:0 16px 6px">
   <div id="noLeidos"></div>
   <input id="buscarTareas" class="buscador-cli" placeholder="🔍 Buscar tarea o cliente…">
+  <button id="btnOcultarMigradas" style="width:100%;margin-top:6px;background:var(--panel);
+    border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:8px;
+    font-size:.72rem;font-weight:700"></button>
 </div>
 <div id="lista"></div>
 
@@ -453,7 +456,8 @@
     <div id="panelUV" style="display:none">
       <div class="uv-mults">
         <div>Sin instalación: costo ×<input id="uvMultSin" type="number" step="0.1" inputmode="decimal"></div>
-        <div>Con instalación: costo ×<input id="uvMultCon" type="number" step="0.1" inputmode="decimal"></div>
+        <div>Con instalación (originales): costo ×<input id="uvMultCon" type="number" step="0.1" inputmode="decimal"></div>
+        <div>Instalación (alternativas): + $<input id="uvInstM2" type="number" step="500" inputmode="numeric"> por m²</div>
       </div>
       <div style="font-size:.68rem;color:var(--texto2);margin:6px 0 8px">Precios por m² · Mimaki tintas UV-LED premium (LMK) · Tocá el costo para actualizarlo</div>
       <div id="listaUV" style="max-height:42vh;overflow-y:auto;margin-bottom:10px"></div>
@@ -1008,6 +1012,7 @@ const OFFSET_SEMILLA = {
 const UV_SEMILLA = {
   multSin: 2,
   multCon: 3,
+  instM2: 15000,   /* instalación por m² cuando el material no trae la suya */
   mats: []
 };
 function tipoInstalacion(nombre){
@@ -1431,6 +1436,25 @@ function migrarSoldadoRuis(){
     ];
     for(const m of matsSR) uv.mats.push({id:uid()+Math.random().toString(36).slice(2,4), ...m});
   }
+  // limpieza de una sola vez: materiales UV repetidos por una versión vieja sin protección.
+  // Son idénticos en costo e instalación, así que se conserva el primero de cada nombre.
+  if(uv && uv.mats && uv.mats.length){
+    const vistos = new Set(); const limpios = []; let repetidos = 0;
+    for(const m of uv.mats){
+      const clave = normalizarTexto(m.nombre||'');
+      if(vistos.has(clave)){ repetidos++; continue; }
+      vistos.add(clave); limpios.push(m);
+    }
+    if(repetidos){
+      uv.mats = limpios;
+      registrar('unificó ' + repetidos + ' materiales UV repetidos');
+    }
+  }
+  // las tintas alternativas cobran instalación por m² fijo, no por multiplicador
+  if(uv && uv.mats) for(const m of uv.mats){
+    if(m.instM2 == null && normalizarTexto(m.nombre||'').includes('alternativa'))
+      m.instM2 = (uv.instM2 != null ? uv.instM2 : 15000);
+  }
   // el proveedor NO va en el nombre (el nombre lo ve el cliente): pasa a campo interno
   if(uv && uv.mats) for(const m of uv.mats){
     if(normalizarTexto(m.nombre||'').includes('soldado')){
@@ -1586,11 +1610,40 @@ function tarjetaTarea(t, contenedor){
   contenedor.appendChild(d);
 }
 
+let ocultarMigradas = false;
+
+/* una tarea "ya es pedido" si se convirtió en orden, si quedó colgada de una,
+   o si la descartaste en la migración */
+function yaEsPedido(t){
+  if(pedidos.some(p=>p.id===t.id)) return true;
+  if(t.pedido && pedidos.some(p=>p.id===t.pedido)) return true;
+  if((tareasDescartadas||[]).includes(t.id)) return true;
+  for(const p of pedidos)
+    for(const x of (p.pendientes||[])) if(x.tareaOrigen===t.id) return true;
+  for(const x of (pendientesSueltos||[])) if(x.tareaOrigen===t.id) return true;
+  return false;
+}
+
+function pintarBtnMigradas(){
+  const b = document.getElementById('btnOcultarMigradas');
+  if(!b) return;
+  const n = tareas.filter(yaEsPedido).length;
+  if(!n){ b.style.display='none'; return; }
+  b.style.display = 'block';
+  b.textContent = ocultarMigradas
+    ? '👁 Mostrar las ' + n + ' que ya son pedido'
+    : '🙈 Ocultar las ' + n + ' que ya son pedido';
+  b.style.borderColor = ocultarMigradas ? 'var(--ambar)' : 'var(--borde)';
+  b.style.color = ocultarMigradas ? 'var(--ambar)' : 'var(--texto2)';
+}
+
 function render(){
   renderNoLeidos();
+  pintarBtnMigradas();
   const cont = document.getElementById('lista');
   cont.innerHTML = '';
   let visibles = tareas.filter(t => filtro==='todas' ? true : t.cat===filtro);
+  if(ocultarMigradas) visibles = visibles.filter(t => !yaEsPedido(t));
   const qT = normalizarTexto((document.getElementById('buscarTareas')||{}).value || '');
   if(qT) visibles = visibles.filter(t=>
     normalizarTexto(t.texto).includes(qT) || normalizarTexto(nombreCliente(t)).includes(qT)
@@ -1598,7 +1651,11 @@ function render(){
   if(!visibles.length){
     cont.innerHTML = qT
       ? '<div class="vacio">Ninguna tarea coincide con la búsqueda.</div>'
-      : '<div class="vacio">No hay tareas acá. Tocá <b>+ Nueva tarea</b> para agregar.</div>';
+      : (ocultarMigradas
+        ? '<div class="vacio">Todas estas tareas ya viven en la <b>Agenda</b>, como pendientes ' +
+          'de su orden.<br><br>No hace falta borrarlas: están duplicadas, no perdidas. ' +
+          'Tocá el botón de arriba si querés volver a verlas.</div>'
+        : '<div class="vacio">No hay tareas acá. Tocá <b>+ Nueva tarea</b> para agregar.</div>');
     return;
   }
   for(const c of cats){
@@ -1775,13 +1832,23 @@ function soltarDrag(){
   guardarDatos(); render(); renderCalendario();
 }
 
+/* ¿el bloque de fotos y chat lo sigue usando alguien? */
+function bloqueEnUso(id){
+  if(pedidos.some(p=>p.id===id)) return true;              // la orden nació de esta tarea
+  for(const p of pedidos)
+    for(const x of (p.pendientes||[])) if(x.bloques===id || x.tareaOrigen===id) return true;
+  for(const x of (pendientesSueltos||[])) if(x.bloques===id || x.tareaOrigen===id) return true;
+  return false;
+}
+
 async function borrar(id){
   const tb = tareas.find(x=>x.id===id);
   if(tb) registrar('borró la tarea "' + (tb.texto||'').slice(0,50) + '"');
   tareas = tareas.filter(x=>x.id!==id);
-  try{ await window.storage.delete('bloques:'+id); }catch(e){}
+  const enUso = bloqueEnUso(id);
+  if(!enUso){ try{ await window.storage.delete('bloques:'+id); }catch(e){} }
   render(); renderCalendario(); guardarDatos();
-  toast('Tarea borrada');
+  toast(enUso ? 'Tarea borrada — fotos y chat conservados ✓' : 'Tarea borrada');
 }
 
 /* confirmación por doble toque (los diálogos del navegador están bloqueados en el visor) */
@@ -2656,6 +2723,9 @@ function renderAgenda(){
   }
 }
 
+document.getElementById('btnOcultarMigradas').onclick = ()=>{
+  ocultarMigradas = !ocultarMigradas; render();
+};
 document.getElementById('vAgenda').onclick = ()=> setVista('agenda');
 document.getElementById('vLista').onclick = ()=> setVista('lista');
 document.getElementById('vCal').onclick = ()=> setVista('cal');
@@ -4076,8 +4146,8 @@ function renderBuscadorItems(p){
     for(const m of resUV){
       const inst = tipoInstalacion(m.nombre);
       const opciones = [
-        ['🖨 '+m.nombre+' impreso · sin instalación · m²', Math.round(m.costo*uv.multSin)],
-        ['🖨 '+m.nombre+' '+inst+' · m²', Math.round(m.instM2 ? m.costo*uv.multSin + m.instM2 : m.costo*uv.multCon)],
+        ['🖨 '+m.nombre+' impreso · sin instalación · m²', Math.round(uvPrecioSin(m))],
+        ['🖨 '+m.nombre+' '+inst+' · m²', Math.round(uvPrecioCon(m))],
       ];
       for(const [nom, precio] of opciones){
         const b = document.createElement('button');
@@ -8067,7 +8137,7 @@ function renderOffset(){
       '<button class="uv-costo">costo '+plata(m.costo)+'</button>' +
       '<button class="mini borrarOff">✕</button></div>' +
       '<div class="uv-ventas"><span>Venta: <b>'+plata(ventaOffset(m))+'</b></span></div>';
-    f.querySelector('.uv-nombre').textContent = m.nombre + (m.prov ? '  \U0001F3F7 ' + m.prov : '');
+    f.querySelector('.uv-nombre').textContent = m.nombre + (m.prov ? '  · ' + m.prov : '');
     f.querySelector('.uv-costo').onclick = function(){
       const inp = document.createElement('input');
       inp.type = 'number'; inp.inputMode = 'numeric';
@@ -8117,9 +8187,32 @@ document.getElementById('btnListaPrecios').onclick = ()=>{
   document.getElementById('btnCompartir').style.display = navigator.share ? '' : 'none';
   document.getElementById('modalResumen').classList.add('abierto');
 };
+/* Dos reglas distintas según la tinta:
+   · tintas UV alternativas -> instalado = costo × multSin + un fijo por m²
+   · tintas originales Mimaki -> instalado = costo × multCon
+   Manda el material: si tiene instM2 cargado, usa el fijo; si no, el multiplicador. */
+function uvEsAlternativa(m){
+  return !!m && (m.instM2 != null || normalizarTexto(m.nombre||'').includes('alternativa'));
+}
+function uvInstalacion(m){
+  if(m && m.instM2 != null) return m.instM2;
+  return (uv && uv.instM2 != null) ? uv.instM2 : 15000;
+}
+function uvPrecioSin(m){ return m.costo * uv.multSin; }
+function uvPrecioCon(m){
+  return uvEsAlternativa(m) ? m.costo * uv.multSin + uvInstalacion(m)
+                            : m.costo * uv.multCon;
+}
+function uvComoSeCalcula(m){
+  return uvEsAlternativa(m)
+    ? '(×' + uv.multSin + ' + ' + plata(uvInstalacion(m)) + ' inst./m²)'
+    : '(×' + uv.multCon + ')';
+}
+
 function renderUV(){
   document.getElementById('uvMultSin').value = uv.multSin;
   document.getElementById('uvMultCon').value = uv.multCon;
+  document.getElementById('uvInstM2').value = uvInstalacion(null);
   const cont = document.getElementById('listaUV');
   cont.innerHTML = '';
   for(const m of uv.mats){
@@ -8131,11 +8224,11 @@ function renderUV(){
       '<button class="uv-costo">costo '+plata(m.costo)+'</button>' +
       '<button class="mini borrarUV">✕</button></div>' +
       '<div class="uv-ventas">' +
-      '<span>Sin instalación: <b>'+plata(m.costo*uv.multSin)+'</b></span>' +
-      '<span>'+inst.charAt(0).toUpperCase()+inst.slice(1)+': <b>'+plata(m.instM2 ? m.costo*uv.multSin + m.instM2 : m.costo*uv.multCon)+'</b>' +
-      (m.instM2 ? ' <i style="font-size:.62rem;color:var(--texto2);font-style:normal">(×'+uv.multSin+' + '+plata(m.instM2)+' inst./m²)</i>' : '') + '</span>' +
+      '<span>Sin instalación: <b>'+plata(uvPrecioSin(m))+'</b></span>' +
+      '<span>'+inst.charAt(0).toUpperCase()+inst.slice(1)+': <b>'+plata(uvPrecioCon(m))+'</b>' +
+      ' <i style="font-size:.62rem;color:var(--texto2);font-style:normal">'+uvComoSeCalcula(m)+'</i></span>' +
       '</div>';
-    f.querySelector('.uv-nombre').textContent = m.nombre + (m.prov ? '  \U0001F3F7 ' + m.prov : '');
+    f.querySelector('.uv-nombre').textContent = m.nombre + (m.prov ? '  · ' + m.prov : '');
     f.querySelector('.uv-costo').onclick = function(){
       const inp = document.createElement('input');
       inp.type = 'number'; inp.inputMode = 'numeric';
@@ -8164,6 +8257,11 @@ document.getElementById('uvMultCon').addEventListener('change', e=>{
   uv.multCon = parseFloat(e.target.value)||3;
   renderUV(); guardarDatos();
   toast('Precios con instalación recalculados ✓');
+});
+document.getElementById('uvInstM2').addEventListener('change', e=>{
+  uv.instM2 = parseFloat(e.target.value)||0;
+  renderUV(); guardarDatos();
+  toast('Instalación actualizada a ' + plata(uv.instM2) + ' por m² ✓');
 });
 document.getElementById('crearUV').onclick = ()=>{
   const inN = document.getElementById('inNuevoUVNombre');
