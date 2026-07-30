@@ -250,7 +250,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v81</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v82</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -875,6 +875,7 @@ const PALETA = ['#ffb020','#5ab8ff','#c08bff','#4cd27d','#ff7a7a','#ff9950','#3a
 const LIMITE_BLOQUES_MB = 4.5;
 
 let cats = [], tareas = [], clientes = [], proveedores = [], productos = [], pedidos = [];
+let pendientesSueltos = [], tareasViejas = [], tareasDescartadas = [], migracion = null;
 let uv = null, offset = null;
 let movimientos = [], filtroCaja = 'todos', movTipoSel = 'egreso', movQuienSel = null, movPersonaSel = null, movPedidoSel = null;
 const PERSONAS = [['Marcos','#ffb020'],['Gastón','#5ab8ff']];
@@ -1098,6 +1099,10 @@ async function cargar(){
       clientes = (d.clientes || []).map(c=>({dir:'', mail:'', ...c}));
       productos = d.productos || PRODUCTOS_SEMILLA.map(p=>({id:uid()+Math.random().toString(36).slice(2,4), ...p}));
       pedidos = d.pedidos || [];
+      pendientesSueltos = d.pendientesSueltos || [];
+      tareasViejas = d.tareasViejas || [];
+      tareasDescartadas = d.tareasDescartadas || [];
+      migracion = d.migracion || null;
       for(const p of pedidos){ if(!p.estadoVenta) p.estadoVenta = 'confirmado'; }
       // migración: el vínculo viejo pedido.tarea pasa a tarea.pedido (un pedido, varias tareas)
       for(const p of pedidos){
@@ -1265,7 +1270,7 @@ async function cargar(){
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, pendientesSueltos, tareasViejas, tareasDescartadas, migracion, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -4837,6 +4842,10 @@ async function dbxSubir(){
   return false;
 }
 function aplicarDatosRemotos(d){
+  pendientesSueltos = d.pendientesSueltos || pendientesSueltos;
+  tareasViejas = d.tareasViejas || tareasViejas;
+  tareasDescartadas = d.tareasDescartadas || tareasDescartadas;
+  migracion = d.migracion || migracion;
   cats = d.cats||cats; tareas = d.tareas||[];
   clientes = d.clientes||[]; proveedores = d.proveedores||[];
   productos = d.productos||[]; pedidos = d.pedidos||[];
@@ -5049,7 +5058,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles});
+    cats, tareas, clientes, proveedores, productos, pedidos, pendientesSueltos, tareasViejas, tareasDescartadas, migracion, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -5070,6 +5079,10 @@ document.getElementById('btnImportar').onclick = (e)=>{
   catch(err){ toast('El texto pegado no es una copia válida'); return; }
   if(!d || !Array.isArray(d.tareas) || !Array.isArray(d.cats)){ toast('El texto pegado no es una copia válida'); return; }
   dosToques(e.target, '¿Seguro? Tocá de nuevo', ()=>{
+    pendientesSueltos = d.pendientesSueltos || [];
+    tareasViejas = d.tareasViejas || [];
+    tareasDescartadas = d.tareasDescartadas || [];
+    migracion = d.migracion || null;
     cats = d.cats; tareas = d.tareas;
     clientes = d.clientes||[]; proveedores = d.proveedores||[];
     productos = d.productos||[]; pedidos = d.pedidos||[];
