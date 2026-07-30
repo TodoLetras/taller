@@ -250,7 +250,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v80</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v81</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -3982,13 +3982,17 @@ function renderSenas(p){
       const ok = document.createElement('button');
       ok.textContent = '✓';
       ok.style.cssText = 'background:#5ab8ff;color:#0a1a26;border:none;border-radius:8px;padding:10px 16px;font-weight:800';
+      const fec = document.createElement('input');
+      fec.type = 'date'; fec.value = hoyISO(); fec.title = 'Fecha de la seña';
+      fec.style.cssText = 'width:100%;margin:6px 0 0;padding:9px;font-size:14px;background:var(--fondo);' +
+        'border:1px solid #5ab8ff;border-radius:8px;color:var(--texto)';
       ok.onclick = ()=>{
         const monto = parseFloat(inp.value)||0;
         if(monto<=0){ inp.focus(); return; }
         movimientos.push({id:uid(), tipo:'ingreso', sena:true, pedido:p.id,
           monto, concepto:'Seña — ' + nombreClienteId(p.cliente),
           persona: PERSONAS.find(x=>x[0]===usuarioActual) ? usuarioActual : null,
-          quien: p.cliente||null, fecha: hoyISO(), creado: Date.now()});
+          quien: p.cliente||null, fecha: fec.value || hoyISO(), creado: Date.now()});
         if(p.estadoVenta==='presupuesto') p.estadoVenta = 'confirmado';
         registrar('registró una seña de ' + plata(monto) + ' del pedido de ' + nombreClienteId(p.cliente));
         const exceso = totalSenas(p) + (p.creditoAplicado||0) - totalPedido(p);
@@ -4015,6 +4019,7 @@ function renderSenas(p){
       canc.onclick = ()=> renderSenas(p) || renderPedidoEstados(p);
       fila.appendChild(inp); fila.appendChild(ok); fila.appendChild(canc);
       zona.appendChild(fila);
+      zona.appendChild(fec);
       inp.focus();
     };
     zona.appendChild(btn);
