@@ -124,12 +124,12 @@
   #btnResumen{flex:1;background:var(--panel2);color:var(--texto);border:1px solid var(--borde)}
 
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:flex-end;z-index:30}
-  @supports (height:100dvh){.modal{height:100dvh}}
+  @supports (height:100dvh){.modal{height:calc(100dvh / var(--zoom,1))}}
   .modal.abierto{display:flex}
   .hoja{background:var(--panel);width:100%;border-radius:20px 20px 0 0;
-    padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-height:92vh;overflow-y:auto;
+    padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-height:calc(92vh / var(--zoom,1));overflow-y:auto;
     overscroll-behavior:contain}
-  @supports (max-height:100dvh){.hoja{max-height:90dvh}}
+  @supports (max-height:100dvh){.hoja{max-height:calc(90dvh / var(--zoom,1))}}
   .hoja h2{font-size:.95rem;margin-bottom:12px}
   .hoja textarea,.hoja input{width:100%;background:var(--panel2);border:1px solid var(--borde);
     border-radius:10px;color:var(--texto);padding:11px;font-size:16px;font-family:inherit}
@@ -142,6 +142,11 @@
   .cats-pick button{background:var(--panel2);border:1px solid var(--borde);color:var(--texto2);
     border-radius:999px;padding:9px 14px;font-size:.78rem;font-weight:700}
   .acciones{display:flex;gap:8px;margin-top:4px}
+  /* dentro de una ficha, los botones quedan pegados abajo y siempre alcanzables */
+  .hoja > .acciones{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom));
+    background:var(--panel);padding:10px 0 calc(12px + env(safe-area-inset-bottom));
+    margin-bottom:calc(-20px - env(safe-area-inset-bottom));z-index:2;
+    box-shadow:0 -10px 14px -8px rgba(0,0,0,.45)}
   .acciones button{flex:1;border:none;border-radius:12px;padding:13px 0;font-weight:700;font-size:.9rem}
   .btn-primario{background:var(--ambar);color:#1a1200}
   .btn-secundario{background:var(--panel2);color:var(--texto2);border:1px solid var(--borde) !important}
@@ -279,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v86</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v88</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1487,6 +1492,9 @@ const ZOOMS = [[1,'normal'],[1.15,'grande'],[1.3,'muy grande']];
 function aplicarPrefVisuales(){
   const z = parseFloat(localStorage.getItem('ui-zoom')||'1');
   document.body.style.zoom = z;
+  /* el zoom escala también las medidas de pantalla: las fichas tienen que
+     dividir por él para no quedar más altas que lo que se ve de verdad */
+  document.documentElement.style.setProperty('--zoom', z);
   const claro = localStorage.getItem('ui-tema')==='claro';
   document.body.classList.toggle('tema-claro', claro);
   const bt = document.getElementById('btnTema');
@@ -3398,12 +3406,15 @@ document.getElementById('cliCerrar').onclick = ()=>{ modalCliente.classList.remo
 modalCliente.addEventListener('click', e=>{ if(e.target===modalCliente) modalCliente.classList.remove('abierto'); });
 
 /* ---------- pedidos ---------- */
+function nombreItem(it){
+  return (it.detalle ? it.detalle + ' · ' : '') + it.nombre;
+}
 function textoItem(it){
   if(it.uv){
-    return it.nombre + ' (' + plata(it.precio) + '/m²) · Medida: ' + it.base + '×' + it.altura + ' cm' +
+    return nombreItem(it) + ' (' + plata(it.precio) + '/m²) · Medida: ' + it.base + '×' + it.altura + ' cm' +
       (it.cant>1 ? ' × ' + it.cant + 'u' : '') + ' — ' + plata(subtotalItem(it));
   }
-  return it.nombre + (it.cant>1 ? ' × ' + it.cant + (it.mo?'h':'u') : '') + ' — ' + plata(subtotalItem(it));
+  return nombreItem(it) + (it.cant>1 ? ' × ' + it.cant + (it.mo?'h':'u') : '') + ' — ' + plata(subtotalItem(it));
 }
 async function copiarItem(it){
   const texto = textoItem(it);
@@ -3861,7 +3872,7 @@ function renderPedidoItems(p){
       d.innerHTML =
         '<div class="pi-cab"><div class="pi-nombre"></div>' +
         '<button class="editar-od" title="Editar">✎</button>' +
-        '<button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
+        '<button class="dup-item" title="Duplicar este ítem">⧉</button><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
         '<div class="pi-medidas"><span style="color:#5ab8ff">🖨 offset digital</span><span class="pi-sub">= ' + plata(subtotalItem(it)) + '</span></div>';
       d.querySelector('.pi-nombre').textContent = it.nombre;
       d.querySelector('.editar-od').style.cssText = 'background:none;border:none;color:#5ab8ff;font-size:.9rem;padding:2px 4px';
@@ -3871,7 +3882,8 @@ function renderPedidoItems(p){
       };
     }else if(it.uv){
       d.innerHTML =
-        '<div class="pi-cab"><div class="pi-nombre"></div><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
+        '<div class="pi-cab"><div class="pi-nombre"></div><button class="dup-item" title="Duplicar este ítem">⧉</button><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
+        '<div class="pi-medidas"><input class="detalleItem" placeholder="Nombre de esta pieza · ej: Freezer 1 · frente" style="flex:1;margin:0;padding:6px 8px;font-size:12.5px;background:var(--fondo);border:1px dashed var(--borde);border-radius:8px;color:var(--texto)"></div>' +
         '<div class="pi-medidas">' +
           '<span>Medida:</span>' +
           '<input class="base" type="number" inputmode="numeric" min="0" title="base en cm"><span>cm ×</span>' +
@@ -4049,6 +4061,48 @@ function renderPedidoItems(p){
       const nom = d.querySelector('.pi-nombre');
       if(nom) nom.style.textDecoration = 'line-through';
     }
+    const inDet = d.querySelector('.detalleItem');
+    if(inDet){
+      inDet.value = it.detalle || '';
+      inDet.addEventListener('input', ()=>{ it.detalle = inDet.value.trim() || null; sincronizarPedido(); });
+    }
+    const btnDup = d.querySelector('.dup-item');
+    if(btnDup) btnDup.onclick = function(){
+      /* pregunta cuántas copias: para 24 piezas iguales no hay que tocar 24 veces */
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.inputMode = 'numeric'; inp.min = '1'; inp.value = '1';
+      inp.title = '¿Cuántas copias?';
+      inp.style.cssText = 'width:56px;margin:0;padding:3px 6px;font-size:13px;text-align:center;' +
+        'background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--ambar)';
+      this.replaceWith(inp); inp.focus(); inp.select();
+      let hecho = false;
+      const crear = ()=>{
+        if(hecho) return; hecho = true;
+        const n = Math.max(0, Math.min(200, parseInt(inp.value) || 0));
+        if(!n){ renderPedidoItems(p); return; }
+        for(let k = 0; k < n; k++){
+          const copia = JSON.parse(JSON.stringify(it));
+          copia.detalle = null;        // el nombre de cada pieza se escribe aparte
+          delete copia.ventaManual;    // no se arrastra un precio pactado a mano
+          p.items.splice(idx + 1 + k, 0, copia);
+        }
+        registrar('duplicó ' + n + '× el ítem "' + (it.nombre||'').slice(0,34) + '"');
+        renderPedidoItems(p); guardarDatos(); renderPedidos();
+        const filas = document.querySelectorAll('#pedItems .ped-item');
+        const nueva = filas[idx+1];
+        if(nueva){
+          nueva.scrollIntoView({block:'nearest'});
+          const di = nueva.querySelector('.detalleItem');
+          if(di) di.focus();
+        }
+        toast(n === 1 ? 'Ítem duplicado ✓' : n + ' copias agregadas ✓');
+      };
+      inp.addEventListener('blur', crear);
+      inp.addEventListener('keydown', ev=>{
+        if(ev.key === 'Enter') inp.blur();
+        if(ev.key === 'Escape'){ hecho = true; renderPedidoItems(p); }
+      });
+    };
     d.querySelector('.copiar-item').onclick = ()=> copiarItem(it);
     d.querySelector('.quitar-item').onclick = (e)=>{
       dosToques(e.target, '¿Borrar?', ()=>{
@@ -4621,9 +4675,9 @@ document.getElementById('pedPresu').onclick = ()=>{
     if(it.conf===false) continue;
     const sub = subtotalItem(it);
     if(it.uv){
-      texto += '▪ ' + it.nombre + ' · ' + it.base + '×' + it.altura + ' cm' + (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '') + (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
+      texto += '▪ ' + nombreItem(it) + ' · ' + it.base + '×' + it.altura + ' cm' + (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '') + (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
     }else{
-      texto += '▪ ' + it.nombre + (it.cant>1 ? ' × '+it.cant+(it.mo?' h':'') : '') + ': ' + plata(sub) +
+      texto += '▪ ' + nombreItem(it) + (it.cant>1 ? ' × '+it.cant+(it.mo?' h':'') : '') + ': ' + plata(sub) +
         (it.abierto ? ' *' : '') + '\n';
     }
   }
