@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v89</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v90</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -3997,6 +3997,7 @@ function renderPedidoItems(p){
           if(it.ventaManual) toast('Venta pactada: ' + plata(it.ventaManual) + ' (la fórmula queda de lado)');
         });
       }
+      let repintarCosto = null;   // se completa más abajo, cuando existe el botón
       const refrescar = ()=>{
         it.base = parseFloat(inB.value)||0;
         it.altura = parseFloat(inA.value)||0;
@@ -4005,6 +4006,7 @@ function renderPedidoItems(p){
         it.demAlto = parseFloat(inDH.value)||0;
         imp.textContent = 'Impresión: ' + medidaImpresion(it);
         sub.textContent = '= ' + plata(subtotalItem(it));
+        if(repintarCosto) repintarCosto();    // el costo también depende de las medidas
         actualizarTotal(p); sincronizarPedido();
       };
       // costura y varilla por metro lineal (perímetro sugerido, editable)
@@ -4062,6 +4064,7 @@ function renderPedidoItems(p){
         inp.addEventListener('change', confirmar);
         inp.addEventListener('blur', confirmar);
       };
+      repintarCosto = pintarCosto;
       pintarCosto();
       imp.textContent = 'Impresión: ' + medidaImpresion(it);
       sub.textContent = '= ' + plata(subtotalItem(it));
@@ -4111,18 +4114,34 @@ function renderPedidoItems(p){
         actualizarTotal(p); sincronizarPedido();
       });
     }
-    // confirmación por ítem: visible en modo parcial, o si el ítem quedó descartado
-    if(p.estadoVenta==='parcial' || it.conf===false){
+    // confirmación por ítem: en todos los ítems de todas las ventas.
+    // Lo que queda sin tildar no entra en el total, la ganancia, el presupuesto,
+    // la orden de trabajo ni el ranking de productos.
+    {
       const tg = document.createElement('button');
       const activo = it.conf!==false;
       tg.textContent = activo ? '✓' : '✗';
-      tg.title = activo ? 'El cliente lo confirmó (tocá para descartarlo)' : 'Descartado (tocá para reincorporarlo)';
+      tg.title = activo ? 'Confirmado por el cliente · tocá para dejarlo afuera'
+                        : 'Fuera del trabajo · tocá para incluirlo';
       tg.style.cssText = 'border-radius:8px;padding:4px 10px;font-weight:800;font-size:.85rem;border:1px solid ' +
         (activo ? 'rgba(76,210,125,.5);background:rgba(76,210,125,.12);color:#4cd27d' : '#ff7a7a;background:rgba(255,122,122,.1);color:#ff7a7a');
       tg.onclick = (ev)=>{
         ev.stopPropagation();
         it.conf = (it.conf===false) ? true : false;
         registrar((it.conf===false?'descartó':'reincorporó') + ' el ítem "' + it.nombre.slice(0,40) + '" del pedido de ' + nombreClienteId(p.cliente));
+        /* el estado de la venta se acomoda solo: si sobra algo afuera es parcial,
+           y si vuelven a estar todos, vuelve a confirmado */
+        const reales = p.items.filter(x=>!x.mo);
+        const afuera = reales.filter(x=>x.conf===false).length;
+        if(p.estadoVenta !== 'presupuesto'){
+          if(afuera > 0 && p.estadoVenta !== 'parcial'){
+            p.estadoVenta = 'parcial';
+            toast('La venta pasó a parcial: ' + afuera + ' ítem(s) afuera');
+          }else if(afuera === 0 && p.estadoVenta === 'parcial'){
+            p.estadoVenta = 'confirmado';
+            toast('Están todos adentro: la venta vuelve a confirmada');
+          }
+        }
         renderPedidoItems(p); guardarDatos(); renderPedidos();
       };
       const cab = d.querySelector('.pi-cab');
