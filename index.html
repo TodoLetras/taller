@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v90</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v91</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -3406,10 +3406,18 @@ document.getElementById('cliCerrar').onclick = ()=>{ modalCliente.classList.remo
 modalCliente.addEventListener('click', e=>{ if(e.target===modalCliente) modalCliente.classList.remove('abierto'); });
 
 /* ---------- pedidos ---------- */
-function nombreItem(it){
-  return (it.detalle ? it.detalle + ' · ' : '') + it.nombre;
+/* En el presupuesto manda el nombre que puso Marcos; el material queda de respaldo. */
+function nombreItem(it){ return it.detalle || it.nombre; }
+/* ¿este pedido muestra las medidas en el presupuesto? por defecto no */
+function presuConMedidas(p){ return !!(p && p.presuMedidas); }
+/* medidas en texto, para cuando sí se muestran */
+function medidasItem(it){
+  if(!it.uv) return '';
+  return ' · ' + (it.base||0) + '×' + (it.altura||0) + ' cm' +
+    (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '');
 }
 function textoItem(it){
+  if(it.titulo) return '— ' + (it.nombre||'') + ' —';
   if(it.uv){
     return nombreItem(it) + ' (' + plata(it.precio) + '/m²) · Medida: ' + it.base + '×' + it.altura + ' cm' +
       (it.cant>1 ? ' × ' + it.cant + 'u' : '') + ' — ' + plata(subtotalItem(it));
@@ -3426,6 +3434,7 @@ async function copiarItem(it){
   document.getElementById('modalResumen').classList.add('abierto');
 }
 function subtotalItem(i){
+  if(i.titulo) return 0;              // los títulos de sección no suman
   if(i.ventaManual > 0) return i.ventaManual;
   return subtotalFormula(i);
 }
@@ -3484,6 +3493,7 @@ function refrescarDescuentoUI(p){
   btnQ.onclick = ()=> dosToques(btnQ, '¿Quitar?', ()=> quitarDescuentoPedido(p));
 }
 function costoItem(i){
+  if(i.titulo) return 0;              // los títulos de sección no cuestan
   if(i.uv && i.costoM2){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);
     const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);
@@ -3495,7 +3505,7 @@ function costoItem(i){
 function gananciaPedido(p){
   let ganancia = 0, sinCosto = 0;
   for(const i of p.items){
-    if(i.conf===false) continue;
+    if(i.conf===false || i.titulo) continue;
     const c = costoItem(i);
     if(c===null){ sinCosto++; continue; }
     ganancia += subtotalItem(i) - c;
@@ -3939,6 +3949,40 @@ function renderPedidoItems(p){
   }
   p.items.forEach((it,idx)=>{
     if(it.mo) return; // la mano de obra tiene su propia fila abajo
+
+    if(it.titulo){
+      const t = document.createElement('div');
+      t.style.cssText = 'display:flex;gap:6px;align-items:center;margin:12px 0 4px';
+      const inp = document.createElement('input');
+      inp.value = it.nombre || '';
+      inp.placeholder = 'Título de sección';
+      inp.style.cssText = 'flex:1;margin:0;padding:8px 10px;font-size:.78rem;font-weight:800;' +
+        'letter-spacing:.03em;background:var(--panel2);border:1px solid var(--ambar);' +
+        'border-radius:9px;color:var(--ambar)';
+      inp.addEventListener('input', ()=>{ it.nombre = inp.value; sincronizarPedido(); });
+      const mini = (txt, titulo, fn)=>{
+        const b = document.createElement('button');
+        b.textContent = txt; b.title = titulo;
+        b.style.cssText = 'background:none;border:1px solid var(--borde);color:var(--texto2);' +
+          'border-radius:8px;padding:6px 9px;font-size:.72rem';
+        b.onclick = fn; return b;
+      };
+      t.appendChild(inp);
+      t.appendChild(mini('\u2191','Subir', ()=>{
+        if(idx>0){ p.items.splice(idx-1,0,p.items.splice(idx,1)[0]); renderPedidoItems(p); guardarDatos(); }
+      }));
+      t.appendChild(mini('\u2193','Bajar', ()=>{
+        if(idx<p.items.length-1){ p.items.splice(idx+1,0,p.items.splice(idx,1)[0]); renderPedidoItems(p); guardarDatos(); }
+      }));
+      t.appendChild(mini('\u2715','Quitar el título', (e)=>{
+        dosToques(e.target, '¿Quitar?', ()=>{
+          p.items.splice(idx,1); renderPedidoItems(p); guardarDatos(); renderPedidos();
+        });
+      }));
+      cont.appendChild(t);
+      return;
+    }
+
     const d = document.createElement('div');
     d.className = 'ped-item' + ((it.uv || it.od) ? ' uv' : '');
     if(it.od){
@@ -4239,6 +4283,58 @@ function sincronizarPedido(){
   timerPedido = setTimeout(()=>{ guardarDatos(); renderPedidos(); }, 500);
 }
 
+/* alta de un título de sección, eligiendo delante de qué ítem va */
+function panelNuevoTitulo(p, barra){
+  if(barra.querySelector('.panelTit')) return;
+  const w = document.createElement('div');
+  w.className = 'panelTit';
+  w.style.cssText = 'flex:1 1 100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;' +
+    'border-top:1px dashed var(--ambar);padding-top:8px;margin-top:4px';
+
+  const txt = document.createElement('input');
+  txt.placeholder = 'Ej: los dos freezers grandes detrás del mostrador';
+  txt.style.cssText = 'flex:1 1 100%;margin:0;padding:8px;font-size:13px;background:var(--fondo);' +
+    'border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:1;min-width:160px;margin:0;padding:7px;font-size:12px;background:var(--fondo);' +
+    'border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+  const oFin = document.createElement('option');
+  oFin.value = '-1'; oFin.textContent = 'Al final de todo';
+  sel.appendChild(oFin);
+  p.items.forEach((x,i)=>{
+    if(x.mo) return;
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = 'Antes de: ' + (x.titulo ? (x.nombre||'') : (x.detalle || x.nombre || '').slice(0,38));
+    sel.appendChild(o);
+  });
+
+  const ok = document.createElement('button');
+  ok.textContent = 'Agregar';
+  ok.style.cssText = 'background:var(--ambar);color:#1a1200;border:none;border-radius:8px;' +
+    'padding:8px 14px;font-weight:800;font-size:.72rem';
+  ok.onclick = ()=>{
+    const nombre = txt.value.trim();
+    if(!nombre){ txt.focus(); return; }
+    const nuevo = {titulo:true, nombre, cant:0, precio:0};
+    const pos = parseInt(sel.value);
+    if(pos >= 0) p.items.splice(pos, 0, nuevo); else p.items.push(nuevo);
+    registrar('agregó el título "' + nombre.slice(0,40) + '" al pedido de ' + nombreClienteId(p.cliente));
+    renderPedidoItems(p); renderBuscadorItems(p); guardarDatos();
+    toast('Título agregado ✓');
+  };
+  const canc = document.createElement('button');
+  canc.textContent = 'Cancelar';
+  canc.style.cssText = 'background:var(--panel2);color:var(--texto2);border:1px solid var(--borde);' +
+    'border-radius:8px;padding:8px 12px;font-size:.72rem';
+  canc.onclick = ()=> w.remove();
+
+  w.appendChild(txt); w.appendChild(sel); w.appendChild(canc); w.appendChild(ok);
+  barra.appendChild(w);
+  txt.focus();
+}
+
 /* buscador de productos dentro del pedido */
 function renderBuscadorItems(p){
   const cont = document.getElementById('pedAgregarItem');
@@ -4250,6 +4346,29 @@ function renderBuscadorItems(p){
   const sug = document.createElement('div');
   sug.className = 'sugerencias';
   cont.appendChild(sug);
+
+  /* opciones del presupuesto: títulos de sección y medidas */
+  const barra = document.createElement('div');
+  barra.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px';
+
+  const bTit = document.createElement('button');
+  bTit.textContent = '＋ Título de sección';
+  bTit.style.cssText = 'background:var(--panel2);border:1px solid var(--ambar);color:var(--ambar);' +
+    'border-radius:10px;padding:8px 12px;font-size:.72rem;font-weight:700';
+  bTit.onclick = ()=> panelNuevoTitulo(p, barra);
+  barra.appendChild(bTit);
+
+  const lblMed = document.createElement('label');
+  lblMed.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2)';
+  const cbMed = document.createElement('input');
+  cbMed.type = 'checkbox'; cbMed.checked = presuConMedidas(p);
+  cbMed.onchange = ()=>{ p.presuMedidas = cbMed.checked; guardarDatos();
+    toast(cbMed.checked ? 'El presupuesto va a mostrar las medidas' : 'El presupuesto va sin medidas'); };
+  lblMed.appendChild(cbMed);
+  lblMed.appendChild(document.createTextNode('Mostrar medidas en el presupuesto'));
+  barra.appendChild(lblMed);
+
+  cont.appendChild(barra);
   function filtrar(){
     const q = normalizarTexto(inp.value.trim());
     sug.innerHTML = '';
@@ -4771,11 +4890,17 @@ document.getElementById('pedPresu').onclick = ()=>{
   const nc = nombreClienteId(p.cliente);
   if(nc && nc!=='Sin cliente') texto += 'Cliente: ' + nc + '\n';
   texto += '\n';
+  const conMed = presuConMedidas(p);
   for(const it of p.items){
     if(it.conf===false) continue;
+    if(it.titulo){
+      texto += '\n*' + (it.nombre||'').toUpperCase() + '*\n';
+      continue;
+    }
     const sub = subtotalItem(it);
     if(it.uv){
-      texto += '▪ ' + nombreItem(it) + ' · ' + it.base + '×' + it.altura + ' cm' + (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '') + (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
+      texto += '▪ ' + nombreItem(it) + (conMed ? medidasItem(it) : '') +
+        (it.cant>1 ? ' × '+it.cant+'u' : '') + ': ' + plata(sub) + '\n';
     }else{
       texto += '▪ ' + nombreItem(it) + (it.cant>1 ? ' × '+it.cant+(it.mo?' h':'') : '') + ': ' + plata(sub) +
         (it.abierto ? ' *' : '') + '\n';
@@ -6862,18 +6987,36 @@ async function generarPDFPedido(p){
     // ítems
     doc.setFontSize(11);
     const items = p.items.filter(it=> it.conf !== false);
+    const conMedPDF = presuConMedidas(p);
+    let primero = true;
     for(const it of items){
-      const texto = it.nombre + (it.uv ? ' · ' + (it.base||0) + '×' + (it.altura||0) + ' cm' + (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '') : '') + (it.cant > 1 ? ' × ' + it.cant + (it.mo ? ' h' : (it.uv ? 'u' : '')) : '') + (it.abierto ? ' *' : '');
+      if(it.titulo){
+        saltoSiHaceFalta(34);
+        if(!primero) y += 8;
+        doc.setFont('Fira','bold'); doc.setFontSize(11.5); doc.setTextColor(30,30,30);
+        doc.text((it.nombre||'').toUpperCase(), margen, y);
+        y += 16;
+        doc.setDrawColor(30,30,30); doc.setLineWidth(0.7);
+        doc.line(margen, y - 9, W - margen, y - 9);
+        doc.setFontSize(11);
+        primero = false;
+        continue;
+      }
+      const texto = nombreItem(it) +
+        (conMedPDF ? medidasItem(it) : '') +
+        (it.cant > 1 ? ' × ' + it.cant + (it.mo ? ' h' : (it.uv ? 'u' : '')) : '') +
+        (it.abierto ? ' *' : '');
       const lineas = doc.splitTextToSize(texto, W - margen*2 - 110);
       const alto = lineas.length * 14 + 10;
       saltoSiHaceFalta(alto);
-      doc.setFont('Fira','normal'); doc.setTextColor(40,40,40);
+      doc.setFont('Fira','normal'); doc.setFontSize(11); doc.setTextColor(40,40,40);
       doc.text(lineas, margen, y);
       doc.setFont('Fira','bold');
       doc.text(plata(subtotalItem(it)), W - margen, y, {align:'right'});
       y += alto;
       doc.setDrawColor(210,210,210); doc.setLineWidth(0.5);
       doc.line(margen, y - 7, W - margen, y - 7);
+      primero = false;
     }
 
     // total
