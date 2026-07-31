@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v88</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v89</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -3858,6 +3858,79 @@ function renderPedidoCliente(p){
     guardarDatos(); renderPedidos();
   });
 }
+
+/* Cambiar el material de un ítem UV, y opcionalmente de todos los que usan el mismo.
+   Sirve para cuando ya cargaste muchas piezas y el cliente cambia de material. */
+function panelMaterialUV(p, idx, filaDom){
+  if(filaDom.querySelector('.panelMat')) return;
+  const it = p.items[idx];
+  const iguales = p.items.filter(x=> x.uv && x.nombre === it.nombre);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'pi-medidas panelMat';
+  wrap.style.cssText = 'flex-wrap:wrap;gap:6px;border-top:1px dashed var(--ambar);' +
+    'padding-top:8px;margin-top:6px';
+
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:1 1 100%;margin:0;padding:7px;font-size:12.5px;background:var(--fondo);' +
+    'border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+  const ops = [];
+  for(const m of uv.mats){
+    const inst = tipoInstalacion(m.nombre);
+    ops.push({nombre:'🖨 '+m.nombre+' impreso · sin instalación', precio:Math.round(uvPrecioSin(m)), costo:m.costo});
+    ops.push({nombre:'🖨 '+m.nombre+' '+inst,                     precio:Math.round(uvPrecioCon(m)), costo:m.costo});
+  }
+  ops.forEach((o,i)=>{
+    const e = document.createElement('option');
+    e.value = i; e.textContent = o.nombre + '  —  ' + plata(o.precio);
+    if(o.nombre === it.nombre) e.selected = true;
+    sel.appendChild(e);
+  });
+
+  let aTodos = iguales.length > 1;
+  const chk = document.createElement('label');
+  chk.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2);flex:1';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = aTodos;
+  cb.onchange = ()=> aTodos = cb.checked;
+  chk.appendChild(cb);
+  chk.appendChild(document.createTextNode(
+    iguales.length > 1 ? 'Aplicar a los ' + iguales.length + ' ítems con este material' : 'Solo este ítem'));
+  if(iguales.length <= 1) cb.disabled = true;
+
+  const ok = document.createElement('button');
+  ok.textContent = 'Aplicar';
+  ok.style.cssText = 'background:var(--ambar);color:#1a1200;border:none;border-radius:8px;' +
+    'padding:7px 14px;font-weight:800;font-size:.72rem';
+  const canc = document.createElement('button');
+  canc.textContent = 'Cancelar';
+  canc.style.cssText = 'background:var(--panel2);color:var(--texto2);border:1px solid var(--borde);' +
+    'border-radius:8px;padding:7px 12px;font-size:.72rem';
+  canc.onclick = ()=> renderPedidoItems(p);
+
+  ok.onclick = ()=>{
+    const o = ops[parseInt(sel.value)];
+    if(!o){ renderPedidoItems(p); return; }
+    const objetivo = (aTodos && iguales.length > 1) ? iguales : [it];
+    const viejo = it.nombre;
+    for(const x of objetivo){
+      x.nombre = o.nombre;
+      x.precio = o.precio;      // precio por m² del material nuevo
+      x.costoM2 = o.costo;      // costo real, para el margen
+      // se conservan medidas, demasía, vulcanizado, varilla y el nombre de cada pieza
+    }
+    registrar('cambió el material de ' + objetivo.length + ' ítem(s) de "' +
+      viejo.replace('🖨 ','').slice(0,32) + '" a "' + o.nombre.replace('🖨 ','').slice(0,32) + '"');
+    renderPedidoItems(p); guardarDatos(); renderPedidos();
+    toast(objetivo.length === 1 ? 'Material cambiado ✓'
+                                : objetivo.length + ' ítems actualizados ✓');
+  };
+
+  wrap.appendChild(sel); wrap.appendChild(chk); wrap.appendChild(canc); wrap.appendChild(ok);
+  filaDom.appendChild(wrap);
+  sel.focus();
+}
+
 function renderPedidoItems(p){
   const cont = document.getElementById('pedItems');
   cont.innerHTML = '';
@@ -4060,6 +4133,14 @@ function renderPedidoItems(p){
       d.style.opacity = '.5';
       const nom = d.querySelector('.pi-nombre');
       if(nom) nom.style.textDecoration = 'line-through';
+    }
+    if(it.uv){
+      const nomEl = d.querySelector('.pi-nombre');
+      if(nomEl){
+        nomEl.style.cursor = 'pointer';
+        nomEl.title = 'Tocá para cambiar el material';
+        nomEl.onclick = ()=> panelMaterialUV(p, idx, d);
+      }
     }
     const inDet = d.querySelector('.detalleItem');
     if(inDet){
