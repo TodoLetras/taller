@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v91</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v92</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -3951,6 +3951,7 @@ function renderPedidoItems(p){
     if(it.mo) return; // la mano de obra tiene su propia fila abajo
 
     if(it.titulo){
+      const envoltorio = document.createElement('div');
       const t = document.createElement('div');
       t.style.cssText = 'display:flex;gap:6px;align-items:center;margin:12px 0 4px';
       const inp = document.createElement('input');
@@ -3968,18 +3969,14 @@ function renderPedidoItems(p){
         b.onclick = fn; return b;
       };
       t.appendChild(inp);
-      t.appendChild(mini('\u2191','Subir', ()=>{
-        if(idx>0){ p.items.splice(idx-1,0,p.items.splice(idx,1)[0]); renderPedidoItems(p); guardarDatos(); }
-      }));
-      t.appendChild(mini('\u2193','Bajar', ()=>{
-        if(idx<p.items.length-1){ p.items.splice(idx+1,0,p.items.splice(idx,1)[0]); renderPedidoItems(p); guardarDatos(); }
-      }));
+      t.appendChild(mini('\u21c5','Mover este título', ()=> panelMoverItem(p, idx, envoltorio)));
       t.appendChild(mini('\u2715','Quitar el título', (e)=>{
         dosToques(e.target, '¿Quitar?', ()=>{
           p.items.splice(idx,1); renderPedidoItems(p); guardarDatos(); renderPedidos();
         });
       }));
-      cont.appendChild(t);
+      envoltorio.appendChild(t);
+      cont.appendChild(envoltorio);
       return;
     }
 
@@ -3989,7 +3986,7 @@ function renderPedidoItems(p){
       d.innerHTML =
         '<div class="pi-cab"><div class="pi-nombre"></div>' +
         '<button class="editar-od" title="Editar">✎</button>' +
-        '<button class="dup-item" title="Duplicar este ítem">⧉</button><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
+        '<button class="mover-item" title="Mover este ítem">⇅</button><button class="dup-item" title="Duplicar este ítem">⧉</button><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
         '<div class="pi-medidas"><span style="color:#5ab8ff">🖨 offset digital</span><span class="pi-sub">= ' + plata(subtotalItem(it)) + '</span></div>';
       d.querySelector('.pi-nombre').textContent = it.nombre;
       d.querySelector('.editar-od').style.cssText = 'background:none;border:none;color:#5ab8ff;font-size:.9rem;padding:2px 4px';
@@ -3999,7 +3996,7 @@ function renderPedidoItems(p){
       };
     }else if(it.uv){
       d.innerHTML =
-        '<div class="pi-cab"><div class="pi-nombre"></div><button class="dup-item" title="Duplicar este ítem">⧉</button><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
+        '<div class="pi-cab"><div class="pi-nombre"></div><button class="mover-item" title="Mover este ítem">⇅</button><button class="dup-item" title="Duplicar este ítem">⧉</button><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
         '<div class="pi-medidas"><input class="detalleItem" placeholder="Nombre de esta pieza · ej: Freezer 1 · frente" style="flex:1;margin:0;padding:6px 8px;font-size:12.5px;background:var(--fondo);border:1px dashed var(--borde);border-radius:8px;color:var(--texto)"></div>' +
         '<div class="pi-medidas">' +
           '<span>Medida:</span>' +
@@ -4119,6 +4116,8 @@ function renderPedidoItems(p){
         '<input class="cant" type="text" inputmode="decimal">' +
         '<input class="precio" type="number" inputmode="numeric" min="0">' +
         (it.adTr && it.adMeta ? '<button class="adReal" title="Cargar lo cobrado real por AD y la papelera">🧾</button>' : (it.costoU !== undefined && !it.mo ? '<button class="costoReal" title="Costo real del trabajo (lo que te cobra el proveedor). Tocá para corregirlo si te cobró distinto al presupuesto.">🧾</button>' : '')) +
+        '<button class="mover-item" title="Mover este ítem">⇅</button>' +
+        '<button class="dup-item" title="Duplicar este ítem">⧉</button>' +
         '<button class="copiar-item">📋</button>' +
         '<button class="quitar-item">✕</button>';
       d.querySelector('.pi-nombre').textContent = it.nombre;
@@ -4210,6 +4209,11 @@ function renderPedidoItems(p){
       inDet.value = it.detalle || '';
       inDet.addEventListener('input', ()=>{ it.detalle = inDet.value.trim() || null; sincronizarPedido(); });
     }
+    const btnMov = d.querySelector('.mover-item');
+    if(btnMov){
+      btnMov.style.cssText = 'background:none;border:none;color:var(--texto2);font-size:.95rem;padding:2px 5px';
+      btnMov.onclick = ()=> panelMoverItem(p, idx, d);
+    }
     const btnDup = d.querySelector('.dup-item');
     if(btnDup) btnDup.onclick = function(){
       /* pregunta cuántas copias: para 24 piezas iguales no hay que tocar 24 veces */
@@ -4281,6 +4285,64 @@ let timerPedido = null;
 function sincronizarPedido(){
   clearTimeout(timerPedido);
   timerPedido = setTimeout(()=>{ guardarDatos(); renderPedidos(); }, 500);
+}
+
+/* mover una fila del pedido: de a un paso, o de un salto a donde haga falta */
+function etiquetaFila(x){
+  if(x.titulo) return '\u2014 ' + (x.nombre||'sin título') + ' \u2014';
+  if(x.mo) return 'Mano de obra';
+  return (x.detalle || x.nombre || '(sin nombre)').slice(0,40);
+}
+function panelMoverItem(p, idx, filaDom){
+  if(filaDom.querySelector('.panelMover')) return;
+  const w = document.createElement('div');
+  w.className = 'panelMover';
+  w.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;' +
+    'border-top:1px dashed var(--ambar);padding:8px 0 2px;margin-top:6px';
+
+  const mover = (desde, hasta)=>{
+    if(hasta < 0 || hasta >= p.items.length || hasta === desde) return;
+    const [x] = p.items.splice(desde, 1);
+    p.items.splice(hasta, 0, x);
+    renderPedidoItems(p); renderBuscadorItems(p); guardarDatos(); renderPedidos();
+  };
+  const btn = (txt, titulo, fn)=>{
+    const b = document.createElement('button');
+    b.textContent = txt; b.title = titulo;
+    b.style.cssText = 'border-radius:8px;padding:7px 12px;font-size:.72rem;font-weight:700;' +
+      'background:var(--panel2);color:var(--texto2);border:1px solid var(--borde)';
+    b.onclick = fn; return b;
+  };
+
+  w.appendChild(btn('\u2191 Subir', 'Subir un lugar', ()=> mover(idx, idx-1)));
+  w.appendChild(btn('\u2193 Bajar', 'Bajar un lugar', ()=> mover(idx, idx+1)));
+
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:1;min-width:150px;margin:0;padding:7px;font-size:12px;' +
+    'background:var(--fondo);border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+  const oNada = document.createElement('option');
+  oNada.value = ''; oNada.textContent = 'Mover antes de\u2026';
+  sel.appendChild(oNada);
+  p.items.forEach((x,i)=>{
+    if(i === idx || x.mo) return;
+    const o = document.createElement('option');
+    o.value = i; o.textContent = 'Antes de: ' + etiquetaFila(x);
+    sel.appendChild(o);
+  });
+  const oFin = document.createElement('option');
+  oFin.value = 'fin'; oFin.textContent = 'Al final de todo';
+  sel.appendChild(oFin);
+  sel.onchange = ()=>{
+    if(sel.value === '') return;
+    if(sel.value === 'fin'){ mover(idx, p.items.length-1); return; }
+    let destino = parseInt(sel.value);
+    if(destino > idx) destino--;          // al sacarlo, lo de abajo sube un lugar
+    mover(idx, destino);
+  };
+  w.appendChild(sel);
+  w.appendChild(btn('Listo', 'Cerrar', ()=> w.remove()));
+
+  filaDom.appendChild(w);
 }
 
 /* alta de un título de sección, eligiendo delante de qué ítem va */
