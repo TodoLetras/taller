@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v92</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v95</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -381,6 +381,7 @@
       <button id="btnAplicarDesc" style="border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">% Aplicar descuento</button>
       <button id="btnQuitarDesc" style="display:none;border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed #ff7a7a;color:#ff7a7a">✕ Quitar descuento</button>
     </div>
+    <div id="pedVersiones"></div>
     <label>Estado del presupuesto</label>
     <div class="cats-pick" id="pedEstadoVenta"></div>
     <label>Etapa del trabajo</label>
@@ -861,6 +862,7 @@
     <textarea id="cliNotas" placeholder="Datos de facturación, horarios, referencias…"></textarea>
     <div class="divisor" id="cliDivTareas">📋 Tareas de este cliente</div>
     <div id="cliTareas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+    <div id="cliExtracto" style="margin-bottom:10px"></div>
     <div id="cliPedidos" style="margin-bottom:10px"></div>
     <div id="cliCuenta" style="margin-bottom:10px"></div>
     <button id="cliNuevaTarea" style="width:100%;background:var(--panel);border:1px dashed var(--ambar);color:var(--ambar);border-radius:12px;padding:12px;font-weight:700;font-size:.85rem;margin-bottom:12px">＋ Tarea para este cliente</button>
@@ -2899,10 +2901,111 @@ function abrirCliente(id){
   const suyas = tareas.filter(t=>t.cliente===id).sort((a,b)=>(a.orden||0)-(b.orden||0));
   if(!suyas.length) cont.innerHTML = '<div class="vacio" style="padding:10px">Sin tareas para este ' + (res.lista==='proveedores'?'proveedor':'cliente') + '.</div>';
   for(const t of suyas) tarjetaTarea(t, cont);
+  renderExtractoContacto(id, res.lista==='proveedores');
   renderPedidosContacto(id);
   renderCuentaContacto(id, res.lista==='proveedores');
   modalCliente.classList.add('abierto');
 }
+/* ============ EXTRACTO DE CUENTA ============
+   Trabajos y pagos mezclados en orden cronológico, con el saldo al final.
+   Los presupuestos sin confirmar no entran: todavía no son deuda. */
+function renderExtractoContacto(id, esProveedor){
+  const cont = document.getElementById('cliExtracto');
+  if(!cont) return;
+  cont.innerHTML = '';
+
+  const suyos = esProveedor ? [] :
+    pedidos.filter(p=> p.cliente===id && p.estadoVenta !== 'presupuesto'
+                       && p.estado !== 'anulado');
+  const movs = movimientos.filter(m=> m.quien===id && movReal(m));
+  const res2 = buscarContacto(id);
+  const arrastre = res2 && res2.c ? (res2.c.inicial||0) : 0;
+  if(!suyos.length && !movs.length && !arrastre) return;
+
+  const eventos = [];
+  if(arrastre > 0.5){
+    eventos.push({fecha:'0000-00-00', tipo:'arrastre', texto:'Saldo anterior a la app', monto:arrastre});
+  }
+  for(const p of suyos){
+    eventos.push({
+      fecha: new Date(p.creado||Date.now()).toISOString().slice(0,10),
+      tipo:'trabajo', pedido:p,
+      texto: p.nombre || ((p.items.find(i=>i.conf!==false && !i.titulo)||{}).nombre || '(sin ítems)'),
+      monto: totalPedido(p)
+    });
+  }
+  for(const m of movs){
+    eventos.push({
+      fecha: m.fecha || new Date(m.creado||Date.now()).toISOString().slice(0,10),
+      creado: m.creado||0,
+      tipo: m.tipo==='ingreso' ? 'pago' : 'pagoNuestro',
+      texto: m.concepto || (m.sena ? 'Seña' : (m.tipo==='egreso' ? 'Pago a proveedor' : 'Pago')),
+      monto: m.monto||0, mov:m
+    });
+  }
+  /* dentro del mismo día, primero lo que suma y después lo que descuenta:
+     si no, el saldo del medio queda en rojo aunque la cuenta cierre bien */
+  const peso = e => (e.tipo==='pago' || e.tipo==='pagoNuestro') ? 1 : 0;
+  eventos.sort((a,b)=> (a.fecha||'').localeCompare(b.fecha||'')
+                    || peso(a) - peso(b)
+                    || (a.creado||0)-(b.creado||0));
+
+  const tit = document.createElement('div');
+  tit.className = 'divisor';
+  tit.textContent = '📒 Extracto de cuenta';
+  cont.appendChild(tit);
+
+  let saldo = 0;
+  for(const e of eventos){
+    /* en un cliente: el trabajo suma deuda y el pago que nos hace la baja.
+       en un proveedor: lo que nos entrega suma deuda y lo que le pagamos la baja. */
+    const suma = esProveedor
+      ? (e.tipo === 'pagoNuestro' ? false : true)
+      : (e.tipo === 'trabajo' || e.tipo === 'arrastre');
+    saldo += suma ? e.monto : -e.monto;
+
+    const f = document.createElement('div');
+    f.className = 'mov-fila';
+    f.style.borderLeft = '4px solid ' + (suma ? 'var(--ambar)' : '#4cd27d');
+    if(e.tipo==='trabajo'){ f.style.cursor = 'pointer'; }
+
+    const fechaTxt = e.tipo==='arrastre' ? 'antes de la app' : fechaLinda(e.fecha);
+    const etiqueta = e.tipo==='trabajo' ? '🧾 trabajo'
+                   : e.tipo==='arrastre' ? '📌 arrastre'
+                   : e.tipo==='pagoNuestro' ? (esProveedor ? '📤 le pagamos' : '📤 le pagamos')
+                   : (e.mov && e.mov.sena ? '🪙 seña' : '💰 nos pagó');
+
+    f.innerHTML =
+      '<div class="mv-info"><div class="mv-concepto" style="font-size:.76rem"></div>' +
+      '<div class="mv-quien"></div></div>' +
+      '<div style="text-align:right">' +
+        '<div style="font-weight:800;font-size:.8rem;color:' + (suma ? 'var(--texto)' : '#4cd27d') + '">' +
+          (suma ? '' : '− ') + plata(e.monto) + '</div>' +
+        '<div style="font-size:.66rem;color:var(--texto2)">saldo ' + plata(saldo) + '</div>' +
+      '</div>';
+    f.querySelector('.mv-concepto').textContent = (e.texto||'').slice(0,58);
+    f.querySelector('.mv-quien').textContent = fechaTxt + ' · ' + etiqueta;
+    if(e.tipo==='trabajo'){
+      f.onclick = ()=>{ modalCliente.classList.remove('abierto'); abrirPedido(e.pedido.id); };
+    }
+    cont.appendChild(f);
+  }
+
+  const cierre = document.createElement('div');
+  cierre.className = 'caja-card';
+  cierre.style.cssText = 'margin-top:8px;border:1px solid ' +
+    (saldo > 0.5 ? 'var(--ambar)' : '#4cd27d');
+  if(esProveedor) botonPagarProveedor(id, cont, saldo, '');
+  const etiquetaSaldo = esProveedor
+    ? (saldo > 0.5 ? '💸 Le debemos' : '✅ Sin deuda con este proveedor')
+    : (saldo > 0.5 ? '💸 Nos debe' : (saldo < -0.5 ? '💚 Tiene a favor' : '✅ Cuenta saldada'));
+  cierre.innerHTML =
+    '<div class="cc-linea cc-saldo"><span>' + etiquetaSaldo + '</span>' +
+    '<b style="color:' + (saldo > 0.5 ? 'var(--ambar)' : '#4cd27d') + '">' +
+    plata(Math.abs(saldo)) + '</b></div>';
+  cont.appendChild(cierre);
+}
+
 function renderPedidosContacto(id){
   const cont = document.getElementById('cliPedidos');
   cont.innerHTML = '';
@@ -3142,6 +3245,82 @@ function bloqueCredito(id, cont){
   zona.appendChild(btn);
   cont.appendChild(box);
 }
+/* Botón de pago para las cuentas de proveedor: registra el egreso en la caja
+   con fecha editable, sin tener que ir a Caja y cargarlo a mano. */
+function botonPagarProveedor(id, cont, saldo, etiqueta){
+  const prov = proveedores.find(x=>x.id===id);
+  const zona = document.createElement('div');
+  zona.style.cssText = 'margin:6px 0 10px';
+
+  const btn = document.createElement('button');
+  btn.textContent = '＋ Registrar pago' + (saldo > 0.5 ? ' · debemos ' + plata(saldo) : '');
+  btn.style.cssText = 'width:100%;border-radius:10px;padding:11px;font-weight:800;font-size:.76rem;' +
+    'background:rgba(255,122,122,.10);border:1px solid rgba(255,122,122,.55);color:#ff7a7a';
+
+  btn.onclick = ()=>{
+    zona.innerHTML = '';
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center';
+
+    const inMonto = document.createElement('input');
+    inMonto.type = 'number'; inMonto.inputMode = 'numeric';
+    inMonto.placeholder = '$ monto';
+    if(saldo > 0.5) inMonto.value = Math.round(saldo);
+    inMonto.style.cssText = 'flex:1;min-width:110px;margin:0;padding:10px;font-size:15px;' +
+      'background:var(--fondo);border:1px solid #ff7a7a;border-radius:9px;color:var(--texto)';
+
+    const inFecha = document.createElement('input');
+    inFecha.type = 'date'; inFecha.value = hoyISO();
+    inFecha.title = 'Fecha del pago';
+    inFecha.style.cssText = 'flex:1;min-width:130px;margin:0;padding:9px;font-size:14px;' +
+      'background:var(--fondo);border:1px solid var(--borde);border-radius:9px;color:var(--texto)';
+
+    const inNota = document.createElement('input');
+    inNota.placeholder = 'Detalle, opcional · ej: transferencia';
+    inNota.style.cssText = 'flex:1 1 100%;margin:0;padding:9px;font-size:13.5px;' +
+      'background:var(--fondo);border:1px solid var(--borde);border-radius:9px;color:var(--texto)';
+
+    const ok = document.createElement('button');
+    ok.textContent = 'Pagar';
+    ok.style.cssText = 'background:#ff7a7a;color:#1a0a0a;border:none;border-radius:9px;' +
+      'padding:10px 18px;font-weight:800;font-size:.76rem';
+    const canc = document.createElement('button');
+    canc.textContent = 'Cancelar';
+    canc.style.cssText = 'background:var(--panel2);color:var(--texto2);border:1px solid var(--borde);' +
+      'border-radius:9px;padding:10px 14px;font-size:.74rem';
+    canc.onclick = ()=>{ document.getElementById('cliCuenta').innerHTML=''; renderCuentaContacto(id, true); };
+
+    ok.onclick = ()=>{
+      const monto = parseFloat(inMonto.value)||0;
+      if(monto <= 0){ inMonto.focus(); return; }
+      const nombreProv = prov ? prov.nombre : 'proveedor';
+      movimientos.push({
+        id: uid(), tipo:'egreso', monto,
+        concepto: (inNota.value.trim() || 'Pago a ' + nombreProv) +
+                  (etiqueta ? ' · ' + etiqueta : ''),
+        quien: id, persona: nombreProv,
+        fecha: inFecha.value || hoyISO(), creado: Date.now()
+      });
+      registrar('pagó ' + plata(monto) + ' a ' + nombreProv);
+      guardarDatos(); renderCaja();
+      document.getElementById('cliCuenta').innerHTML='';
+      renderCuentaContacto(id, true);
+      toast('Pago registrado: ' + plata(monto) + ' ✓');
+    };
+
+    fila.appendChild(inMonto); fila.appendChild(inFecha);
+    zona.appendChild(fila); zona.appendChild(inNota);
+    const bs = document.createElement('div');
+    bs.style.cssText = 'display:flex;gap:6px;margin-top:6px';
+    bs.appendChild(canc); bs.appendChild(ok);
+    zona.appendChild(bs);
+    inMonto.focus(); inMonto.select();
+  };
+
+  zona.appendChild(btn);
+  cont.appendChild(zona);
+}
+
 function renderCuentaOffStd(id, cont){
   if(!offset || offset.proveedor !== id) return;
   const trabajos = [];
@@ -3174,6 +3353,7 @@ function renderCuentaOffStd(id, cont){
     '<div class="cc-linea"><span>Pagado</span><b style="color:#4cd27d">' + plata(pagos) + '</b></div>' +
     '<div class="cc-linea cc-saldo"><span>Saldo a pagar</span><b style="color:' + (saldo>0.5?'#ff7a7a':'#4cd27d') + '">' + plata(saldo) + '</b></div>';
   cont.appendChild(card);
+  botonPagarProveedor(id, cont, saldo, 'offset estándar');
   const btnD = card.querySelector('#editDeudaIniOff');
   if(btnD && contacto) btnD.onclick = ()=>{
     const linea = btnD.closest('.cc-linea');
@@ -3292,6 +3472,7 @@ function renderCuentaOD(id, cont){
     '<div class="cc-linea"><span>Pagado</span><b style="color:#4cd27d">' + plata(pagos) + '</b></div>' +
     '<div class="cc-linea cc-saldo"><span>Saldo a pagar</span><b style="color:' + (saldo>0.5?'#ff7a7a':'#4cd27d') + '">' + plata(saldo) + '</b></div>';
   cont.appendChild(card);
+  botonPagarProveedor(id, cont, saldo, 'offset digital');
   const btnD = card.querySelector('#editDeudaIni');
   if(btnD && contacto) btnD.onclick = ()=>{
     const linea = btnD.closest('.cc-linea');
@@ -3741,6 +3922,7 @@ function abrirPedido(id){
   renderPedidoCliente(p);
   renderPedidoEstadoVenta(p);
   renderPedidoTareas(p);
+  renderVersiones(p);
   const inNom = document.getElementById('pedNombre');
   inNom.value = p.nombre || '';
   inNom.oninput = ()=>{ p.nombre = inNom.value.trim(); guardarDatos(); renderPedidos(); };
@@ -4285,6 +4467,161 @@ let timerPedido = null;
 function sincronizarPedido(){
   clearTimeout(timerPedido);
   timerPedido = setTimeout(()=>{ guardarDatos(); renderPedidos(); }, 500);
+}
+
+/* ============ VERSIONES DE PRESUPUESTO ============
+   Una versión guarda los MONTOS YA CALCULADOS, no los ítems.
+   Así, si mañana cambian los costos y la lista de precios, la versión
+   que le pasaste al cliente sigue diciendo exactamente lo mismo. */
+
+function lineasPresupuesto(p){
+  const conMed = presuConMedidas(p);
+  const out = [];
+  for(const it of p.items){
+    if(it.conf === false) continue;
+    if(it.titulo){ out.push({titulo:true, nombre: it.nombre || ''}); continue; }
+    out.push({
+      nombre: nombreItem(it),
+      medidas: conMed ? medidasItem(it) : '',
+      cant: it.cant || 1,
+      unidad: it.mo ? ' h' : (it.uv ? 'u' : ''),
+      abierto: !!it.abierto,
+      sub: subtotalItem(it)
+    });
+  }
+  return out;
+}
+
+function guardarVersionPresu(p, nota){
+  p.versiones = p.versiones || [];
+  const v = {
+    id: uid(),
+    fecha: new Date().toISOString(),
+    nota: nota || '',
+    conMedidas: presuConMedidas(p),
+    desc: p.descPedido || null,
+    lineas: lineasPresupuesto(p),
+    total: totalPedido(p)
+  };
+  p.versiones.push(v);
+  registrar('guardó la versión del presupuesto de ' + nombreClienteId(p.cliente) + ' por ' + plata(v.total));
+  guardarDatos();
+  return v;
+}
+
+function textoVersion(p, v){
+  const f = new Date(v.fecha);
+  let t = '*PRESUPUESTO · TODO LETRAS*\n';
+  t += 'Fecha: ' + f.getDate() + '/' + (f.getMonth()+1) + '/' + f.getFullYear() + '\n';
+  const cli = nombreClienteId(p.cliente);
+  if(cli && cli !== '(sin cliente)') t += 'Cliente: ' + cli + '\n';
+  t += '\n';
+  for(const l of v.lineas){
+    if(l.titulo){ t += '\n*' + (l.nombre||'').toUpperCase() + '*\n'; continue; }
+    t += '▪ ' + l.nombre + (l.medidas||'') +
+      (l.cant > 1 ? ' × ' + l.cant + l.unidad : '') + ': ' + plata(l.sub) +
+      (l.abierto ? ' *' : '') + '\n';
+  }
+  t += '\n*TOTAL: ' + plata(v.total) + '*';
+  return t;
+}
+
+function renderVersiones(p){
+  const cont = document.getElementById('pedVersiones');
+  if(!cont) return;
+  cont.innerHTML = '';
+
+  const cab = document.createElement('div');
+  cab.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 6px';
+  const bGuardar = document.createElement('button');
+  bGuardar.textContent = '💾 Guardar esta versión';
+  bGuardar.style.cssText = 'background:var(--panel2);border:1px solid var(--ambar);color:var(--ambar);' +
+    'border-radius:10px;padding:9px 13px;font-size:.74rem;font-weight:700';
+  bGuardar.onclick = ()=>{
+    if(!p.items.filter(i=>i.conf!==false && !i.titulo).length){ toast('No hay ítems para guardar'); return; }
+    const inp = document.createElement('input');
+    inp.placeholder = 'Nota, opcional · ej: opción con vinilo económico';
+    inp.style.cssText = 'flex:1 1 100%;margin:6px 0 0;padding:8px;font-size:13px;background:var(--fondo);' +
+      'border:1px solid var(--ambar);border-radius:8px;color:var(--texto)';
+    let listo = false;
+    const cerrar = ()=>{
+      if(listo) return; listo = true;
+      const v = guardarVersionPresu(p, inp.value.trim());
+      renderVersiones(p);
+      toast('Versión guardada: ' + plata(v.total) + ' ✓');
+    };
+    inp.addEventListener('keydown', e=>{
+      if(e.key === 'Enter') cerrar();
+      if(e.key === 'Escape'){ listo = true; renderVersiones(p); }
+    });
+    inp.addEventListener('blur', cerrar);
+    cab.appendChild(inp); inp.focus();
+  };
+  cab.appendChild(bGuardar);
+  cont.appendChild(cab);
+
+  const vs = (p.versiones || []).slice().reverse();
+  if(!vs.length){
+    const v0 = document.createElement('div');
+    v0.style.cssText = 'font-size:.7rem;color:var(--texto2);padding:2px 0 4px';
+    v0.textContent = 'Sin versiones guardadas. Guardá una cuando se la pases al cliente.';
+    cont.appendChild(v0);
+    return;
+  }
+
+  for(const v of vs){
+    const f = new Date(v.fecha);
+    const fila = document.createElement('div');
+    fila.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;' +
+      'padding:9px 11px;margin-bottom:6px';
+    const top = document.createElement('div');
+    top.style.cssText = 'display:flex;gap:8px;align-items:baseline;flex-wrap:wrap';
+    const fe = document.createElement('b');
+    fe.style.cssText = 'font-size:.78rem;color:var(--texto)';
+    fe.textContent = f.getDate() + '/' + (f.getMonth()+1) + '/' + f.getFullYear() + ' ' +
+      String(f.getHours()).padStart(2,'0') + ':' + String(f.getMinutes()).padStart(2,'0');
+    const tt = document.createElement('span');
+    tt.style.cssText = 'margin-left:auto;font-weight:800;color:var(--ambar);font-size:.82rem';
+    tt.textContent = plata(v.total);
+    top.appendChild(fe); top.appendChild(tt);
+    fila.appendChild(top);
+
+    const det = document.createElement('div');
+    det.style.cssText = 'font-size:.68rem;color:var(--texto2);margin-top:3px';
+    const nLineas = v.lineas.filter(l=>!l.titulo).length;
+    det.textContent = nLineas + (nLineas === 1 ? ' ítem' : ' ítems') +
+      (v.conMedidas ? ' · con medidas' : '') + (v.nota ? ' · ' + v.nota : '');
+    fila.appendChild(det);
+
+    const bs = document.createElement('div');
+    bs.style.cssText = 'display:flex;gap:6px;margin-top:7px;flex-wrap:wrap';
+    const mini = (txt, fn, peligro)=>{
+      const b = document.createElement('button');
+      b.textContent = txt;
+      b.style.cssText = 'border-radius:8px;padding:6px 10px;font-size:.68rem;font-weight:700;' +
+        (peligro ? 'background:none;border:1px solid #ff7a7a;color:#ff7a7a'
+                 : 'background:var(--panel);border:1px solid var(--borde);color:var(--texto2)');
+      b.onclick = fn; return b;
+    };
+    bs.appendChild(mini('🖼 PDF', ()=> generarPDFPedido(p, v)));
+    bs.appendChild(mini('📋 Texto', async ()=>{
+      const t = textoVersion(p, v);
+      const ok = await copiar(t);
+      if(ok){ toast('Texto copiado ✓'); return; }
+      document.getElementById('resumenTitulo').textContent = '📋 Presupuesto guardado';
+      document.getElementById('resumenTexto').value = t;
+      document.getElementById('btnCompartir').style.display = navigator.share ? '' : 'none';
+      document.getElementById('modalResumen').classList.add('abierto');
+    }));
+    bs.appendChild(mini('✕', (e)=>{
+      dosToques(e.target, '¿Borrar?', ()=>{
+        p.versiones = p.versiones.filter(x=>x.id !== v.id);
+        guardarDatos(); renderVersiones(p);
+      });
+    }, true));
+    fila.appendChild(bs);
+    cont.appendChild(fila);
+  }
 }
 
 /* mover una fila del pedido: de a un paso, o de un salto a donde haga falta */
@@ -6824,6 +7161,7 @@ function renderCuentaAdProv(id, cont){
     '<div class="cc-linea"><span>Compras asignadas (' + compras.length + ')</span><b>' + plata(compras.reduce((s,c)=>s+c.monto,0)) + '</b></div>' +
     '<div class="cc-linea cc-saldo"><span>Pendiente de pago</span><b style="color:' + (pendiente>0.5 ? '#ff7a7a' : '#4cd27d') + '">' + plata(pendiente) + '</b></div>';
   cont.appendChild(card);
+  botonPagarProveedor(id, cont, pendiente, 'offset AD');
   compras.sort((a,b)=> (b.p.creado||0)-(a.p.creado||0));
   for(const c of compras.slice(0, 20)){
     const f = document.createElement('div');
@@ -6992,7 +7330,7 @@ function cargarImagenDims(dataUrl){
     im.src = dataUrl;
   });
 }
-async function generarPDFPedido(p){
+async function generarPDFPedido(p, version){
   const btn = document.getElementById('pedPDF');
   const txtOrig = btn.textContent;
   btn.textContent = '⏳';
@@ -7031,7 +7369,7 @@ async function generarPDFPedido(p){
     doc.setFont('Fira','bold'); doc.setFontSize(19); doc.setTextColor(30,30,30);
     doc.text('PRESUPUESTO', margen, y);
     doc.setFont('Fira','normal'); doc.setFontSize(10.5); doc.setTextColor(90,90,90);
-    const hoy = new Date();
+    const hoy = version ? new Date(version.fecha) : new Date();
     doc.text('Córdoba, ' + hoy.getDate() + '/' + (hoy.getMonth()+1) + '/' + hoy.getFullYear(), W - margen, y, {align:'right'});
     y += 24;
 
@@ -7048,10 +7386,9 @@ async function generarPDFPedido(p){
 
     // ítems
     doc.setFontSize(11);
-    const items = p.items.filter(it=> it.conf !== false);
-    const conMedPDF = presuConMedidas(p);
+    const lineas = version ? version.lineas : lineasPresupuesto(p);
     let primero = true;
-    for(const it of items){
+    for(const it of lineas){
       if(it.titulo){
         saltoSiHaceFalta(34);
         if(!primero) y += 8;
@@ -7064,17 +7401,16 @@ async function generarPDFPedido(p){
         primero = false;
         continue;
       }
-      const texto = nombreItem(it) +
-        (conMedPDF ? medidasItem(it) : '') +
-        (it.cant > 1 ? ' × ' + it.cant + (it.mo ? ' h' : (it.uv ? 'u' : '')) : '') +
+      const texto = it.nombre + (it.medidas || '') +
+        (it.cant > 1 ? ' × ' + it.cant + (it.unidad || '') : '') +
         (it.abierto ? ' *' : '');
-      const lineas = doc.splitTextToSize(texto, W - margen*2 - 110);
-      const alto = lineas.length * 14 + 10;
+      const parrafo = doc.splitTextToSize(texto, W - margen*2 - 110);
+      const alto = parrafo.length * 14 + 10;
       saltoSiHaceFalta(alto);
       doc.setFont('Fira','normal'); doc.setFontSize(11); doc.setTextColor(40,40,40);
-      doc.text(lineas, margen, y);
+      doc.text(parrafo, margen, y);
       doc.setFont('Fira','bold');
-      doc.text(plata(subtotalItem(it)), W - margen, y, {align:'right'});
+      doc.text(plata(it.sub), W - margen, y, {align:'right'});
       y += alto;
       doc.setDrawColor(210,210,210); doc.setLineWidth(0.5);
       doc.line(margen, y - 7, W - margen, y - 7);
@@ -7085,7 +7421,7 @@ async function generarPDFPedido(p){
     saltoSiHaceFalta(40);
     y += 6;
     doc.setFont('Fira','bold'); doc.setFontSize(14.5); doc.setTextColor(0,0,0);
-    doc.text('TOTAL: ' + plata(totalPedido(p)), W - margen, y, {align:'right'});
+    doc.text('TOTAL: ' + plata(version ? version.total : totalPedido(p)), W - margen, y, {align:'right'});
     y += 20;
     if(items.some(it=>it.abierto)){
       doc.setFont('Fira','normal'); doc.setFontSize(9); doc.setTextColor(110,110,110);
