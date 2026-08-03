@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v95</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v97</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -362,6 +362,8 @@
     </div>
     <label>Cliente</label>
     <div class="cats-pick" id="pedCliente"></div>
+    <label>Lo que pidió el cliente</label>
+    <div id="pedBrief"></div>
     <label>Tareas del trabajo</label>
     <div class="cats-pick" id="pedTarea"></div>
     <label>Ítems</label>
@@ -2606,6 +2608,14 @@ function agFila(x, p, atrasado){
     const c = document.createElement('span'); c.textContent = '· ' + nombreClienteId(cli);
     meta.appendChild(c);
   }
+  if(p && p.brief && (x.tipo === 'datos' || x.tipo === 'disenar')){
+    const b = document.createElement('div');
+    b.style.cssText = 'font-size:.7rem;color:var(--texto2);margin-top:4px;padding-left:8px;' +
+      'border-left:2px solid var(--borde);line-height:1.35';
+    b.textContent = p.brief.slice(0, 150) + (p.brief.length > 150 ? '…' : '');
+    cuerpo.appendChild(b);
+  }
+
   const d = agDias(x, p);
   if(d !== null && d >= 1){
     const s2 = document.createElement('span');
@@ -3828,8 +3838,10 @@ function renderPedidos(){
   else if(filtroPedidos.startsWith('tag:')) ordenados = ordenados.filter(p=> (p.etiquetas||[]).includes(filtroPedidos.slice(4)));
   if(buscado){
     ordenados = ordenados.filter(p=>{
-      const textos = [nombreClienteId(p.cliente)||'', p.nombre||'']
-        .concat((p.items||[]).map(i=> i.nombre||''))
+      const dp = p.datosPedido || {};
+      const textos = [nombreClienteId(p.cliente)||'', p.nombre||'', p.brief||'',
+                      dp.medidas||'', dp.colores||'', dp.plazo||'']
+        .concat((p.items||[]).map(i=> (i.detalle||'') + ' ' + (i.nombre||'')))
         .concat(tareas.filter(t=> t.pedido===p.id).map(t=> t.texto||t.nombre||''));
       return normalizarTexto(textos.join(' ')).includes(buscado);
     });
@@ -3922,6 +3934,7 @@ function abrirPedido(id){
   renderPedidoCliente(p);
   renderPedidoEstadoVenta(p);
   renderPedidoTareas(p);
+  renderBrief(p);
   renderVersiones(p);
   const inNom = document.getElementById('pedNombre');
   inNom.value = p.nombre || '';
@@ -4467,6 +4480,134 @@ let timerPedido = null;
 function sincronizarPedido(){
   clearTimeout(timerPedido);
   timerPedido = setTimeout(()=>{ guardarDatos(); renderPedidos(); }, 500);
+}
+
+/* ============ LO QUE PIDIÓ EL CLIENTE ============
+   Un resumen del audio o del mensaje de WhatsApp, dictado por voz.
+   No guarda el audio: guarda lo que importa, que es lo que vas a leer después. */
+
+function hayDictado(){
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+/* Dictado sobre cualquier campo de texto. Devuelve el botón listo para colgar. */
+function botonDictar(campo, alTerminar){
+  const b = document.createElement('button');
+  b.type = 'button';
+  const pintar = (grabando)=>{
+    b.textContent = grabando ? '⏹ Parar' : '🎤 Dictar';
+    b.style.cssText = 'border-radius:9px;padding:9px 13px;font-size:.74rem;font-weight:700;' +
+      (grabando ? 'background:#ff7a7a;color:#1a0a0a;border:none'
+                : 'background:var(--panel2);border:1px solid var(--ambar);color:var(--ambar)');
+  };
+  pintar(false);
+  if(!hayDictado()){
+    b.disabled = true;
+    b.style.opacity = '.45';
+    b.title = 'Este navegador no tiene dictado. En el celular, usá el micrófono del teclado.';
+    return b;
+  }
+  let rec = null;
+  b.onclick = ()=>{
+    if(rec){ rec.stop(); return; }
+    const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+    rec = new R();
+    rec.lang = 'es-AR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    const base = campo.value ? campo.value.replace(/\s+$/,'') + ' ' : '';
+    let firme = '';
+    rec.onresult = (ev)=>{
+      let provisorio = '';
+      for(let i = ev.resultIndex; i < ev.results.length; i++){
+        const t = ev.results[i][0].transcript;
+        if(ev.results[i].isFinal) firme += t + ' '; else provisorio += t;
+      }
+      campo.value = base + firme + provisorio;
+      campo.scrollTop = campo.scrollHeight;
+    };
+    rec.onerror = (ev)=>{
+      if(ev.error === 'not-allowed') toast('Hay que darle permiso al micrófono');
+      else if(ev.error !== 'no-speech') toast('El dictado se cortó');
+    };
+    rec.onend = ()=>{
+      rec = null; pintar(false);
+      campo.value = campo.value.replace(/\s+$/,'');
+      if(alTerminar) alTerminar();
+    };
+    rec.start();
+    pintar(true);
+    toast('Hablá tranquilo… tocá parar cuando termines');
+  };
+  return b;
+}
+
+/* el resumen también sirve para pasárselo a Gastón por el chat del trabajo */
+function textoBrief(p){
+  const dp = p.datosPedido || {};
+  let t = '';
+  if(p.brief) t += p.brief + '\n';
+  const partes = [];
+  if(dp.medidas) partes.push('Medidas: ' + dp.medidas);
+  if(dp.colores) partes.push('Material/colores: ' + dp.colores);
+  if(dp.plazo)   partes.push('Para: ' + dp.plazo);
+  if(partes.length) t += partes.join(' · ');
+  return t.trim();
+}
+
+function renderBrief(p){
+  const cont = document.getElementById('pedBrief');
+  if(!cont) return;
+  cont.innerHTML = '';
+
+  const ta = document.createElement('textarea');
+  ta.value = p.brief || '';
+  ta.rows = 3;
+  ta.placeholder = 'Resumí el audio o el mensaje: qué quiere, dónde va, qué le importa…';
+  ta.style.cssText = 'width:100%;margin:0;padding:10px;font-size:13.5px;line-height:1.45;' +
+    'background:var(--fondo);border:1px solid var(--borde);border-radius:10px;color:var(--texto);resize:vertical';
+  ta.addEventListener('input', ()=>{ p.brief = ta.value.trim() || null; sincronizarPedido(); });
+  cont.appendChild(ta);
+
+  const fila = document.createElement('div');
+  fila.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center';
+  fila.appendChild(botonDictar(ta, ()=>{ p.brief = ta.value.trim() || null; guardarDatos(); }));
+
+  const bCop = document.createElement('button');
+  bCop.textContent = '📋 Copiar';
+  bCop.title = 'Copiar para mandárselo a Gastón o al diseñador';
+  bCop.style.cssText = 'border-radius:9px;padding:9px 13px;font-size:.74rem;font-weight:700;' +
+    'background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)';
+  bCop.onclick = async ()=>{
+    const t = textoBrief(p);
+    if(!t){ toast('Todavía no hay nada escrito'); return; }
+    const ok = await copiar(t);
+    toast(ok ? 'Copiado ✓' : 'No se pudo copiar');
+  };
+  fila.appendChild(bCop);
+
+  /* los tres datos que después vas a querer buscar */
+  const dato = (clave, etiqueta, ancho)=>{
+    const i = document.createElement('input');
+    i.value = (p.datosPedido && p.datosPedido[clave]) || '';
+    i.placeholder = etiqueta;
+    i.style.cssText = 'flex:1 1 ' + ancho + ';min-width:96px;margin:0;padding:8px 10px;font-size:12.5px;' +
+      'background:var(--fondo);border:1px dashed var(--borde);border-radius:9px;color:var(--texto)';
+    i.addEventListener('input', ()=>{
+      p.datosPedido = p.datosPedido || {};
+      p.datosPedido[clave] = i.value.trim() || null;
+      sincronizarPedido();
+    });
+    return i;
+  };
+  const fila2 = document.createElement('div');
+  fila2.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px';
+  fila2.appendChild(dato('medidas', 'Medidas', '30%'));
+  fila2.appendChild(dato('colores', 'Colores / material', '34%'));
+  fila2.appendChild(dato('plazo',   'Para cuándo', '28%'));
+
+  cont.appendChild(fila);
+  cont.appendChild(fila2);
 }
 
 /* ============ VERSIONES DE PRESUPUESTO ============
@@ -6501,23 +6642,107 @@ function odPosado(pw, ph){
     const c = Math.floor(W/a), f = Math.floor(H/b);
     if(c<1 || f<1) return {n:0};
     let n = c*f, extra = 0, detalle = c+'×'+f;
+    const piezas = [];
+    for(let i=0;i<c;i++) for(let j=0;j<f;j++) piezas.push({x:i*a, y:j*b, w:a, h:b, r:false});
     // franja sobrante a lo ancho: piezas rotadas
     const sobraW = W - c*a;
-    const eW = Math.floor(sobraW/b) * Math.floor(H/a);
+    const cW = Math.floor(sobraW/b), fW = Math.floor(H/a);
+    const eW = cW * fW;
     // franja sobrante a lo alto
     const sobraH = H - f*b;
-    const eH = Math.floor(W/b) * Math.floor(sobraH/a);
-    if(eW >= eH && eW > 0){ extra = eW; detalle += ' + '+eW+' rotadas'; }
-    else if(eH > 0){ extra = eH; detalle += ' + '+eH+' rotadas'; }
+    const cH = Math.floor(W/b), fH = Math.floor(sobraH/a);
+    const eH = cH * fH;
+    if(eW >= eH && eW > 0){
+      extra = eW; detalle += ' + '+eW+' rotadas';
+      for(let i=0;i<cW;i++) for(let j=0;j<fW;j++)
+        piezas.push({x: c*a + i*b, y: j*a, w:b, h:a, r:true});
+    }else if(eH > 0){
+      extra = eH; detalle += ' + '+eH+' rotadas';
+      for(let i=0;i<cH;i++) for(let j=0;j<fH;j++)
+        piezas.push({x: i*b, y: f*b + j*a, w:b, h:a, r:true});
+    }
     // bajadas estimadas de la grilla principal
     const bajadas = (c+1) + (f+1);
-    return {n: n+extra, detalle, bajadas, c, f};
+    const total = n + extra;
+    return {n: total, detalle, bajadas, c, f, piezas,
+            aprov: (total*a*b) / (W*H)};
   }
   const o1 = orientacion(pw, ph);
   const o2 = orientacion(ph, pw);
   if(!o1.n && !o2.n) return null;
   const mejor = (o2.n > o1.n) ? {...o2, rot:true} : {...o1, rot:false};
   return mejor;
+}
+
+/* ¿Recortando unos milímetros se desperdicia mucho menos papel?
+   Ojo: no sirve proponer piezas más chicas porque sí (obvio que entran más).
+   Solo avisamos cuando el APROVECHAMIENTO de la hoja mejora de verdad
+   con un recorte mínimo. */
+function odSugerirMedidas(pw, ph){
+  const base = odPosado(pw, ph);
+  if(!base || !base.n) return [];
+  if(base.aprov >= 0.93) return [];   // ya está bien aprovechada, no molestamos
+  const cand = [];
+  const MAX = 2.0;                     // no proponemos recortar más de 2 cm por lado
+  for(let da=0; da<=MAX+0.01; da+=0.1){
+    for(let db=0; db<=MAX+0.01; db+=0.1){
+      if(da<0.05 && db<0.05) continue;
+      const a = Math.round((pw-da)*10)/10, b = Math.round((ph-db)*10)/10;
+      if(a < 2 || b < 2) continue;
+      const r = odPosado(a, b);
+      if(!r || !r.n) continue;
+      if(r.n <= base.n) continue;                    // tiene que entrar más
+      if(r.aprov < base.aprov + 0.04) continue;      // y desperdiciar bastante menos
+      cand.push({w:a, h:b, n:r.n, aprov:r.aprov,
+                 recorte: Math.round((da+db)*10)/10});
+    }
+  }
+  if(!cand.length) return [];
+  /* de cada resultado, la medida que menos recorta */
+  const porN = {};
+  for(const c of cand){
+    if(!porN[c.n] || c.recorte < porN[c.n].recorte) porN[c.n] = c;
+  }
+  return Object.values(porN)
+    .sort((a,b)=> b.aprov - a.aprov || a.recorte - b.recorte)
+    .slice(0, 2);
+}
+
+/* Dibuja la hoja con las piezas acomodadas */
+function odDibujarPosado(canvas, pos){
+  if(!canvas || !pos || !pos.piezas) return;
+  const W = od.hojaW, H = od.hojaH;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.min(420, canvas.parentElement ? canvas.parentElement.clientWidth : 420);
+  const escala = (cssW - 16) / W;
+  const cssH = H * escala + 22;
+  canvas.style.height = cssH + 'px';
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+  const ox = 8, oy = 5;
+  // la hoja
+  ctx.fillStyle = '#f4f1ea';
+  ctx.fillRect(ox, oy, W*escala, H*escala);
+  ctx.strokeStyle = '#888'; ctx.lineWidth = 1.2;
+  ctx.strokeRect(ox, oy, W*escala, H*escala);
+  // las piezas
+  for(const q of pos.piezas){
+    const x = ox + q.x*escala, y = oy + q.y*escala;
+    const w = q.w*escala, h = q.h*escala;
+    ctx.fillStyle = q.r ? 'rgba(90,184,255,.30)' : 'rgba(196,122,0,.24)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = q.r ? '#3f8fd0' : '#c47a00';
+    ctx.lineWidth = 0.9;
+    ctx.strokeRect(x, y, w, h);
+  }
+  // pie
+  ctx.fillStyle = '#666';
+  ctx.font = '10px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Hoja ' + W + '×' + H + ' cm · ' + pos.n + ' piezas · aprovecha ' +
+    Math.round(pos.aprov*100) + '%', ox + W*escala/2, oy + H*escala + 14);
 }
 function odCalcular(meta){
   const costoHoja = odCostoHoja(meta) + odTermPorHoja(meta);
@@ -6705,13 +6930,33 @@ function actualizarOffDig(){
   const pos = document.getElementById('odPosado');
   if(odMeta.porPieza){
     if(calc.posado && calc.posado.n > 0){
+      const ap = Math.round(calc.posado.aprov*100);
       pos.innerHTML = '📐 Entran <b>' + calc.posado.n + ' piezas por hoja</b> (' + calc.posado.detalle +
         (calc.posado.rot ? ', pieza rotada' : '') + ') → ' + calc.hojasBase + ' hojas' +
-        (calc.posado.bajadas ? ' · ~' + calc.posado.bajadas + ' bajadas de cuchilla' : '');
+        (calc.posado.bajadas ? ' · ~' + calc.posado.bajadas + ' bajadas de cuchilla' : '') +
+        ' · aprovecha <b style="color:' + (ap>=90?'#4cd27d':(ap>=75?'var(--ambar)':'#ff7a7a')) + '">' + ap + '%</b>' +
+        '<canvas id="odEsquema" style="width:100%;max-width:420px;display:block;margin:8px auto 0"></canvas>';
       // sugerencia de corte
       if(odMeta.corte==='no' && calc.posado.bajadas){
         pos.innerHTML += '<br>💡 Sugerencia: corte ' + (calc.posado.bajadas<=15 ? 'hasta 15 bajadas' : 'de más de 15 bajadas');
       }
+      // ¿conviene recortar un poco la pieza?
+      const sug = odSugerirMedidas(odMeta.pzAncho, odMeta.pzAlto);
+      if(sug.length){
+        let h = '<div style="margin-top:8px;padding:8px 10px;border-radius:9px;' +
+                'background:rgba(255,190,60,.10);border:1px solid rgba(255,190,60,.45)">' +
+                '<b style="font-size:.72rem">✂️ Se está desperdiciando papel</b>';
+        for(const c of sug){
+          const hojasNuevas = Math.ceil((odMeta.pzCant||0) / c.n);
+          h += '<div style="font-size:.7rem;margin-top:4px;line-height:1.4">A <b>' + c.w + '×' + c.h + ' cm</b>' +
+               ' entran <b>' + c.n + '</b> por hoja (aprovecha ' + Math.round(c.aprov*100) + '%)' +
+               (hojasNuevas ? ' → ' + hojasNuevas + ' hojas en vez de ' + calc.hojasBase : '') + '</div>';
+        }
+        h += '<div style="font-size:.64rem;color:var(--texto2);margin-top:5px">' +
+             'Solo si el cliente acepta la medida. No cambia nada solo.</div></div>';
+        pos.innerHTML += h;
+      }
+      setTimeout(()=> odDibujarPosado(document.getElementById('odEsquema'), calc.posado), 0);
     }else if(odMeta.pzAncho && odMeta.pzAlto){
       pos.innerHTML = '⚠️ La pieza no entra en la hoja de ' + od.hojaW + '×' + od.hojaH + ' cm';
     }else{
