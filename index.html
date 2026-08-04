@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v97</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v98</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -6635,6 +6635,7 @@ function odTermPorHoja(meta){
   return (meta.plastF ? od.plast : 0) + (meta.plastD ? od.plast : 0) +
          (meta.mc ? od.mc : 0) + (meta.cc ? od.cc : 0);
 }
+let odMedidaOriginal = null;   /* de qué medida venimos, para poder desandar */
 function odPosado(pw, ph){
   const W = od.hojaW, H = od.hojaH;
   if(pw<=0 || ph<=0 || pw>Math.max(W,H) && ph>Math.max(W,H)) return null;
@@ -6834,6 +6835,7 @@ function renderOffDig(){
   document.getElementById('odZonaHojas').style.display = odMeta.porPieza ? 'none' : 'block';
   document.getElementById('odZonaPieza').style.display = odMeta.porPieza ? 'block' : 'none';
   document.getElementById('odHojas').value = odMeta.hojas || '';
+  odMedidaOriginal = null;
   document.getElementById('odPzAncho').value = odMeta.pzAncho || '';
   document.getElementById('odPzAlto').value = odMeta.pzAlto || '';
   document.getElementById('odPzCant').value = odMeta.pzCant || '';
@@ -6942,21 +6944,56 @@ function actualizarOffDig(){
       }
       // ¿conviene recortar un poco la pieza?
       const sug = odSugerirMedidas(odMeta.pzAncho, odMeta.pzAlto);
-      if(sug.length){
+      if(sug.length || odMedidaOriginal){
         let h = '<div style="margin-top:8px;padding:8px 10px;border-radius:9px;' +
                 'background:rgba(255,190,60,.10);border:1px solid rgba(255,190,60,.45)">' +
-                '<b style="font-size:.72rem">✂️ Se está desperdiciando papel</b>';
+                '<b style="font-size:.72rem">' +
+                (odMedidaOriginal ? '✂️ Estás probando una medida alternativa'
+                                  : '✂️ Se está desperdiciando papel') + '</b>';
+        if(odMedidaOriginal){
+          h += '<div style="font-size:.7rem;margin-top:4px">Original: <b>' +
+               odMedidaOriginal.w + '×' + odMedidaOriginal.h + ' cm</b>' +
+               ' (' + odMedidaOriginal.n + ' por hoja, ' + odMedidaOriginal.hojas + ' hojas)</div>' +
+               '<button class="odProbar" data-w="' + odMedidaOriginal.w + '" data-h="' + odMedidaOriginal.h +
+               '" data-volver="1" style="margin-top:6px;width:100%;text-align:left;border-radius:8px;' +
+               'padding:8px 10px;font-size:.7rem;font-weight:700;background:var(--panel2);' +
+               'border:1px solid var(--borde);color:var(--texto2)">↩︎ Volver a la medida original</button>';
+        }
         for(const c of sug){
           const hojasNuevas = Math.ceil((odMeta.pzCant||0) / c.n);
-          h += '<div style="font-size:.7rem;margin-top:4px;line-height:1.4">A <b>' + c.w + '×' + c.h + ' cm</b>' +
-               ' entran <b>' + c.n + '</b> por hoja (aprovecha ' + Math.round(c.aprov*100) + '%)' +
-               (hojasNuevas ? ' → ' + hojasNuevas + ' hojas en vez de ' + calc.hojasBase : '') + '</div>';
+          h += '<button class="odProbar" data-w="' + c.w + '" data-h="' + c.h + '"' +
+               ' style="display:block;width:100%;text-align:left;margin-top:5px;border-radius:8px;' +
+               'padding:8px 10px;font-size:.7rem;line-height:1.4;background:var(--panel2);' +
+               'border:1px solid var(--ambar);color:var(--texto)">' +
+               '👉 Probar <b>' + c.w + '×' + c.h + ' cm</b> · entran <b>' + c.n + '</b> por hoja' +
+               ' (aprovecha ' + Math.round(c.aprov*100) + '%)' +
+               (hojasNuevas ? '<br><span style="color:var(--texto2)">' + hojasNuevas +
+                              ' hojas en vez de ' + calc.hojasBase + '</span>' : '') +
+               '</button>';
         }
-        h += '<div style="font-size:.64rem;color:var(--texto2);margin-top:5px">' +
-             'Solo si el cliente acepta la medida. No cambia nada solo.</div></div>';
+        h += '<div style="font-size:.64rem;color:var(--texto2);margin-top:6px">' +
+             'Tocá una para verla dibujada. Podés volver atrás cuando quieras.</div></div>';
         pos.innerHTML += h;
       }
-      setTimeout(()=> odDibujarPosado(document.getElementById('odEsquema'), calc.posado), 0);
+      setTimeout(()=>{
+        odDibujarPosado(document.getElementById('odEsquema'), calc.posado);
+        pos.querySelectorAll('.odProbar').forEach(b=>{
+          b.onclick = ()=>{
+            const w = parseFloat(b.dataset.w), h = parseFloat(b.dataset.h);
+            if(b.dataset.volver){
+              odMedidaOriginal = null;
+            }else if(!odMedidaOriginal){
+              /* guardamos de dónde venimos para poder desandar */
+              odMedidaOriginal = {w: odMeta.pzAncho, h: odMeta.pzAlto,
+                                  n: calc.posado.n, hojas: calc.hojasBase};
+            }
+            odMeta.pzAncho = w; odMeta.pzAlto = h;
+            document.getElementById('odPzAncho').value = w;
+            document.getElementById('odPzAlto').value = h;
+            actualizarOffDig();
+          };
+        });
+      }, 0);
     }else if(odMeta.pzAncho && odMeta.pzAlto){
       pos.innerHTML = '⚠️ La pieza no entra en la hoja de ' + od.hojaW + '×' + od.hojaH + ' cm';
     }else{
@@ -7035,8 +7072,8 @@ function actualizarOffDig(){
 }
 // entradas del armador
 document.getElementById('odHojas').addEventListener('input', e=>{ odMeta.hojas = parseInt(e.target.value)||null; actualizarOffDig(); });
-document.getElementById('odPzAncho').addEventListener('input', e=>{ odMeta.pzAncho = parseFloat(e.target.value)||null; actualizarOffDig(); });
-document.getElementById('odPzAlto').addEventListener('input', e=>{ odMeta.pzAlto = parseFloat(e.target.value)||null; actualizarOffDig(); });
+document.getElementById('odPzAncho').addEventListener('input', e=>{ odMeta.pzAncho = parseFloat(e.target.value)||null; odMedidaOriginal = null; actualizarOffDig(); });
+document.getElementById('odPzAlto').addEventListener('input', e=>{ odMeta.pzAlto = parseFloat(e.target.value)||null; odMedidaOriginal = null; actualizarOffDig(); });
 document.getElementById('odPzCant').addEventListener('input', e=>{ odMeta.pzCant = parseInt(e.target.value)||null; actualizarOffDig(); });
 document.getElementById('odDesc').addEventListener('input', e=>{ odMeta.desc = e.target.value.trim(); });
 document.getElementById('odModoHojas').onclick = ()=>{ odMeta.porPieza = false; renderOffDig(); };
