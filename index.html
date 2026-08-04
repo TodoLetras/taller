@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v98</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v99</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -7705,7 +7705,7 @@ async function generarPDFPedido(p, version){
     doc.setFont('Fira','bold'); doc.setFontSize(14.5); doc.setTextColor(0,0,0);
     doc.text('TOTAL: ' + plata(version ? version.total : totalPedido(p)), W - margen, y, {align:'right'});
     y += 20;
-    if(items.some(it=>it.abierto)){
+    if(lineas.some(it=> !it.titulo && it.abierto)){
       doc.setFont('Fira','normal'); doc.setFontSize(9); doc.setTextColor(110,110,110);
       doc.text('(*) Valor estimado por hora de trabajo: se ajusta según las horas reales.', margen, y);
       y += 16;
