@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v105</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v106</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -651,7 +651,7 @@
       <input id="adW" type="text" inputmode="decimal" placeholder="Ancho" style="flex:1 1 90px;min-width:80px;margin:0">
       <span style="color:var(--texto2)">×</span>
       <input id="adH" type="text" inputmode="decimal" placeholder="Alto" style="flex:1 1 90px;min-width:80px;margin:0">
-      <input id="adCant" type="text" inputmode="numeric" placeholder="Cantidad · ej: 250, 500, 1000" style="flex:1 1 100%;margin:0">
+      <input id="adCant" type="text" inputmode="text" placeholder="Cantidad · ej: 250, 500, 1000" style="flex:1 1 100%;margin:0">
     </div>
     <details style="margin:8px 0 4px">
       <summary style="font-size:.72rem;color:var(--texto2);cursor:pointer;padding:4px 0">⚙️ Libro, poses y márgenes</summary>
@@ -682,9 +682,9 @@
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">📑 Intercalado $</label>
-      <input id="adIntercalado" type="text" inputmode="numeric" placeholder="0 · o por cantidad: 8000, 12000" title="Se cobra UNA vez por trabajo (solo interior). Un valor para todas las cantidades, o una lista en el mismo orden que las cantidades." style="flex:1 1 150px;min-width:130px;margin:0">
+      <input id="adIntercalado" type="text" inputmode="text" placeholder="0 · o por cantidad: 8000, 12000" title="Se cobra UNA vez por trabajo (solo interior). Un valor para todas las cantidades, o una lista en el mismo orden que las cantidades." style="flex:1 1 150px;min-width:130px;margin:0">
       <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">📘 Binder $</label>
-      <input id="adBinder" type="text" inputmode="numeric" placeholder="0 · o por cantidad" title="Armado del libro con pegamento y tapa. Se cobra UNA vez por trabajo (no se duplica en la tapa). Un valor o una lista en el orden de las cantidades." style="flex:1 1 130px;min-width:110px;margin:0">
+      <input id="adBinder" type="text" inputmode="text" placeholder="0 · o por cantidad" title="Armado del libro con pegamento y tapa. Se cobra UNA vez por trabajo (no se duplica en la tapa). Un valor o una lista en el orden de las cantidades." style="flex:1 1 130px;min-width:110px;margin:0">
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <label style="font-size:.74rem;color:var(--texto2);margin:0">✨ Plastificado / barniz</label>
@@ -8310,7 +8310,7 @@ function calcularAd(){
     (adOrig > 1 ? '' :
       '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:.68rem;color:var(--texto2)">' +
       '<span>📦 Paquetes a mostrar:</span>' +
-      '<input id="adPaqLista" value="' + adCfg.paqLista + '" title="Separados por coma. Ej: 1, 2, 5, 10" ' +
+      '<input id="adPaqLista" inputmode="text" value="' + adCfg.paqLista + '" title="Separados por coma. Ej: 1, 2, 5, 10" ' +
       'style="width:130px;margin:0;padding:5px 7px;font-size:12px;background:var(--fondo);' +
       'border:1px dashed var(--ambar);border-radius:8px;color:var(--ambar)">' +
       '<span style="opacity:.75">· el % de cada fila se puede editar</span></div>') +
@@ -8417,7 +8417,7 @@ function calcularAd(){
         'style="width:58px;margin:0;padding:5px;font-size:12px;text-align:right;background:var(--fondo);' +
         'border:1px dashed ' + (adOdMargenOver!=null ? 'var(--ambar)' : '#5ab8ff') + ';border-radius:8px;color:#5ab8ff">' +
         '<span style="color:var(--texto2)">hojas:</span>' +
-        '<input id="adOdCants" value="' + adCfg.odCants + '" style="width:140px;margin:0;padding:6px;font-size:12px;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
+        '<input id="adOdCants" inputmode="text" value="' + adCfg.odCants + '" style="width:140px;margin:0;padding:6px;font-size:12px;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
         '</div>' +
         '<table style="width:100%;border-collapse:collapse;font-size:.7rem">' +
         '<tr style="color:var(--texto2);text-transform:uppercase;font-size:.6rem;letter-spacing:.05em;text-align:right"><td style="padding:4px 2px" title="Incluir en el PDF del cliente">📄</td><td style="text-align:left;padding:4px">Hojas digitales</td><td>Piezas</td><td style="color:#5ab8ff">VENTA</td><td>Unit.</td></tr>' +
