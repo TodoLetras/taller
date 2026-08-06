@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v101</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v105</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -379,7 +379,7 @@
     </div>
     <div class="ped-total" id="pedTotal"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
-      <input id="descPct" type="number" inputmode="decimal" placeholder="desc. %" min="1" max="99" style="width:90px;margin:0;padding:8px;font-size:13px;text-align:right;background:var(--fondo);border:1px dashed var(--ambar);border-radius:8px;color:var(--ambar)">
+      <input id="descPct" type="text" inputmode="decimal" placeholder="desc. %" min="1" max="99" style="width:90px;margin:0;padding:8px;font-size:13px;text-align:right;background:var(--fondo);border:1px dashed var(--ambar);border-radius:8px;color:var(--ambar)">
       <button id="btnAplicarDesc" style="border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">% Aplicar descuento</button>
       <button id="btnQuitarDesc" style="display:none;border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;background:var(--panel2);border:1px dashed #ff7a7a;color:#ff7a7a">✕ Quitar descuento</button>
     </div>
@@ -455,7 +455,7 @@
       <div id="listaLotes"></div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
         <input id="loteNombre" placeholder="Insumo" style="flex:2;min-width:120px;margin:0">
-        <input id="loteCant" type="number" inputmode="decimal" placeholder="Cant." style="width:70px;margin:0">
+        <input id="loteCant" type="text" inputmode="decimal" placeholder="Cant." style="width:70px;margin:0">
         <input id="loteUnidad" placeholder="m/u/cm" style="width:64px;margin:0">
         <input id="loteTotal" type="number" inputmode="numeric" placeholder="$ total lote" style="width:110px;margin:0">
         <button id="btnNuevoLote" style="background:var(--ambar);color:#1a1200;border:none;border-radius:10px;padding:0 14px;font-weight:800">＋</button>
@@ -621,9 +621,9 @@
     </div>
     <div id="odZonaPieza" style="display:none">
       <div style="display:flex;gap:8px;align-items:center">
-        <input id="odPzAncho" type="number" inputmode="decimal" step="0.1" placeholder="Ancho cm" style="flex:1;margin:0">
+        <input id="odPzAncho" type="text" inputmode="decimal" step="0.1" placeholder="Ancho cm" style="flex:1;margin:0">
         <span style="color:var(--texto2)">×</span>
-        <input id="odPzAlto" type="number" inputmode="decimal" step="0.1" placeholder="Alto cm" style="flex:1;margin:0">
+        <input id="odPzAlto" type="text" inputmode="decimal" step="0.1" placeholder="Alto cm" style="flex:1;margin:0">
         <input id="odPzCant" type="number" inputmode="numeric" placeholder="Piezas" style="flex:1;margin:0">
       </div>
       <div id="odPosado" style="font-size:.74rem;color:#5ab8ff;font-weight:700;margin-top:8px;line-height:1.5"></div>
@@ -646,18 +646,27 @@
 <div class="modal" id="modalAd">
   <div class="hoja">
     <h2>🖨 Offset tradicional · AD Impresiones</h2>
-    <label>Pieza (cm)</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <input id="adW" type="number" inputmode="decimal" placeholder="Ancho" style="flex:1;margin:0">
+    <label>Pieza (cm) y cantidad</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="adW" type="text" inputmode="decimal" placeholder="Ancho" style="flex:1 1 90px;min-width:80px;margin:0">
       <span style="color:var(--texto2)">×</span>
-      <input id="adH" type="number" inputmode="decimal" placeholder="Alto" style="flex:1;margin:0">
-      <input id="adCant" type="text" inputmode="numeric" placeholder="Cantidad (una o varias: 250, 500, 750, 1000)" style="flex:1;margin:0">
-      <input id="adOriginales" type="number" inputmode="numeric" min="1" placeholder="📖 hojas libro (1)" title="Cantidad de HOJAS distintas del libro (cada hoja = frente y dorso = 2 páginas). Con más de 1, la Cantidad pasa a ser ejemplares." style="width:126px;margin:0">
-      <input id="adHojasColor" type="number" inputmode="numeric" min="0" placeholder="🎨 hojas a color (0)" title="Cuántas de esas hojas van a color, AGRUPADAS en la imposición. Regla: si una página de un pliego va a color, todo el pliego máquina va a color (usa los colores elegidos arriba); el resto va 1/1. Si las hojas a color están salteadas y ocupan más pliegos, subí este número." style="width:136px;margin:0">
-      <input id="adPoses" type="number" inputmode="numeric" placeholder="Poses (auto)" title="Dejalo vacío para el cálculo automático, o escribí las poses reales de tu imposición" style="flex:1;margin:0">
-      <input id="adPinza" type="number" inputmode="decimal" value="1.5" title="Pinza (cm): franja que toma la máquina a lo largo del lado largo del pliego" style="width:70px;margin:0">
-      <input id="adMarg" type="number" inputmode="decimal" value="1" title="Margen lateral (cm) por costado" style="width:64px;margin:0">
+      <input id="adH" type="text" inputmode="decimal" placeholder="Alto" style="flex:1 1 90px;min-width:80px;margin:0">
+      <input id="adCant" type="text" inputmode="numeric" placeholder="Cantidad · ej: 250, 500, 1000" style="flex:1 1 100%;margin:0">
     </div>
+    <details style="margin:8px 0 4px">
+      <summary style="font-size:.72rem;color:var(--texto2);cursor:pointer;padding:4px 0">⚙️ Libro, poses y márgenes</summary>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+        <input id="adOriginales" type="number" inputmode="numeric" min="1" placeholder="📖 hojas libro (1)" title="Cantidad de HOJAS distintas del libro (cada hoja = frente y dorso = 2 páginas). Con más de 1, la Cantidad pasa a ser ejemplares." style="flex:1 1 150px;min-width:130px;margin:0">
+        <input id="adHojasColor" type="number" inputmode="numeric" min="0" placeholder="🎨 hojas a color (0)" title="Cuántas de esas hojas van a color, AGRUPADAS en la imposición. Regla: si una página de un pliego va a color, todo el pliego máquina va a color (usa los colores elegidos arriba); el resto va 1/1. Si las hojas a color están salteadas y ocupan más pliegos, subí este número." style="flex:1 1 150px;min-width:130px;margin:0">
+        <input id="adPoses" type="number" inputmode="numeric" placeholder="Poses (auto)" title="Dejalo vacío para el cálculo automático, o escribí las poses reales de tu imposición" style="flex:1 1 130px;min-width:120px;margin:0">
+        <label style="font-size:.7rem;color:var(--texto2);margin:0;flex:1 1 100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="white-space:nowrap">Pinza cm</span>
+          <input id="adPinza" type="text" inputmode="decimal" value="1.5" title="Pinza (cm): franja que toma la máquina a lo largo del lado largo del pliego" style="width:78px;margin:0">
+          <span style="white-space:nowrap">Margen cm</span>
+          <input id="adMarg" type="text" inputmode="decimal" value="1" title="Margen lateral (cm) por costado" style="width:78px;margin:0">
+        </label>
+      </div>
+    </details>
     <label>Colores</label>
     <div class="cats-pick" id="adColores"></div>
     <label>Papel <span style="font-weight:400;text-transform:none">(precio del paquete: tocalo para actualizarlo)</span></label>
@@ -667,15 +676,15 @@
       <input type="checkbox" id="adRecargoChk" checked style="width:auto;margin:0">
       Cobrar +15% cuando el paquete queda abierto (papel sobrante)
     </label>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <label style="font-size:.74rem;color:var(--texto2);margin:0">✂️ Corte guillotina $</label>
-      <input id="adCorte" type="number" inputmode="numeric" placeholder="0 (AD no cobra ≤16 poses)" style="flex:1;margin:0">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">✂️ Corte guillotina $</label>
+      <input id="adCorte" type="number" inputmode="numeric" placeholder="0 (AD no cobra ≤16 poses)" style="flex:1 1 140px;min-width:120px;margin:0">
     </div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <label style="font-size:.74rem;color:var(--texto2);margin:0">📑 Intercalado $</label>
-      <input id="adIntercalado" type="text" inputmode="numeric" placeholder="0 · o uno por cantidad: 8000, 12000, 15000" title="Se cobra UNA vez por trabajo (solo interior). Un valor para todas las cantidades, o una lista en el mismo orden que las cantidades." style="flex:1;margin:0">
-      <label style="font-size:.74rem;color:var(--texto2);margin:0">📘 Binder $</label>
-      <input id="adBinder" type="text" inputmode="numeric" placeholder="0 · o uno por cantidad" title="Armado del libro con pegamento y tapa. Se cobra UNA vez por trabajo (no se duplica en la tapa). Un valor o una lista en el orden de las cantidades." style="flex:1;margin:0">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">📑 Intercalado $</label>
+      <input id="adIntercalado" type="text" inputmode="numeric" placeholder="0 · o por cantidad: 8000, 12000" title="Se cobra UNA vez por trabajo (solo interior). Un valor para todas las cantidades, o una lista en el mismo orden que las cantidades." style="flex:1 1 150px;min-width:130px;margin:0">
+      <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">📘 Binder $</label>
+      <input id="adBinder" type="text" inputmode="numeric" placeholder="0 · o por cantidad" title="Armado del libro con pegamento y tapa. Se cobra UNA vez por trabajo (no se duplica en la tapa). Un valor o una lista en el orden de las cantidades." style="flex:1 1 130px;min-width:110px;margin:0">
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <label style="font-size:.74rem;color:var(--texto2);margin:0">✨ Plastificado / barniz</label>
@@ -687,9 +696,9 @@
     <div id="adTapaRow" style="display:none;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;padding:8px;border:1px dashed #c792ea;border-radius:10px">
       <label style="font-size:.74rem;color:#c792ea;margin:0;font-weight:700"><input type="checkbox" id="adTapaChk" style="width:auto;margin:0 4px 0 0">📕 Tapa aparte</label>
       <select id="adTapaPapel" style="flex:1;min-width:150px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
-      <input id="adTapaW" type="number" inputmode="decimal" title="ancho de la tapa extendida (auto: 2× ancho de hoja; sumale el lomo si hace falta)" style="width:78px;margin:0">
+      <input id="adTapaW" type="text" inputmode="decimal" title="ancho de la tapa extendida (auto: 2× ancho de hoja; sumale el lomo si hace falta)" style="width:78px;margin:0">
       <span style="color:var(--texto2)">×</span>
-      <input id="adTapaH" type="number" inputmode="decimal" title="alto de la tapa" style="width:78px;margin:0">
+      <input id="adTapaH" type="text" inputmode="decimal" title="alto de la tapa" style="width:78px;margin:0">
       <select id="adTapaPlast" style="flex:1;min-width:150px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
       <select id="adTapaFaz" style="width:96px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)">
         <option value="1">1 faz</option><option value="2">2 faces</option>
@@ -712,6 +721,7 @@
     </details>
     <div class="acciones">
       <button id="adCerrar" class="btn-secundario">Cerrar</button>
+      <div id="adYaCargados" style="font-size:.68rem;color:var(--texto2);text-align:center;margin-top:6px"></div>
     </div>
   </div>
 </div>
@@ -4206,9 +4216,9 @@ function renderPedidoItems(p){
         '</div>' +
         '<div class="pi-medidas">' +
           '<button class="togCostura"></button>' +
-          '<input class="costuraM" type="number" inputmode="decimal" step="0.1" min="0" title="metros lineales de vulcanizado" style="width:64px"><span class="lblCostura" style="display:none">m ·</span>' +
+          '<input class="costuraM" type="text" inputmode="decimal" step="0.1" min="0" title="metros lineales de vulcanizado" style="width:64px"><span class="lblCostura" style="display:none">m ·</span>' +
           '<button class="togVarilla"></button>' +
-          '<input class="varillaM" type="number" inputmode="decimal" step="0.1" min="0" title="metros lineales de varilla" style="width:64px"><span class="lblVarilla" style="display:none">m</span>' +
+          '<input class="varillaM" type="text" inputmode="decimal" step="0.1" min="0" title="metros lineales de varilla" style="width:64px"><span class="lblVarilla" style="display:none">m</span>' +
           '<button class="uvCostoBtn" title="Costo real del trabajo (lo que te cobra el proveedor). Tocá para corregirlo."></button>' +
         '</div>' +
         '<div class="pi-medidas"><span class="pi-impresion"></span>' +
@@ -6635,6 +6645,19 @@ function odTermPorHoja(meta){
   return (meta.plastF ? od.plast : 0) + (meta.plastD ? od.plast : 0) +
          (meta.mc ? od.mc : 0) + (meta.cc ? od.cc : 0);
 }
+/* En el celular el teclado numérico trae coma, no punto. Como los campos
+   decimales ahora son de texto, la pasamos a punto apenas se escribe, así
+   todo el resto de la app la lee bien sin tocar ni una cuenta. */
+document.addEventListener('input', e=>{
+  const el = e.target;
+  if(!el || el.tagName !== 'INPUT') return;
+  if(el.getAttribute('inputmode') !== 'decimal') return;
+  if(el.value.indexOf(',') < 0) return;
+  const pos = el.selectionStart;
+  el.value = el.value.replace(/,/g, '.');
+  try{ el.setSelectionRange(pos, pos); }catch(_){}
+}, true);
+
 let odMedidaOriginal = null;   /* de qué medida venimos, para poder desandar */
 function odPosado(pw, ph){
   const W = od.hojaW, H = od.hojaH;
@@ -7173,7 +7196,7 @@ function abrirCompra(pedidoId){
     f.innerHTML =
       '<input class="lNom" placeholder="¿Qué compraste? (ej: resma A4 impresa ByN)" style="width:100%;margin:0 0 6px;padding:9px;font-size:.82rem">' +
       '<div style="display:flex;gap:6px;align-items:center">' +
-        '<input class="lCant" type="number" inputmode="decimal" value="1" style="width:64px;margin:0;padding:8px;text-align:right">' +
+        '<input class="lCant" type="text" inputmode="decimal" value="1" style="width:64px;margin:0;padding:8px;text-align:right">' +
         '<span style="font-size:.7rem;color:var(--texto2)">×</span>' +
         '<input class="lUnit" type="number" inputmode="numeric" placeholder="$ unit" style="width:92px;margin:0;padding:8px;text-align:right">' +
         '<span style="font-size:.7rem;color:var(--texto2)">=</span>' +
@@ -7295,9 +7318,9 @@ function editarAdReal(it, p){
         '<input data-k="' + k + '" type="number" inputmode="numeric" value="' + (reales[k]!==undefined ? reales[k] : '') + '" placeholder="' + Math.round(m[k]||0) + '" style="width:110px;margin:0;padding:9px;font-size:15px;text-align:right;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
         '</div>' +
         '<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:4px;font-size:.66rem;color:var(--texto2)">' +
-        '<input data-c="' + k + '" type="number" inputmode="decimal" value="' + d.cant + '" style="width:74px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--panel2);border:1px solid var(--borde);border-radius:7px;color:var(--texto)">' +
+        '<input data-c="' + k + '" type="text" inputmode="decimal" value="' + d.cant + '" style="width:74px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--panel2);border:1px solid var(--borde);border-radius:7px;color:var(--texto)">' +
         '<span>' + (d.u||'u') + ' ×</span>' +
-        '<input data-u="' + k + '" type="number" inputmode="decimal" value="' + d.unit + '" style="width:96px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--panel2);border:1px solid var(--borde);border-radius:7px;color:var(--texto)">' +
+        '<input data-u="' + k + '" type="text" inputmode="decimal" value="' + d.unit + '" style="width:96px;margin:0;padding:6px;font-size:13px;text-align:right;background:var(--panel2);border:1px solid var(--borde);border-radius:7px;color:var(--texto)">' +
         '<span>c/u</span></div></div>';
     }).join('') +
     '<div id="adRealTot" style="text-align:right;font-weight:800;font-size:.82rem;margin:6px 0 14px"></div>';
@@ -7564,7 +7587,8 @@ async function generarPDFAd(){
     }
     const colCant = margen, colUnit = W - margen - 140, colTot = W - margen;
     const elegidas = adUltimasOpciones.filter(x=> adPdfSel[x.etq] !== false);
-    if(!elegidas.length){ toast('Tildá al menos una opción'); if(btn) btn.textContent = txtOrig; return; }
+    const digis = (adUltimasOD||[]).filter(x=> adOdSel[x.etq]);
+    if(!elegidas.length && !digis.length){ toast('Tildá al menos una opción'); if(btn) btn.textContent = txtOrig; return; }
     const pedidoOps = elegidas.filter(x=> x.etq && x.etq.startsWith('Tu pedido'));
     const otrasOps  = elegidas.filter(x=> !(x.etq && x.etq.startsWith('Tu pedido')));
     const encabezadoTabla = ()=>{
@@ -7605,6 +7629,15 @@ async function generarPDFAd(){
       doc.text('Otras cantidades — precios por escala', margen, y); y += 15;
       encabezadoTabla();
       for(const {op} of otrasOps) filaOp(op, false);
+    }
+    if(digis.length){
+      y += 10;
+      /* el PDF de AD es de una carilla: si no entra, pasamos de hoja */
+      if(y > 690){ doc.addPage(); y = 60; }
+      doc.setFont('Fira','bold'); doc.setFontSize(11); doc.setTextColor(30,30,30);
+      doc.text('Alternativa para tiradas cortas', margen, y); y += 15;
+      encabezadoTabla();
+      for(const d of digis) filaOp({piezas: d.piezas, venta: d.venta, unitario: d.unitario}, false);
     }
     y += 8;
     doc.setFont('Fira','normal'); doc.setFontSize(8.5); doc.setTextColor(130,130,130);
@@ -7796,6 +7829,10 @@ document.getElementById('pedPDF').onclick = ()=>{
 const modalAd = document.getElementById('modalAd');
 let adPedido = null, adColSel = '4/4';
 let adPdfSel = {};   /* qué opciones van al PDF del cliente */
+let adMargenOver = {};   /* margen escrito a mano por fila */
+let adOdSel = {};        /* filas de la alternativa digital que van al PDF */
+let adUltimasOD = [];
+let adOdPapelOver = null, adOdMargenOver = null;
 let adPdfConPosado = false, adUltimasOpciones = null, adUltimoCtx = null, adSinGiro = false;
 const AD_COLORES = [['1/0',1,0],['1/1',1,1],['2/0',2,0],['2/2',2,2],['4/0',4,0],['4/1',4,1],['4/4',4,4]];
 function adEncajeDet(pw, ph, W, H){
@@ -7848,6 +7885,18 @@ function adCortePliego(pW, pH, MW, MH){
   }
   return mejor;
 }
+/* muestra abajo del módulo lo que ya lleva cargado este pedido */
+function adRefrescarCargados(){
+  const d = document.getElementById('adYaCargados');
+  if(!d) return;
+  if(!adPedido || !adPedido.items || !adPedido.items.length){ d.textContent = ''; return; }
+  const its = adPedido.items.filter(i=> !i.titulo);
+  if(!its.length){ d.textContent = ''; return; }
+  const tot = its.reduce((a,i)=> a + (i.conf===false ? 0 : subtotalItem(i)), 0);
+  d.textContent = '🧾 Este pedido ya lleva ' + its.length +
+    (its.length===1 ? ' ítem' : ' ítems') + ' · ' + plata(tot);
+}
+
 function adMargen(paquetes){
   let m = 100;
   for(const [n, pct] of adCfg.escala){ if(paquetes >= n) m = pct; }
@@ -8019,7 +8068,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     if(intercaladoCosto > 0) des.push('📑 Intercalado: ' + plata(intercaladoCosto));
     if(binderCosto > 0) des.push('📘 Binder: ' + plata(binderCosto));
     des.push('Σ COSTO: ' + plata(costo));
-    const margen = adMargen(paquetes);
+    const margen = (modo && modo.margenOver != null) ? modo.margenOver : adMargen(paquetes);
     const venta = Math.round(costo * (1 + margen/100));
     const paqDec = Math.round((hojas / papel.hojas) * 100) / 100;
     const op = {maquina: maq.nombre, plW: plLargo, plH: plCorto, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes, paqDec,
@@ -8228,7 +8277,10 @@ function calcularAd(){
     idxQ++;
     const interQ = interL.length ? (interL[idxQ] != null ? interL[idxQ] : interL[interL.length-1]) : null;
     const bindQ  = bindL.length  ? (bindL[idxQ]  != null ? bindL[idxQ]  : bindL[bindL.length-1])  : null;
-    let op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'cantidad', q: qi, inter: interQ, bind: bindQ}, adOrig);
+    const etqPedido = 'Tu pedido: ' + qi + (adOrig>1 ? ' ej.' : ' u');
+    let op = adMejorOpcion(papel, cf, cd, pzW, pzH,
+               {tipo:'cantidad', q: qi, inter: interQ, bind: bindQ,
+                margenOver: adMargenOver[etqPedido]}, adOrig);
     if(op && tapaCfg){
       const opT = adMejorOpcion(tapaCfg.papel, cf, cd, tapaCfg.W, tapaCfg.H, {tipo:'cantidad', q: qi}, 1, tapaCfg.plast);
       if(opT){
@@ -8241,17 +8293,30 @@ function calcularAd(){
           detalle: op.detalle + ' — 📕 TAPA (' + tapaCfg.papel.nombre + ' ' + tapaCfg.W + '×' + tapaCfg.H + (tapaCfg.plast ? ' · ' + tapaCfg.plast : '') + '): ' + opT.detalle};
       }
     }
-    if(op) opciones.push({etq: 'Tu pedido: ' + qi + (adOrig>1 ? ' ej.' : ' u'), op, piezasFix: qi});
+    if(op) opciones.push({etq: etqPedido, op, piezasFix: qi});
   }
-  for(let n=1; n<=4; n++){
+  if(!adCfg.paqLista) adCfg.paqLista = '1, 2, 3, 4';
+  const listaPaq = String(adCfg.paqLista).split(/[^0-9]+/).map(Number)
+                     .filter(x=> x>0).slice(0,8);
+  for(const n of listaPaq){
     if(adOrig > 1) break; // en modo libro las opciones por paquete no aplican
-    const op = adMejorOpcion(papel, cf, cd, pzW, pzH, {tipo:'paquetes', n});
-    if(op && op.piezas > 0) opciones.push({etq: n + ' paquete' + (n>1?'s':''), op});
+    const etq = n + ' paquete' + (n>1?'s':'');
+    const op = adMejorOpcion(papel, cf, cd, pzW, pzH,
+                 {tipo:'paquetes', n, margenOver: adMargenOver[etq]});
+    if(op && op.piezas > 0) opciones.push({etq, op});
   }
   if(!opciones.length){ res.innerHTML = '<div class="vacio" style="padding:10px">La pieza no entra en los pliegos de máquina.</div>'; return; }
   let h = '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:6px">' + opciones[0].op.detalle + ' · demasía ' + adCfg.demasia + ' pliegos/postura</div>' +
+    (adOrig > 1 ? '' :
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:.68rem;color:var(--texto2)">' +
+      '<span>📦 Paquetes a mostrar:</span>' +
+      '<input id="adPaqLista" value="' + adCfg.paqLista + '" title="Separados por coma. Ej: 1, 2, 5, 10" ' +
+      'style="width:130px;margin:0;padding:5px 7px;font-size:12px;background:var(--fondo);' +
+      'border:1px dashed var(--ambar);border-radius:8px;color:var(--ambar)">' +
+      '<span style="opacity:.75">· el % de cada fila se puede editar</span></div>') +
     '<canvas id="adEsquema" style="width:100%;max-width:420px;display:block;margin:0 auto 10px;border-radius:8px"></canvas>';
-  h += '<div style="overflow-x:auto"><table style="width:100%;min-width:760px;border-collapse:collapse;font-size:.7rem">' +
+  h += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">' +
+    '<table style="width:100%;min-width:820px;border-collapse:separate;border-spacing:5px 0;font-size:.7rem">' +
     '<tr style="color:var(--texto2);text-transform:uppercase;font-size:.6rem;letter-spacing:.05em;text-align:right">' +
     '<td style="padding:5px 2px" title="Incluir en el PDF del cliente">📄</td>' +
     '<td style="text-align:left;padding:5px 4px">Opción</td><td>Pliegos</td><td>Piezas</td><td>Papel</td><td>Millar</td><td>Chapas</td><td>Postura</td><td>Corte</td><td>Costo</td><td>%</td><td style="color:#4cd27d">VENTA</td><td>Unit.</td><td></td></tr>';
@@ -8269,7 +8334,10 @@ function calcularAd(){
       '<td>' + plata(op.postCosto) + '</td>' +
       '<td>' + plata(op.corteCosto) + '</td>' +
       '<td><b>' + plata(op.costo) + '</b></td>' +
-      '<td>+' + op.margen + '</td>' +
+      '<td style="padding:3px 2px"><input class="adMrg" data-etq="' + etq + '" type="number" inputmode="numeric" value="' + op.margen +
+        '" title="Margen de esta fila. Borralo para volver al automático." ' +
+        'style="width:54px;margin:0;padding:4px 3px;font-size:11.5px;text-align:right;background:var(--fondo);' +
+        'border:1px dashed ' + (adMargenOver[etq]!=null ? 'var(--ambar)' : 'var(--borde)') + ';border-radius:6px;color:var(--texto)"></td>' +
       '<td style="color:#4cd27d;font-weight:800;white-space:nowrap">' + plata(op.venta) + '</td>' +
       '<td style="white-space:nowrap">' + plata(Math.round(op.unitario*100)/100) + '</td>' +
       '<td style="white-space:nowrap"><button class="adVer" style="background:none;border:1px dashed var(--borde);color:var(--texto2);border-radius:8px;padding:6px 8px;font-weight:800;font-size:.72rem">🔍</button> <button class="adUsar" data-etq="' + etq + '" style="background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:6px 9px;font-weight:800;font-size:.72rem">＋</button></td></tr>' +
@@ -8309,20 +8377,28 @@ function calcularAd(){
     if(posOD && posOD.n > 0){
       const keys = Object.keys(od.tabla).map(Number);
       const gram = papel.gramaje || 0;
-      const key = keys.reduce((mj,k)=> Math.abs(k-gram) < Math.abs(mj-gram) ? k : mj, keys[0]);
+      const keyAuto = keys.reduce((mj,k)=> Math.abs(k-gram) < Math.abs(mj-gram) ? k : mj, keys[0]);
+      const key = (adOdPapelOver != null && od.tabla[String(adOdPapelOver)]) ? adOdPapelOver : keyAuto;
+      const margenOD = (adOdMargenOver != null) ? adOdMargenOver : od.margen;
       if(!adCfg.odCants) adCfg.odCants = '10, 25, 30, 50';
       const cantsOD = String(adCfg.odCants).split(/[^0-9]+/).map(Number).filter(x=>x>0).slice(0,8);
       const colOD = OD_MODOS.findIndex(m=> m[0]===adColSel);
       const costoHojaOD = od.tabla[String(key)][colOD];
       const unitAdBase = (q > 0 && opciones[0].op) ? opciones[0].op.unitario : null;
       let filasOD = '';
+      adUltimasOD = [];
       for(const hb of cantsOD){
-        const ventaOD = Math.round((hb + 1) * costoHojaOD * (1 + od.margen/100)); // +1 hoja de armado
+        const ventaOD = Math.round((hb + 1) * costoHojaOD * (1 + margenOD/100)); // +1 hoja de armado
         const piezasOD = hb * posOD.n;
         const unitOD = ventaOD / piezasOD;
         const gana = unitAdBase !== null && unitOD < unitAdBase - 0.005;
+        const etqOD = hb + ' hojas';
+        adUltimasOD.push({etq: etqOD, piezas: piezasOD, venta: ventaOD, unitario: unitOD});
         filasOD += '<tr style="border-top:1px dashed var(--borde);text-align:right">' +
-          '<td style="text-align:left;padding:6px 4px"><b>' + hb + ' hojas</b></td>' +
+          '<td style="padding:6px 2px;width:24px"><input type="checkbox" class="adOdSel" data-etq="' + etqOD + '"' +
+            (adOdSel[etqOD] ? ' checked' : '') +
+            ' style="width:16px;height:16px;accent-color:#5ab8ff;margin:0"></td>' +
+          '<td style="text-align:left;padding:6px 4px"><b>' + etqOD + '</b></td>' +
           '<td>' + piezasOD.toLocaleString('es-AR') + '</td>' +
           '<td style="color:#5ab8ff;font-weight:800;white-space:nowrap">' + plata(ventaOD) + '</td>' +
           '<td style="white-space:nowrap">' + plata(Math.round(unitOD*100)/100) + (gana ? ' <span style="color:#4cd27d;font-weight:700">✓</span>' : '') + '</td></tr>';
@@ -8330,26 +8406,63 @@ function calcularAd(){
       h += '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(90,184,255,.06);border:1px dashed rgba(90,184,255,.45)">' +
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:.72rem">' +
         '<b style="color:#5ab8ff">⚡ Alternativa en offset digital</b>' +
-        '<span style="color:var(--texto2)">' + posOD.n + ' poses/hoja · papel ' + key + 'g' + (key !== gram ? ' (el más cercano a ' + gram + 'g)' : '') + ' · ' + adColSel + ' · margen ' + od.margen + '%</span>' +
+        '<span style="color:var(--texto2)">' + posOD.n + ' poses/hoja · ' + adColSel + '</span>' +
+        '<span style="color:var(--texto2)">papel:</span>' +
+        '<select id="adOdPapel" style="width:auto;margin:0;padding:5px 7px;font-size:12px;background:var(--fondo);' +
+        'border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
+        keys.sort((a,b)=>a-b).map(k=> '<option value="' + k + '"' + (k===key ? ' selected' : '') + '>' + k + 'g' +
+          (k===keyAuto ? ' (auto)' : '') + '</option>').join('') + '</select>' +
+        '<span style="color:var(--texto2)">margen:</span>' +
+        '<input id="adOdMargen" type="number" inputmode="numeric" value="' + margenOD + '" title="Borralo para volver al ' + od.margen + '% de siempre" ' +
+        'style="width:58px;margin:0;padding:5px;font-size:12px;text-align:right;background:var(--fondo);' +
+        'border:1px dashed ' + (adOdMargenOver!=null ? 'var(--ambar)' : '#5ab8ff') + ';border-radius:8px;color:#5ab8ff">' +
         '<span style="color:var(--texto2)">hojas:</span>' +
         '<input id="adOdCants" value="' + adCfg.odCants + '" style="width:140px;margin:0;padding:6px;font-size:12px;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
         '</div>' +
         '<table style="width:100%;border-collapse:collapse;font-size:.7rem">' +
-        '<tr style="color:var(--texto2);text-transform:uppercase;font-size:.6rem;letter-spacing:.05em;text-align:right"><td style="text-align:left;padding:4px">Hojas digitales</td><td>Piezas</td><td style="color:#5ab8ff">VENTA</td><td>Unit.</td></tr>' +
+        '<tr style="color:var(--texto2);text-transform:uppercase;font-size:.6rem;letter-spacing:.05em;text-align:right"><td style="padding:4px 2px" title="Incluir en el PDF del cliente">📄</td><td style="text-align:left;padding:4px">Hojas digitales</td><td>Piezas</td><td style="color:#5ab8ff">VENTA</td><td>Unit.</td></tr>' +
         filasOD + '</table>' +
         '<div style="font-size:.6rem;color:var(--texto2);margin-top:4px">✓ = unitario mejor que tu pedido en tradicional. Sin corte ni terminaciones; editá las cantidades separadas por coma.</div></div>';
     }
   }
   res.innerHTML = h;
   dibujarEsquemaAd(opciones[0].op);
+  const selOdP = document.getElementById('adOdPapel');
+  if(selOdP) selOdP.addEventListener('change', ()=>{ adOdPapelOver = parseInt(selOdP.value)||null; calcularAd(); });
+  const inOdM = document.getElementById('adOdMargen');
+  if(inOdM) inOdM.addEventListener('change', ()=>{
+    const v = parseFloat(inOdM.value);
+    adOdMargenOver = (isNaN(v) || inOdM.value.trim()==='') ? null : v;
+    calcularAd();
+  });
+  res.querySelectorAll('.adOdSel').forEach(ch=>{
+    ch.onchange = ()=>{
+      adOdSel[ch.dataset.etq] = ch.checked;
+      const n = res.querySelectorAll('.adSel:checked').length + res.querySelectorAll('.adOdSel:checked').length;
+      const b = document.getElementById('adBtnPdf');
+      if(b) b.textContent = n ? '📄 PDF para el cliente (' + n + ')' : '📄 Elegí al menos una';
+    };
+  });
   const inOdCants = document.getElementById('adOdCants');
   if(inOdCants) inOdCants.addEventListener('change', ()=>{ adCfg.odCants = inOdCants.value; guardarDatos(); calcularAd(); });
   adUltimasOpciones = opciones;
   adUltimoCtx = {pzW, pzH, papel, colTxt: adColSel};
+  const inPaq = document.getElementById('adPaqLista');
+  if(inPaq) inPaq.addEventListener('change', ()=>{
+    adCfg.paqLista = inPaq.value; guardarDatos(); calcularAd();
+  });
+  res.querySelectorAll('.adMrg').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const v = parseFloat(inp.value);
+      if(isNaN(v) || inp.value.trim()==='') delete adMargenOver[inp.dataset.etq];
+      else adMargenOver[inp.dataset.etq] = v;
+      calcularAd();
+    });
+  });
   res.querySelectorAll('.adSel').forEach(ch=>{
     ch.onchange = ()=>{
       adPdfSel[ch.dataset.etq] = ch.checked;
-      const n = res.querySelectorAll('.adSel:checked').length;
+      const n = res.querySelectorAll('.adSel:checked').length + res.querySelectorAll('.adOdSel:checked').length;
       const b = document.getElementById('adBtnPdf');
       if(b) b.textContent = n ? '📄 PDF para el cliente (' + n + ')' : '📄 Elegí al menos una';
     };
@@ -8390,8 +8503,12 @@ function calcularAd(){
                  }}});
       registrar('cargó offset AD en el pedido de ' + nombreClienteId(adPedido.cliente) + ' (' + plata(op.venta) + ')');
       guardarDatos(); renderPedidos();
-      modalAd.classList.remove('abierto');
-      abrirPedido(adPedido.id);
+      /* NO cerramos: así podés cambiar el papel y agregar otra variante
+         al mismo pedido sin recargar todos los datos de nuevo. */
+      const n = adPedido.items.length;
+      renderPedidoItems(adPedido);
+      adRefrescarCargados();
+      toast('Agregado ✓ · ' + n + (n===1 ? ' ítem en el pedido' : ' ítems en el pedido'));
     };
   });
 }
@@ -8482,9 +8599,9 @@ function vcRenderPiezas(){
   vcPzs.forEach((pz, i)=>{
     const f = document.createElement('div');
     f.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
-    f.innerHTML = '<input class="w" type="number" inputmode="decimal" placeholder="ancho" style="width:82px;margin:0" value="'+(pz.w||'')+'">' +
+    f.innerHTML = '<input class="w" type="text" inputmode="decimal" placeholder="ancho" style="width:82px;margin:0" value="'+(pz.w||'')+'">' +
       '<span style="color:var(--texto2)">×</span>' +
-      '<input class="h" type="number" inputmode="decimal" placeholder="alto" style="width:82px;margin:0" value="'+(pz.h||'')+'">' +
+      '<input class="h" type="text" inputmode="decimal" placeholder="alto" style="width:82px;margin:0" value="'+(pz.h||'')+'">' +
       '<span style="color:var(--texto2)">cm ×</span>' +
       '<input class="c" type="number" inputmode="numeric" min="1" style="width:64px;margin:0" value="'+(pz.cant||1)+'">' +
       '<span class="det" style="flex:1;font-size:.66rem;color:var(--texto2)"></span>' +
@@ -8503,9 +8620,9 @@ function vcRenderDes(){
   vcDes.forEach((d, i)=>{
     const f = document.createElement('div');
     f.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
-    f.innerHTML = '<input class="w" type="number" inputmode="decimal" placeholder="ancho" style="width:82px;margin:0" value="'+(d.w||'')+'">' +
+    f.innerHTML = '<input class="w" type="text" inputmode="decimal" placeholder="ancho" style="width:82px;margin:0" value="'+(d.w||'')+'">' +
       '<span style="color:var(--texto2)">×</span>' +
-      '<input class="h" type="number" inputmode="decimal" placeholder="alto" style="width:82px;margin:0" value="'+(d.h||'')+'">' +
+      '<input class="h" type="text" inputmode="decimal" placeholder="alto" style="width:82px;margin:0" value="'+(d.h||'')+'">' +
       '<span style="color:var(--texto2)">cm</span>' +
       '<span class="det" style="flex:1;font-size:.66rem;color:var(--texto2)"></span>' +
       '<button class="x" style="background:none;border:none;color:#ff7a7a;font-size:1rem">✕</button>';
@@ -8690,6 +8807,7 @@ document.getElementById('btnAdOff').onclick = ()=>{
   modalPedido.classList.remove('abierto');
   renderAd();
   modalAd.classList.add('abierto');
+  adRefrescarCargados();
 };
 
 /* ---------- mano de obra ---------- */
