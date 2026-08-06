@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v99</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v101</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -7563,8 +7563,10 @@ async function generarPDFAd(){
       }
     }
     const colCant = margen, colUnit = W - margen - 140, colTot = W - margen;
-    const pedidoOps = adUltimasOpciones.filter(x=> x.etq && x.etq.startsWith('Tu pedido'));
-    const otrasOps  = adUltimasOpciones.filter(x=> !(x.etq && x.etq.startsWith('Tu pedido')));
+    const elegidas = adUltimasOpciones.filter(x=> adPdfSel[x.etq] !== false);
+    if(!elegidas.length){ toast('Tildá al menos una opción'); if(btn) btn.textContent = txtOrig; return; }
+    const pedidoOps = elegidas.filter(x=> x.etq && x.etq.startsWith('Tu pedido'));
+    const otrasOps  = elegidas.filter(x=> !(x.etq && x.etq.startsWith('Tu pedido')));
     const encabezadoTabla = ()=>{
       doc.setFont('Fira','bold'); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
       doc.text('CANTIDAD', colCant, y);
@@ -7575,14 +7577,21 @@ async function generarPDFAd(){
       y += 17;
     };
     const filaOp = (op, destacada)=>{
+      const alto = destacada ? 22 : 20;
+      if(destacada){
+        doc.setFillColor(248, 243, 230);
+        doc.rect(margen - 6, y - 11, W - margen*2 + 12, alto - 2, 'F');
+      }
       doc.setFontSize(destacada ? 12 : 11);
       doc.setFont('Fira', destacada ? 'bold' : 'normal'); doc.setTextColor(30,30,30);
       doc.text(op.piezas.toLocaleString('es-AR') + ' unidades', colCant, y);
-      doc.setFont('Fira','normal');
+      doc.setFont('Fira','normal'); doc.setTextColor(70,70,70);
       doc.text(plata(Math.round(op.unitario*100)/100) + ' c/u', colUnit, y, {align:'right'});
-      doc.setFont('Fira','bold');
+      doc.setFont('Fira','bold'); doc.setTextColor(30,30,30);
       doc.text(plata(op.venta), colTot, y, {align:'right'});
-      y += destacada ? 22 : 20;
+      y += alto;
+      doc.setDrawColor(226,226,226); doc.setLineWidth(0.5);
+      doc.line(margen, y - 12, W - margen, y - 12);
     };
     if(pedidoOps.length){
       doc.setFont('Fira','bold'); doc.setFontSize(11); doc.setTextColor(30,30,30);
@@ -7786,6 +7795,7 @@ document.getElementById('pedPDF').onclick = ()=>{
 /* ---------- offset tradicional AD (GTO / Komori) ---------- */
 const modalAd = document.getElementById('modalAd');
 let adPedido = null, adColSel = '4/4';
+let adPdfSel = {};   /* qué opciones van al PDF del cliente */
 let adPdfConPosado = false, adUltimasOpciones = null, adUltimoCtx = null, adSinGiro = false;
 const AD_COLORES = [['1/0',1,0],['1/1',1,1],['2/0',2,0],['2/2',2,2],['4/0',4,0],['4/1',4,1],['4/4',4,4]];
 function adEncajeDet(pw, ph, W, H){
@@ -7843,7 +7853,16 @@ function adMargen(paquetes){
   for(const [n, pct] of adCfg.escala){ if(paquetes >= n) m = pct; }
   return m;
 }
-function adTarifa(maq, gramaje){
+/* El autoadhesivo va SIEMPRE en el tramo caro, aunque pese 90 gramos:
+   la lista dice "desde 180 gr hasta 300 gr Y AUTOADHESIVO". */
+function adEsAutoadhesivo(papel){
+  if(!papel) return false;
+  if(papel.autoadh === true) return true;
+  if(papel.autoadh === false) return false;
+  return /autoadh/i.test(papel.nombre || '');
+}
+function adTarifa(maq, gramaje, papel){
+  if(adEsAutoadhesivo(papel)) return maq.tarifas.mas180;
   return gramaje <= 170 ? maq.tarifas.hasta170 : maq.tarifas.mas180;
 }
 // calcula una opción: modo {tipo:'paquetes', n} o {tipo:'cantidad', q}
@@ -7863,7 +7882,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
   const poses = posesManual > 0 ? posesManual : (layoutDet ? layoutDet.n : 0);
   if(poses < 1) return null;
   const pliegosPorHoja = cortePl.n;
-  const tar = adTarifa(maq, papel.gramaje);
+  const tar = adTarifa(maq, papel.gramaje, papel);
   const dorso = cd > 0;
   const variantes = [];
   // pasadas: cada pasada por máquina se cobra por millar con su tarifa;
@@ -8234,9 +8253,13 @@ function calcularAd(){
     '<canvas id="adEsquema" style="width:100%;max-width:420px;display:block;margin:0 auto 10px;border-radius:8px"></canvas>';
   h += '<div style="overflow-x:auto"><table style="width:100%;min-width:760px;border-collapse:collapse;font-size:.7rem">' +
     '<tr style="color:var(--texto2);text-transform:uppercase;font-size:.6rem;letter-spacing:.05em;text-align:right">' +
+    '<td style="padding:5px 2px" title="Incluir en el PDF del cliente">📄</td>' +
     '<td style="text-align:left;padding:5px 4px">Opción</td><td>Pliegos</td><td>Piezas</td><td>Papel</td><td>Millar</td><td>Chapas</td><td>Postura</td><td>Corte</td><td>Costo</td><td>%</td><td style="color:#4cd27d">VENTA</td><td>Unit.</td><td></td></tr>';
   for(const {etq, op} of opciones){
     h += '<tr style="border-top:1px dashed var(--borde);text-align:right">' +
+      '<td style="padding:7px 2px;width:26px"><input type="checkbox" class="adSel" data-etq="' + etq + '"' +
+        (adPdfSel[etq] !== false ? ' checked' : '') +
+        ' style="width:17px;height:17px;accent-color:#4cd27d;margin:0"></td>' +
       '<td style="text-align:left;padding:7px 4px;white-space:nowrap"><b>' + etq + '</b>' + (op.nota?'<br><span style="font-size:.6rem;color:var(--texto2)">'+op.nota+'</span>':'') + '</td>' +
       '<td>' + op.pliegos.toLocaleString('es-AR') + '</td>' +
       '<td><b>' + op.piezas.toLocaleString('es-AR') + '</b></td>' +
@@ -8250,7 +8273,7 @@ function calcularAd(){
       '<td style="color:#4cd27d;font-weight:800;white-space:nowrap">' + plata(op.venta) + '</td>' +
       '<td style="white-space:nowrap">' + plata(Math.round(op.unitario*100)/100) + '</td>' +
       '<td style="white-space:nowrap"><button class="adVer" style="background:none;border:1px dashed var(--borde);color:var(--texto2);border-radius:8px;padding:6px 8px;font-weight:800;font-size:.72rem">🔍</button> <button class="adUsar" data-etq="' + etq + '" style="background:var(--ambar);color:#1a1200;border:none;border-radius:8px;padding:6px 9px;font-weight:800;font-size:.72rem">＋</button></td></tr>' +
-      '<tr class="adDetFila" style="display:none"><td colspan="12" style="padding:8px 10px;background:var(--fondo);border-radius:8px"><div style="font-size:.68rem;line-height:1.8;color:var(--texto)">' + (op.desglose||[]).map(l=> '<div>' + l + '</div>').join('') + '</div></td></tr>';
+      '<tr class="adDetFila" style="display:none"><td colspan="13" style="padding:8px 10px;background:var(--fondo);border-radius:8px"><div style="font-size:.68rem;line-height:1.8;color:var(--texto)">' + (op.desglose||[]).map(l=> '<div>' + l + '</div>').join('') + '</div></td></tr>';
   }
   h += '</table></div>';
   h += '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">' +
@@ -8323,6 +8346,14 @@ function calcularAd(){
   if(inOdCants) inOdCants.addEventListener('change', ()=>{ adCfg.odCants = inOdCants.value; guardarDatos(); calcularAd(); });
   adUltimasOpciones = opciones;
   adUltimoCtx = {pzW, pzH, papel, colTxt: adColSel};
+  res.querySelectorAll('.adSel').forEach(ch=>{
+    ch.onchange = ()=>{
+      adPdfSel[ch.dataset.etq] = ch.checked;
+      const n = res.querySelectorAll('.adSel:checked').length;
+      const b = document.getElementById('adBtnPdf');
+      if(b) b.textContent = n ? '📄 PDF para el cliente (' + n + ')' : '📄 Elegí al menos una';
+    };
+  });
   const bpdf = document.getElementById('adBtnPdf');
   if(bpdf) bpdf.onclick = ()=> generarPDFAd();
   const tpos = document.getElementById('adTogglePosado');
