@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v106</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v108</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -7833,6 +7833,7 @@ let adMargenOver = {};   /* margen escrito a mano por fila */
 let adOdSel = {};        /* filas de la alternativa digital que van al PDF */
 let adUltimasOD = [];
 let adOdPapelOver = null, adOdMargenOver = null;
+let adOdTerm = {plastF:false, plastD:false, mc:false, cc:false, corte:'no'};
 let adPdfConPosado = false, adUltimasOpciones = null, adUltimoCtx = null, adSinGiro = false;
 const AD_COLORES = [['1/0',1,0],['1/1',1,1],['2/0',2,0],['2/2',2,2],['4/0',4,0],['4/1',4,1],['4/4',4,4]];
 function adEncajeDet(pw, ph, W, H){
@@ -8383,12 +8384,16 @@ function calcularAd(){
       if(!adCfg.odCants) adCfg.odCants = '10, 25, 30, 50';
       const cantsOD = String(adCfg.odCants).split(/[^0-9]+/).map(Number).filter(x=>x>0).slice(0,8);
       const colOD = OD_MODOS.findIndex(m=> m[0]===adColSel);
-      const costoHojaOD = od.tabla[String(key)][colOD];
+      const termOD = (adOdTerm.plastF ? od.plast : 0) + (adOdTerm.plastD ? od.plast : 0) +
+                     (adOdTerm.mc ? od.mc : 0) + (adOdTerm.cc ? od.cc : 0);
+      const costoHojaOD = od.tabla[String(key)][colOD] + termOD;
+      const corteOD = adOdTerm.corte==='h15' ? od.corte.h15
+                    : adOdTerm.corte==='m15' ? od.corte.m15 : {costo:0, venta:0};
       const unitAdBase = (q > 0 && opciones[0].op) ? opciones[0].op.unitario : null;
       let filasOD = '';
       adUltimasOD = [];
       for(const hb of cantsOD){
-        const ventaOD = Math.round((hb + 1) * costoHojaOD * (1 + margenOD/100)); // +1 hoja de armado
+        const ventaOD = Math.round((hb + 1) * costoHojaOD * (1 + margenOD/100)) + corteOD.venta; // +1 hoja de armado; el corte va a precio fijo
         const piezasOD = hb * posOD.n;
         const unitOD = ventaOD / piezasOD;
         const gana = unitAdBase !== null && unitOD < unitAdBase - 0.005;
@@ -8419,14 +8424,32 @@ function calcularAd(){
         '<span style="color:var(--texto2)">hojas:</span>' +
         '<input id="adOdCants" inputmode="text" value="' + adCfg.odCants + '" style="width:140px;margin:0;padding:6px;font-size:12px;background:var(--fondo);border:1px dashed #5ab8ff;border-radius:8px;color:#5ab8ff">' +
         '</div>' +
+        '<canvas id="adOdEsquema" style="width:100%;max-width:340px;display:block;margin:2px auto 8px"></canvas>' +
+        '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px">' +
+        [['plastF','✨ Plast. frente', plata(od.plast)+'/hoja'],
+         ['plastD','✨ Plast. dorso',  plata(od.plast)+'/hoja'],
+         ['mc',    '✂️ Medio corte',   plata(od.mc)+'/hoja'],
+         ['cc',    '✂️ Corte completo',plata(od.cc)+'/hoja']].map(([k,txt,pre])=>
+          '<button class="adOdTerm" data-k="' + k + '" style="border-radius:8px;padding:6px 9px;font-size:.66rem;font-weight:700;' +
+          (adOdTerm[k] ? 'background:rgba(90,184,255,.18);border:1px solid #5ab8ff;color:#5ab8ff'
+                       : 'background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)') +
+          '">' + (adOdTerm[k] ? '☑ ' : '☐ ') + txt + ' <span style="opacity:.65">' + pre + '</span></button>').join('') +
+        [['no','Sin corte'],['h15','Corte ≤15 · '+plata(od.corte.h15.venta)],['m15','Corte >15 · '+plata(od.corte.m15.venta)]].map(([v,txt])=>
+          '<button class="adOdCorte" data-v="' + v + '" style="border-radius:8px;padding:6px 9px;font-size:.66rem;font-weight:700;' +
+          (adOdTerm.corte===v ? 'background:rgba(255,176,32,.15);border:1px solid var(--ambar);color:var(--ambar)'
+                              : 'background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)') +
+          '">' + txt + '</button>').join('') +
+        '</div>' +
         '<table style="width:100%;border-collapse:collapse;font-size:.7rem">' +
         '<tr style="color:var(--texto2);text-transform:uppercase;font-size:.6rem;letter-spacing:.05em;text-align:right"><td style="padding:4px 2px" title="Incluir en el PDF del cliente">📄</td><td style="text-align:left;padding:4px">Hojas digitales</td><td>Piezas</td><td style="color:#5ab8ff">VENTA</td><td>Unit.</td></tr>' +
         filasOD + '</table>' +
-        '<div style="font-size:.6rem;color:var(--texto2);margin-top:4px">✓ = unitario mejor que tu pedido en tradicional. Sin corte ni terminaciones; editá las cantidades separadas por coma.</div></div>';
+        '<div style="font-size:.6rem;color:var(--texto2);margin-top:4px">✓ = unitario mejor que tu pedido en tradicional. El corte va a precio fijo, no por hoja; las terminaciones se suman por hoja.</div></div>';
     }
   }
   res.innerHTML = h;
   dibujarEsquemaAd(opciones[0].op);
+  const cvOD = document.getElementById('adOdEsquema');
+  if(cvOD) odDibujarPosado(cvOD, odPosado(pzW, pzH));
   const selOdP = document.getElementById('adOdPapel');
   if(selOdP) selOdP.addEventListener('change', ()=>{ adOdPapelOver = parseInt(selOdP.value)||null; calcularAd(); });
   const inOdM = document.getElementById('adOdMargen');
@@ -8434,6 +8457,12 @@ function calcularAd(){
     const v = parseFloat(inOdM.value);
     adOdMargenOver = (isNaN(v) || inOdM.value.trim()==='') ? null : v;
     calcularAd();
+  });
+  res.querySelectorAll('.adOdTerm').forEach(b=>{
+    b.onclick = ()=>{ adOdTerm[b.dataset.k] = !adOdTerm[b.dataset.k]; calcularAd(); };
+  });
+  res.querySelectorAll('.adOdCorte').forEach(b=>{
+    b.onclick = ()=>{ adOdTerm.corte = b.dataset.v; calcularAd(); };
   });
   res.querySelectorAll('.adOdSel').forEach(ch=>{
     ch.onchange = ()=>{
