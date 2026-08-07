@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v108</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v112</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -669,6 +669,10 @@
     </details>
     <label>Colores</label>
     <div class="cats-pick" id="adColores"></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--texto2);margin:6px 0 8px">
+      <input type="checkbox" id="adPantoneChk" style="width:auto;margin:0">
+      🎯 Tinta Pantone (AD la cobra con otra tarifa · no hay 4 colores)
+    </label>
     <label>Papel <span style="font-weight:400;text-transform:none">(precio del paquete: tocalo para actualizarlo)</span></label>
     <select id="adPapel" style="width:100%;margin:0 0 8px;padding:11px;font-size:15px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
     <label>Descripción</label>
@@ -948,7 +952,12 @@ const AD_SEMILLA = {
   maquinas: {
     gto:    {nombre:'GTO',    W:50, H:34, ctp:6900,
       tarifas:{ hasta170:{post:{1:11000,2:25800,4:47000}, millar:{1:10000,2:12400,4:18000}},
-                mas180:  {post:{1:11000,2:26000,4:47000}, millar:{1:14000,2:18000,4:26000}} }},
+                mas180:  {post:{1:11000,2:26000,4:47000}, millar:{1:14000,2:18000,4:26000}},
+                opp:     {post:{1:25000,2:34700,4:53600}, millar:{1:18000,2:25000,4:34700}},
+                pantone170:{post:{1:18400,2:28300}, millar:{1:12400,2:15500}},
+                pantone200:{post:{1:20000,2:28300}, millar:{1:18000,2:18000}},
+                sobreOficio:{post:{1:18000,2:28000,4:48700}, millar:{1:16400,2:17200,4:28200}},
+                sobreBolsa: {post:{1:20000,2:30400,4:48700}, millar:{1:20000,2:22000,4:30400}} }},
     komori: {nombre:'Komori', W:64, H:47, ctp:10500,
       tarifas:{ hasta170:{post:{1:14000,2:32700,4:52600}, millar:{1:12700,2:15800,4:23400}},
                 mas180:  {post:{1:14000,2:32700,4:52600}, millar:{1:16900,2:21500,4:31600}} }}
@@ -1499,6 +1508,93 @@ function migrarSoldadoRuis(){
   }
   if(!productos.find(x=> normalizarTexto(x.nombre||'')==='limpieza de vidriera')){
     productos.push({id:uid(), nombre:'Limpieza de vidriera', precio:10000, rubro:'Otros'});
+  }
+  /* Lista de papeles.net del 06/08/2026.
+     El precio es el del PAQUETE, ya con el 21% de IVA sumado (la web los publica
+     sin IVA) y con el descuento web del 7% aplicado. Se carga UNA sola vez:
+     después los precios se tocan a mano desde ⚙️ Papeles y ya no se pisan.
+     Si un papel ya existía con precio cargado, no se toca. */
+  if(typeof adPapeles !== 'undefined' && adPapeles && adCfg && !adCfg.papelesNet0826){
+    const LISTA_PN = [
+      // nombre, gramaje, ancho, alto, hojas por paquete, precio del paquete c/IVA
+      ['Ilustración 90g',   90, 65,  95, 500, 70697],
+      ['Ilustración 115g', 115, 63,  88, 250, 40552],
+      ['Ilustración 115g', 115, 65,  95, 250, 45168],
+      ['Ilustración 130g', 130, 63,  88, 250, 47286],
+      ['Ilustración 130g', 130, 65,  95, 250, 53491],
+      ['Ilustración 130g', 130, 72, 102, 250, 63617],
+      // ⚠️ la ficha de papeles.net dice "125 hojas", pero el precio por m² solo cierra
+      // con 250 (igual que el 150g de ese mismo formato). Confirmar antes de cotizar.
+      ['Ilustración 130g', 130, 82, 118, 250, 83818],
+      ['Ilustración 150g', 150, 63,  88, 250, 53902],
+      ['Ilustración 150g', 150, 65,  95, 250, 60037],
+      ['Ilustración 150g', 150, 72, 102, 250, 71402],
+      ['Ilustración 150g', 150, 82, 118, 250, 94075],
+      ['Ilustración 170g', 170, 63,  88, 250, 61089],
+      ['Ilustración 170g', 170, 65,  95, 250, 66770],
+      ['Ilustración 170g', 170, 72, 102, 125, 39705],
+      ['Ilustración 170g', 170, 82, 118, 125, 53309],
+      ['Ilustración 210g', 210, 65,  95, 125, 41240],
+      ['Ilustración 300g', 300, 72, 102, 125, 73105],
+      ['Obra 70g',          70, 65,  95, 500, 49042],
+      ['Obra 70g',          70, 82, 118, 250, 38423],
+      ['Obra 80g',          80, 65,  95, 500, 58389],
+      ['Obra 180g',        180, 65,  95, 125, 41267],
+      ['Obra 180g',        180, 74, 110, 125, 54399],
+      ['Obra 240g',        240, 65,  95, 125, 55023],
+    ];
+    const clavePapel = (n, W, H)=> normalizarTexto(n||'') + '|' + W + 'x' + H;
+    let nuevos = 0;
+    for(const [nombre, gramaje, W, H, hojas, precio] of LISTA_PN){
+      const ya = adPapeles.find(p=> clavePapel(p.nombre, p.W, p.H) === clavePapel(nombre, W, H));
+      if(ya){
+        if(!ya.precio){ ya.precio = precio; ya.hojas = ya.hojas || hojas; ya.fecha = '2026-08-06'; }
+        continue;
+      }
+      adPapeles.push({id:uid()+Math.random().toString(36).slice(2,4), nombre, gramaje, W, H, hojas, precio, fecha:'2026-08-06'});
+      nuevos++;
+    }
+    adCfg.papelesNet0826 = true;
+    if(nuevos) try{ registrar('cargó ' + nuevos + ' papeles de papeles.net (precios del 06/08/2026 con IVA)'); }catch(e){}
+  }
+  /* OPP autoadhesivo blanco mate (Silk) Ritrama · papeles.net 06/08/2026.
+     La web lo publica POR HOJA y sin IVA: acá va el precio de la CAJA de 200
+     hojas, ya con el 21%. Va aparte de la carga anterior para que entre aunque
+     ya se haya abierto una versión con la lista de papeles cargada. */
+  if(typeof adPapeles !== 'undefined' && adPapeles && adCfg && !adCfg.oppBlanco0826){
+    const OPP = [
+      ['OPP autoadhesivo blanco mate 75 mic',  50, 65, 200, 191274],
+      ['OPP autoadhesivo blanco mate 65 mic',  50, 70, 200, 192690],
+    ];
+    for(const [nombre, W, H, hojas, precio] of OPP){
+      if(adPapeles.find(p=> normalizarTexto(p.nombre||'') === normalizarTexto(nombre))) continue;
+      adPapeles.push({id:uid()+Math.random().toString(36).slice(2,4), nombre, gramaje:80, W, H, hojas, precio, autoadh:true, opp:true, fecha:'2026-08-06'});
+    }
+    adCfg.oppBlanco0826 = true;
+  }
+  /* Renglón propio del OPP en la lista de AD (GTO 50×34, febrero 2026).
+     Antes el OPP se cobraba con la tarifa de "180 a 300 y autoadhesivo", que es
+     bastante más barata: postura 1 color $11.000 contra $25.000 reales. */
+  if(typeof adCfg === 'object' && adCfg && adCfg.maquinas && adCfg.maquinas.gto
+     && adCfg.maquinas.gto.tarifas && !adCfg.maquinas.gto.tarifas.opp){
+    adCfg.maquinas.gto.tarifas.opp = {post:{1:25000,2:34700,4:53600}, millar:{1:18000,2:25000,4:34700}};
+    try{ registrar('cargó la tarifa de autoadhesivo OPP de la GTO (lista feb 2026)'); }catch(e){}
+  }
+  /* Resto de la lista de AD para la GTO (feb 2026): Pantone y sobres.
+     El Pantone ya calcula; los sobres quedan guardados a la espera del módulo
+     (falta la lista de Grafoeste y cómo se cuenta la postura por sobre). */
+  if(typeof adCfg === 'object' && adCfg && adCfg.maquinas && adCfg.maquinas.gto
+     && adCfg.maquinas.gto.tarifas && !adCfg.maquinas.gto.tarifas.pantone170){
+    const t = adCfg.maquinas.gto.tarifas;
+    t.pantone170 = {post:{1:18400,2:28300}, millar:{1:12400,2:15500}};
+    t.pantone200 = {post:{1:20000,2:28300}, millar:{1:18000,2:18000}};
+    t.sobreOficio = {post:{1:18000,2:28000,4:48700}, millar:{1:16400,2:17200,4:28200}};
+    t.sobreBolsa  = {post:{1:20000,2:30400,4:48700}, millar:{1:20000,2:22000,4:30400}};
+    try{ registrar('cargó las tarifas de Pantone y sobres de la GTO (lista feb 2026)'); }catch(e){}
+  }
+  // los papeles OPP ya cargados quedan marcados para que tomen esa tarifa
+  if(typeof adPapeles !== 'undefined' && adPapeles) for(const p of adPapeles){
+    if(p.opp === undefined && /\bopp\b/i.test(p.nombre||'')) p.opp = true;
   }
 }
 /* preferencias visuales POR DISPOSITIVO (no van a Dropbox): tamaño de letra y tema */
@@ -7911,7 +8007,26 @@ function adEsAutoadhesivo(papel){
   if(papel.autoadh === false) return false;
   return /autoadh/i.test(papel.nombre || '');
 }
+/* El OPP tiene renglón propio en la lista de AD (más caro que el resto de los
+   autoadhesivos), así que no entra en el tramo "180 a 300 y autoadhesivo". */
+function adEsOpp(papel){
+  if(!papel) return false;
+  if(papel.opp === true) return true;
+  if(papel.opp === false) return false;
+  return /\bopp\b/i.test(papel.nombre || '');
+}
+function adEsPantone(){
+  const c = document.getElementById('adPantoneChk');
+  return !!(c && c.checked);
+}
 function adTarifa(maq, gramaje, papel){
+  if(adEsOpp(papel) && maq.tarifas.opp) return maq.tarifas.opp;
+  if(adEsPantone() && maq.tarifas.pantone170 && maq.tarifas.pantone200){
+    /* la lista arma el tramo caro igual que con el papel común:
+       "desde 200 gr hasta 300 gr Y AUTOADHESIVO" */
+    if(adEsAutoadhesivo(papel)) return maq.tarifas.pantone200;
+    return gramaje <= 170 ? maq.tarifas.pantone170 : maq.tarifas.pantone200;
+  }
   if(adEsAutoadhesivo(papel)) return maq.tarifas.mas180;
   return gramaje <= 170 ? maq.tarifas.hasta170 : maq.tarifas.mas180;
 }
@@ -8059,6 +8174,9 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     }else{
       des.push('🔩 Chapas: ' + v.chapas + ' × ' + plata(maq.ctp) + ' = ' + plata(chapasCosto));
       des.push('⚙️ Posturas: ' + v.posturas + ' → ' + plata(v.postCosto));
+    }
+    if(adEsOpp(papel) && !maq.tarifas.opp){
+      des.push('⚠️ OPP: no tengo la tarifa de OPP de la ' + maq.nombre + ' (solo la de la GTO). Se está cobrando con el tramo de 180-300 g, que es más barato: pedile la fila a AD.');
     }
     for(const g of v.pasadas){
       const cambios = g.cambios || 1;
@@ -8253,6 +8371,13 @@ function calcularAd(){
   const col = AD_COLORES.find(c=>c[0]===adColSel);
   if(!pzW || !pzH || !papel || !col){ res.innerHTML = '<div class="vacio" style="padding:10px">Completá pieza, colores y papel.</div>'; return; }
   if(!papel.precio){ res.innerHTML = '<div class="vacio" style="padding:10px;color:#ff7a7a">⚠️ Ese papel no tiene precio cargado: ponéselo en ⚙️ Papeles (mirá papeles.net).</div>'; return; }
+  if(adEsPantone() && (col[1] >= 4 || col[2] >= 4)){
+    res.innerHTML = '<div class="vacio" style="padding:10px;color:#ff7a7a">🎯 Con tinta Pantone AD no cotiza 4 colores (la lista lo deja en 0). Elegí 1 o 2 colores, o destildá Pantone.</div>';
+    return;
+  }
+  if(adEsPantone() && adEsOpp(papel)){
+    res.innerHTML = '<div class="vacio" style="padding:10px;color:#ffb86c">🎯 La lista de AD no tiene Pantone sobre OPP: el OPP tiene renglón propio. Se va a cobrar con la tarifa de OPP; confirmalo con AD si el trabajo lleva Pantone.</div>';
+  }
   const [, cf, cd] = col;
   const opciones = [];
   const rowTapa = document.getElementById('adTapaRow');
@@ -8543,6 +8668,7 @@ function calcularAd(){
 }
 for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg','adOriginales','adHojasColor','adIntercalado','adBinder']) document.getElementById(id).addEventListener('input', calcularAd);
 document.getElementById('adRecargoChk').addEventListener('change', calcularAd);
+document.getElementById('adPantoneChk').addEventListener('change', calcularAd);
 document.getElementById('adPapAgregar').onclick = ()=>{
   const n = document.getElementById('adPapNombre').value.trim();
   if(!n) return;
