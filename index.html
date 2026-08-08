@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v112</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v109</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -376,6 +376,7 @@
       <button id="btnCompraPed" style="flex:1;min-width:44%;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #4cd27d;color:#4cd27d">🛒 Compra</button>
       <button id="btnCorpPed" style="flex:1;min-width:44%;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">🔤 Corpóreas</button>
       <button id="btnViniloCorte" style="flex:1;min-width:44%;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #35b8a0;color:#35b8a0">🪟 Vinilo corte</button>
+      <button id="btnCarteleria" style="flex:1;min-width:44%;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #b48ead;color:#b48ead">🏗 Cartelería</button>
     </div>
     <div class="ped-total" id="pedTotal"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
@@ -556,6 +557,24 @@
 </div>
 
 <!-- modal armador offset digital -->
+<div class="modal" id="modalCarteleria">
+  <div class="hoja">
+    <h2>🏗 Cartelería</h2>
+    <div style="font-size:.7rem;color:var(--texto2);margin-bottom:10px;line-height:1.45">
+      Un cartel se arma por capas: <b>cara</b>, <b>estructura</b>, <b>aplicaciones</b> y <b>montaje</b>.
+      Primero cargá acá los precios de los insumos; después se van sumando las capas.
+    </div>
+    <div id="cartInsumos"></div>
+    <details style="margin-top:12px">
+      <summary style="font-size:.74rem;color:var(--texto2);cursor:pointer;padding:6px 0">⚙️ Porcentajes y valores generales</summary>
+      <div id="cartCfgPanel" style="margin-top:8px"></div>
+    </details>
+    <div class="acciones">
+      <button id="cartCerrar" class="btn-secundario">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="modalViniloCorte">
   <div class="hoja">
     <h2>🪟 Vinilo de corte · vidrieras</h2>
@@ -669,10 +688,6 @@
     </details>
     <label>Colores</label>
     <div class="cats-pick" id="adColores"></div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--texto2);margin:6px 0 8px">
-      <input type="checkbox" id="adPantoneChk" style="width:auto;margin:0">
-      🎯 Tinta Pantone (AD la cobra con otra tarifa · no hay 4 colores)
-    </label>
     <label>Papel <span style="font-weight:400;text-transform:none">(precio del paquete: tocalo para actualizarlo)</span></label>
     <select id="adPapel" style="width:100%;margin:0 0 8px;padding:11px;font-size:15px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
     <label>Descripción</label>
@@ -934,6 +949,70 @@ const LIMITE_BLOQUES_MB = 4.5;
 
 let cats = [], tareas = [], clientes = [], proveedores = [], productos = [], pedidos = [];
 let pendientesSueltos = [], tareasViejas = [], tareasDescartadas = [], migracion = null;
+
+/* ===== CATÁLOGO DE INSUMOS DE CARTELERÍA =====
+   unidad: cómo se CALCULA (m, m2, u)
+   compra: cómo se COMPRA (tira de 6m, hoja de 122x244, rollo por metro lineal)
+   Los precios se editan a mano; precioAnt guarda el anterior para ver el aumento. */
+let insumos = [];
+function insumosSemilla(){
+  const hoy = new Date().toISOString().slice(0,10);
+  const I = (o)=> Object.assign({id: uid(), precio:0, precioAnt:null, fecha:hoy}, o);
+  return [
+    /* --- caños: se venden por tira de 6 m --- */
+    I({cat:'cano', nombre:'Caño estructural 20×20×1,2', prov:'MAS', unidad:'m', tiraM:6, precio:0,
+       nota:'Bastidor: grilla interna'}),
+    I({cat:'cano', nombre:'Caño estructural 30×30×1,2', prov:'MAS', unidad:'m', tiraM:6, precio:0,
+       nota:'Bastidor: perímetro'}),
+    I({cat:'cano', nombre:'Caño estructural 40×40×1,6', prov:'MAS', unidad:'m', tiraM:6,
+       precio: 35578.86, nota:'Precio verificado en el cotizador de MAS'}),
+    I({cat:'cano', nombre:'Caño estructural 25×25×1,2', prov:'MAS', unidad:'m', tiraM:6}),
+    /* --- chapas en hoja --- */
+    I({cat:'chapa', nombre:'Chapa galvanizada lisa C-25', prov:'Acerco', unidad:'m2',
+       hojaW:1.22, hojaH:2.44}),
+    I({cat:'chapa', nombre:'Chapa galvanizada lisa C-22', prov:'Acerco', unidad:'m2',
+       hojaW:1.22, hojaH:2.44}),
+    I({cat:'chapa', nombre:'Chapa galvanizada lisa C-20', prov:'Acerco', unidad:'m2',
+       hojaW:1.22, hojaH:2.44}),
+    I({cat:'chapa', nombre:'Chapa galvanizada lisa C-18', prov:'Acerco', unidad:'m2',
+       hojaW:1.22, hojaH:2.44}),
+    /* --- chapas de rollo: ancho fijo, largo a medida --- */
+    I({cat:'chapa', nombre:'Chapa trapezoidal T-1010 galvanizada', prov:'Acerco', unidad:'m2',
+       anchoUtil:1.07, largoMin:1, largoMax:13, aMedida:true}),
+    I({cat:'chapa', nombre:'Chapa acanalada galvanizada', prov:'Acerco', unidad:'m2',
+       anchoUtil:1.07, largoMin:1, largoMax:13, aMedida:true}),
+    I({cat:'chapa', nombre:'Chapa Cincalum lisa C-25', prov:'Acerco', unidad:'u', precio:37102.04}),
+    I({cat:'chapa', nombre:'Chapa Cincalum acanalada C-22', prov:'Acerco', unidad:'u', precio:21116.11}),
+    I({cat:'chapa', nombre:'Chapa Cincalum trapezoidal T-1010 C-25', prov:'Acerco', unidad:'u', precio:14750.19}),
+    /* --- aluco --- */
+    I({cat:'aluco', nombre:'Aluminio compuesto 122×244', prov:'', unidad:'m2', hojaW:1.22, hojaH:2.44}),
+    I({cat:'aluco', nombre:'Aluminio compuesto 200×100', prov:'', unidad:'m2', hojaW:2.00, hojaH:1.00}),
+    /* --- MDF: recargo del 10% porque no lo compramos en Moconá --- */
+    I({cat:'mdf', nombre:'MDF crudo 5,5 mm', prov:'Moconá', unidad:'m2', hojaW:1.83, hojaH:2.60, recargo:10}),
+    I({cat:'mdf', nombre:'MDF crudo 9 mm',   prov:'Moconá', unidad:'m2', hojaW:1.83, hojaH:2.60, recargo:10}),
+    I({cat:'mdf', nombre:'MDF crudo 12 mm',  prov:'Moconá', unidad:'m2', hojaW:1.83, hojaH:2.60, recargo:10}),
+    I({cat:'mdf', nombre:'MDF crudo 18 mm',  prov:'Moconá', unidad:'m2', hojaW:1.83, hojaH:2.60, recargo:10}),
+    I({cat:'mdf', nombre:'MDF blanco 18 mm', prov:'Moconá', unidad:'m2', hojaW:1.83, hojaH:2.60, recargo:10}),
+    /* --- vinilos de color, por metro lineal --- */
+    I({cat:'vinilo', nombre:'Vinilo calandrado de color · 60 cm',  unidad:'ml', ancho:0.60}),
+    I({cat:'vinilo', nombre:'Vinilo calandrado de color · 120 cm', unidad:'ml', ancho:1.20}),
+    I({cat:'vinilo', nombre:'Vinilo fundido de color · 90 cm',     unidad:'ml', ancho:0.90}),
+    I({cat:'vinilo', nombre:'Vinilo fundido de color · 150 cm',    unidad:'ml', ancho:1.50})
+  ];
+}
+
+/* Config general de cartelería: los porcentajes y valores que se pueden tocar */
+let cartCfg = {
+  herrero: 50,        // % sobre el valor del caño (incluye pintura)
+  zingueria: 50,      // % sobre el valor de la chapa (plegados y corte)
+  epoxiM2: 0,         // $/m² de pintura epoxi
+  fleteLargo: 50000,  // flete de chapa de más de 5 m, POR VIAJE
+  fleteDesdeM: 5,     // a partir de cuántos metros se cobra flete
+  sobrantePct: 0,     // % del sobrante que se suma AL COSTO (sin markup)
+  unionCm: 1,         // cm que come cada unión de vinilo
+  varillaCadaM: 1.5,  // separación máxima entre varillas del bastidor
+  recargoMdf: 10      // % extra sobre el precio de lista de Moconá
+};
 let uv = null, offset = null;
 let movimientos = [], filtroCaja = 'todos', movTipoSel = 'egreso', movQuienSel = null, movPersonaSel = null, movPedidoSel = null;
 const PERSONAS = [['Marcos','#ffb020'],['Gastón','#5ab8ff']];
@@ -952,12 +1031,7 @@ const AD_SEMILLA = {
   maquinas: {
     gto:    {nombre:'GTO',    W:50, H:34, ctp:6900,
       tarifas:{ hasta170:{post:{1:11000,2:25800,4:47000}, millar:{1:10000,2:12400,4:18000}},
-                mas180:  {post:{1:11000,2:26000,4:47000}, millar:{1:14000,2:18000,4:26000}},
-                opp:     {post:{1:25000,2:34700,4:53600}, millar:{1:18000,2:25000,4:34700}},
-                pantone170:{post:{1:18400,2:28300}, millar:{1:12400,2:15500}},
-                pantone200:{post:{1:20000,2:28300}, millar:{1:18000,2:18000}},
-                sobreOficio:{post:{1:18000,2:28000,4:48700}, millar:{1:16400,2:17200,4:28200}},
-                sobreBolsa: {post:{1:20000,2:30400,4:48700}, millar:{1:20000,2:22000,4:30400}} }},
+                mas180:  {post:{1:11000,2:26000,4:47000}, millar:{1:14000,2:18000,4:26000}} }},
     komori: {nombre:'Komori', W:64, H:47, ctp:10500,
       tarifas:{ hasta170:{post:{1:14000,2:32700,4:52600}, millar:{1:12700,2:15800,4:23400}},
                 mas180:  {post:{1:14000,2:32700,4:52600}, millar:{1:16900,2:21500,4:31600}} }}
@@ -1164,6 +1238,8 @@ async function cargar(){
       productos = d.productos || PRODUCTOS_SEMILLA.map(p=>({id:uid()+Math.random().toString(36).slice(2,4), ...p}));
       pedidos = d.pedidos || [];
       pendientesSueltos = d.pendientesSueltos || [];
+      insumos = (d.insumos && d.insumos.length) ? d.insumos : insumosSemilla();
+      if(d.cartCfg) Object.assign(cartCfg, d.cartCfg);
       tareasViejas = d.tareasViejas || [];
       tareasDescartadas = d.tareasDescartadas || [];
       migracion = d.migracion || null;
@@ -1334,7 +1410,7 @@ async function cargar(){
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, pendientesSueltos, tareasViejas, tareasDescartadas, migracion, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, pendientesSueltos, tareasViejas, tareasDescartadas, migracion, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles, insumos, cartCfg, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -1508,93 +1584,6 @@ function migrarSoldadoRuis(){
   }
   if(!productos.find(x=> normalizarTexto(x.nombre||'')==='limpieza de vidriera')){
     productos.push({id:uid(), nombre:'Limpieza de vidriera', precio:10000, rubro:'Otros'});
-  }
-  /* Lista de papeles.net del 06/08/2026.
-     El precio es el del PAQUETE, ya con el 21% de IVA sumado (la web los publica
-     sin IVA) y con el descuento web del 7% aplicado. Se carga UNA sola vez:
-     después los precios se tocan a mano desde ⚙️ Papeles y ya no se pisan.
-     Si un papel ya existía con precio cargado, no se toca. */
-  if(typeof adPapeles !== 'undefined' && adPapeles && adCfg && !adCfg.papelesNet0826){
-    const LISTA_PN = [
-      // nombre, gramaje, ancho, alto, hojas por paquete, precio del paquete c/IVA
-      ['Ilustración 90g',   90, 65,  95, 500, 70697],
-      ['Ilustración 115g', 115, 63,  88, 250, 40552],
-      ['Ilustración 115g', 115, 65,  95, 250, 45168],
-      ['Ilustración 130g', 130, 63,  88, 250, 47286],
-      ['Ilustración 130g', 130, 65,  95, 250, 53491],
-      ['Ilustración 130g', 130, 72, 102, 250, 63617],
-      // ⚠️ la ficha de papeles.net dice "125 hojas", pero el precio por m² solo cierra
-      // con 250 (igual que el 150g de ese mismo formato). Confirmar antes de cotizar.
-      ['Ilustración 130g', 130, 82, 118, 250, 83818],
-      ['Ilustración 150g', 150, 63,  88, 250, 53902],
-      ['Ilustración 150g', 150, 65,  95, 250, 60037],
-      ['Ilustración 150g', 150, 72, 102, 250, 71402],
-      ['Ilustración 150g', 150, 82, 118, 250, 94075],
-      ['Ilustración 170g', 170, 63,  88, 250, 61089],
-      ['Ilustración 170g', 170, 65,  95, 250, 66770],
-      ['Ilustración 170g', 170, 72, 102, 125, 39705],
-      ['Ilustración 170g', 170, 82, 118, 125, 53309],
-      ['Ilustración 210g', 210, 65,  95, 125, 41240],
-      ['Ilustración 300g', 300, 72, 102, 125, 73105],
-      ['Obra 70g',          70, 65,  95, 500, 49042],
-      ['Obra 70g',          70, 82, 118, 250, 38423],
-      ['Obra 80g',          80, 65,  95, 500, 58389],
-      ['Obra 180g',        180, 65,  95, 125, 41267],
-      ['Obra 180g',        180, 74, 110, 125, 54399],
-      ['Obra 240g',        240, 65,  95, 125, 55023],
-    ];
-    const clavePapel = (n, W, H)=> normalizarTexto(n||'') + '|' + W + 'x' + H;
-    let nuevos = 0;
-    for(const [nombre, gramaje, W, H, hojas, precio] of LISTA_PN){
-      const ya = adPapeles.find(p=> clavePapel(p.nombre, p.W, p.H) === clavePapel(nombre, W, H));
-      if(ya){
-        if(!ya.precio){ ya.precio = precio; ya.hojas = ya.hojas || hojas; ya.fecha = '2026-08-06'; }
-        continue;
-      }
-      adPapeles.push({id:uid()+Math.random().toString(36).slice(2,4), nombre, gramaje, W, H, hojas, precio, fecha:'2026-08-06'});
-      nuevos++;
-    }
-    adCfg.papelesNet0826 = true;
-    if(nuevos) try{ registrar('cargó ' + nuevos + ' papeles de papeles.net (precios del 06/08/2026 con IVA)'); }catch(e){}
-  }
-  /* OPP autoadhesivo blanco mate (Silk) Ritrama · papeles.net 06/08/2026.
-     La web lo publica POR HOJA y sin IVA: acá va el precio de la CAJA de 200
-     hojas, ya con el 21%. Va aparte de la carga anterior para que entre aunque
-     ya se haya abierto una versión con la lista de papeles cargada. */
-  if(typeof adPapeles !== 'undefined' && adPapeles && adCfg && !adCfg.oppBlanco0826){
-    const OPP = [
-      ['OPP autoadhesivo blanco mate 75 mic',  50, 65, 200, 191274],
-      ['OPP autoadhesivo blanco mate 65 mic',  50, 70, 200, 192690],
-    ];
-    for(const [nombre, W, H, hojas, precio] of OPP){
-      if(adPapeles.find(p=> normalizarTexto(p.nombre||'') === normalizarTexto(nombre))) continue;
-      adPapeles.push({id:uid()+Math.random().toString(36).slice(2,4), nombre, gramaje:80, W, H, hojas, precio, autoadh:true, opp:true, fecha:'2026-08-06'});
-    }
-    adCfg.oppBlanco0826 = true;
-  }
-  /* Renglón propio del OPP en la lista de AD (GTO 50×34, febrero 2026).
-     Antes el OPP se cobraba con la tarifa de "180 a 300 y autoadhesivo", que es
-     bastante más barata: postura 1 color $11.000 contra $25.000 reales. */
-  if(typeof adCfg === 'object' && adCfg && adCfg.maquinas && adCfg.maquinas.gto
-     && adCfg.maquinas.gto.tarifas && !adCfg.maquinas.gto.tarifas.opp){
-    adCfg.maquinas.gto.tarifas.opp = {post:{1:25000,2:34700,4:53600}, millar:{1:18000,2:25000,4:34700}};
-    try{ registrar('cargó la tarifa de autoadhesivo OPP de la GTO (lista feb 2026)'); }catch(e){}
-  }
-  /* Resto de la lista de AD para la GTO (feb 2026): Pantone y sobres.
-     El Pantone ya calcula; los sobres quedan guardados a la espera del módulo
-     (falta la lista de Grafoeste y cómo se cuenta la postura por sobre). */
-  if(typeof adCfg === 'object' && adCfg && adCfg.maquinas && adCfg.maquinas.gto
-     && adCfg.maquinas.gto.tarifas && !adCfg.maquinas.gto.tarifas.pantone170){
-    const t = adCfg.maquinas.gto.tarifas;
-    t.pantone170 = {post:{1:18400,2:28300}, millar:{1:12400,2:15500}};
-    t.pantone200 = {post:{1:20000,2:28300}, millar:{1:18000,2:18000}};
-    t.sobreOficio = {post:{1:18000,2:28000,4:48700}, millar:{1:16400,2:17200,4:28200}};
-    t.sobreBolsa  = {post:{1:20000,2:30400,4:48700}, millar:{1:20000,2:22000,4:30400}};
-    try{ registrar('cargó las tarifas de Pantone y sobres de la GTO (lista feb 2026)'); }catch(e){}
-  }
-  // los papeles OPP ya cargados quedan marcados para que tomen esa tarifa
-  if(typeof adPapeles !== 'undefined' && adPapeles) for(const p of adPapeles){
-    if(p.opp === undefined && /\bopp\b/i.test(p.nombre||'')) p.opp = true;
   }
 }
 /* preferencias visuales POR DISPOSITIVO (no van a Dropbox): tamaño de letra y tema */
@@ -4588,6 +4577,168 @@ function sincronizarPedido(){
   timerPedido = setTimeout(()=>{ guardarDatos(); renderPedidos(); }, 500);
 }
 
+/* ============ CARTELERÍA · CATÁLOGO DE INSUMOS ============ */
+
+const CART_CATS = [
+  ['cano',   '🔩 Caños estructurales'],
+  ['chapa',  '🪟 Chapas'],
+  ['aluco',  '⬜ Aluminio compuesto'],
+  ['mdf',    '🪵 MDF'],
+  ['vinilo', '🎨 Vinilos de color']
+];
+
+/* Cómo se compra cada insumo, en una línea legible */
+function insumoFormato(x){
+  if(x.tiraM)    return 'tira de ' + x.tiraM + ' m';
+  if(x.aMedida)  return 'rollo ' + x.anchoUtil + ' m de ancho · largo a medida (' +
+                        x.largoMin + ' a ' + x.largoMax + ' m)';
+  if(x.hojaW)    return 'hoja de ' + Math.round(x.hojaW*100) + '×' + Math.round(x.hojaH*100) + ' cm';
+  if(x.ancho)    return 'rollo de ' + Math.round(x.ancho*100) + ' cm · por metro lineal';
+  return 'por unidad';
+}
+
+/* Precio efectivo: el de lista más el recargo si lo tiene (caso Moconá) */
+function insumoPrecio(x){
+  const base = x.precio || 0;
+  return x.recargo ? base * (1 + x.recargo/100) : base;
+}
+
+function renderInsumos(){
+  const cont = document.getElementById('cartInsumos');
+  if(!cont) return;
+  cont.innerHTML = '';
+
+  const sinPrecio = insumos.filter(x=> !x.precio).length;
+  if(sinPrecio){
+    const av = document.createElement('div');
+    av.style.cssText = 'background:rgba(255,190,60,.10);border:1px solid rgba(255,190,60,.45);' +
+      'border-radius:9px;padding:8px 10px;font-size:.7rem;margin-bottom:10px;line-height:1.45';
+    av.innerHTML = '⚠️ Hay <b>' + sinPrecio + '</b> insumos sin precio. ' +
+      'Cargalos cuando los tengas: hasta entonces esas opciones van a dar cero.';
+    cont.appendChild(av);
+  }
+
+  for(const [cat, titulo] of CART_CATS){
+    const items = insumos.filter(x=> x.cat === cat);
+    if(!items.length) continue;
+
+    const d = document.createElement('details');
+    d.style.cssText = 'margin-bottom:6px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px';
+    const sum = document.createElement('summary');
+    sum.style.cssText = 'padding:9px 11px;font-size:.76rem;font-weight:700;cursor:pointer';
+    const conPrecio = items.filter(x=>x.precio).length;
+    sum.textContent = titulo + '  (' + conPrecio + '/' + items.length + ' con precio)';
+    d.appendChild(sum);
+
+    const caja = document.createElement('div');
+    caja.style.cssText = 'padding:0 10px 10px';
+
+    for(const x of items){
+      const f = document.createElement('div');
+      f.style.cssText = 'border-top:1px dashed var(--borde);padding:8px 0';
+
+      const l1 = document.createElement('div');
+      l1.style.cssText = 'font-size:.74rem;font-weight:600;color:var(--texto)';
+      l1.textContent = x.nombre;
+      f.appendChild(l1);
+
+      const l2 = document.createElement('div');
+      l2.style.cssText = 'font-size:.64rem;color:var(--texto2);margin:2px 0 5px';
+      l2.textContent = insumoFormato(x) + (x.prov ? ' · ' + x.prov : '') +
+        (x.recargo ? ' · +' + x.recargo + '% sobre lista' : '');
+      f.appendChild(l2);
+
+      const fila = document.createElement('div');
+      fila.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap';
+
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.setAttribute('inputmode','decimal');
+      inp.value = x.precio || '';
+      inp.placeholder = '$ precio';
+      inp.style.cssText = 'flex:1 1 110px;min-width:100px;margin:0;padding:8px;font-size:13px;' +
+        'background:var(--fondo);border:1px solid ' + (x.precio ? 'var(--borde)' : 'var(--ambar)') +
+        ';border-radius:8px;color:var(--texto)';
+      inp.addEventListener('change', ()=>{
+        const v = parseFloat(inp.value) || 0;
+        if(v !== (x.precio||0)){
+          if(x.precio) x.precioAnt = x.precio;
+          x.precio = v;
+          x.fecha = hoyISO();
+          guardarDatos(); renderInsumos();
+        }
+      });
+      fila.appendChild(inp);
+
+      if(x.recargo && x.precio){
+        const ef = document.createElement('span');
+        ef.style.cssText = 'font-size:.66rem;color:#4cd27d;font-weight:700';
+        ef.textContent = '→ ' + plata(insumoPrecio(x));
+        fila.appendChild(ef);
+      }
+      if(x.precioAnt){
+        const dif = ((x.precio - x.precioAnt) / x.precioAnt) * 100;
+        const an = document.createElement('span');
+        an.style.cssText = 'font-size:.64rem;color:' + (dif>0 ? '#ff7a7a' : 'var(--texto2)');
+        an.textContent = (dif>0 ? '▲ ' : '▼ ') + Math.abs(dif).toFixed(0) + '% · antes ' + plata(x.precioAnt);
+        fila.appendChild(an);
+      }
+      f.appendChild(fila);
+
+      if(x.nota){
+        const nt = document.createElement('div');
+        nt.style.cssText = 'font-size:.62rem;color:var(--texto2);margin-top:4px;font-style:italic';
+        nt.textContent = x.nota;
+        f.appendChild(nt);
+      }
+      caja.appendChild(f);
+    }
+    d.appendChild(caja);
+    cont.appendChild(d);
+  }
+}
+
+function renderCartCfg(){
+  const cont = document.getElementById('cartCfgPanel');
+  if(!cont) return;
+  cont.innerHTML = '';
+  const campos = [
+    ['herrero',    'Herrero: % sobre el caño (incluye pintura)', '%'],
+    ['zingueria',  'Zinguería: % sobre la chapa (plegado y corte)', '%'],
+    ['epoxiM2',    'Pintura epoxi por m²', '$'],
+    ['fleteLargo', 'Flete de chapa larga (por viaje)', '$'],
+    ['fleteDesdeM','Flete desde cuántos metros', 'm'],
+    ['sobrantePct','Sobrante que se cobra (va al costo, SIN markup)', '%'],
+    ['unionCm',    'Cada unión de vinilo come', 'cm'],
+    ['varillaCadaM','Una varilla cada', 'm'],
+    ['recargoMdf', 'Recargo del MDF sobre lista de Moconá', '%']
+  ];
+  for(const [k, txt, u] of campos){
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px';
+    const l = document.createElement('span');
+    l.style.cssText = 'flex:1 1 190px;font-size:.7rem;color:var(--texto2)';
+    l.textContent = txt;
+    const i = document.createElement('input');
+    i.type = 'text'; i.setAttribute('inputmode','decimal');
+    i.value = cartCfg[k];
+    i.style.cssText = 'width:90px;margin:0;padding:7px;font-size:13px;text-align:right;' +
+      'background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+    i.addEventListener('change', ()=>{
+      cartCfg[k] = parseFloat(i.value) || 0;
+      if(k === 'recargoMdf'){
+        for(const x of insumos) if(x.cat === 'mdf') x.recargo = cartCfg.recargoMdf;
+        renderInsumos();
+      }
+      guardarDatos();
+    });
+    const un = document.createElement('span');
+    un.style.cssText = 'font-size:.68rem;color:var(--texto2);width:20px';
+    un.textContent = u;
+    f.appendChild(l); f.appendChild(i); f.appendChild(un);
+    cont.appendChild(f);
+  }
+}
+
 /* ============ LO QUE PIDIÓ EL CLIENTE ============
    Un resumen del audio o del mensaje de WhatsApp, dictado por voz.
    No guarda el audio: guarda lo que importa, que es lo que vas a leer después. */
@@ -6081,6 +6232,8 @@ async function dbxSubir(){
 }
 function aplicarDatosRemotos(d){
   pendientesSueltos = d.pendientesSueltos || pendientesSueltos;
+  insumos = (d.insumos && d.insumos.length) ? d.insumos : insumosSemilla();
+  if(d.cartCfg) Object.assign(cartCfg, d.cartCfg);
   tareasViejas = d.tareasViejas || tareasViejas;
   tareasDescartadas = d.tareasDescartadas || tareasDescartadas;
   migracion = d.migracion || migracion;
@@ -6296,7 +6449,7 @@ document.getElementById('btnBackup').onclick = ()=>{
 };
 function datosCompletos(){
   return JSON.stringify({v:1, fecha:new Date().toISOString(),
-    cats, tareas, clientes, proveedores, productos, pedidos, pendientesSueltos, tareasViejas, tareasDescartadas, migracion, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles});
+    cats, tareas, clientes, proveedores, productos, pedidos, pendientesSueltos, tareasViejas, tareasDescartadas, migracion, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles, insumos, cartCfg});
 }
 document.getElementById('btnExportar').onclick = async ()=>{
   const texto = datosCompletos();
@@ -8007,26 +8160,7 @@ function adEsAutoadhesivo(papel){
   if(papel.autoadh === false) return false;
   return /autoadh/i.test(papel.nombre || '');
 }
-/* El OPP tiene renglón propio en la lista de AD (más caro que el resto de los
-   autoadhesivos), así que no entra en el tramo "180 a 300 y autoadhesivo". */
-function adEsOpp(papel){
-  if(!papel) return false;
-  if(papel.opp === true) return true;
-  if(papel.opp === false) return false;
-  return /\bopp\b/i.test(papel.nombre || '');
-}
-function adEsPantone(){
-  const c = document.getElementById('adPantoneChk');
-  return !!(c && c.checked);
-}
 function adTarifa(maq, gramaje, papel){
-  if(adEsOpp(papel) && maq.tarifas.opp) return maq.tarifas.opp;
-  if(adEsPantone() && maq.tarifas.pantone170 && maq.tarifas.pantone200){
-    /* la lista arma el tramo caro igual que con el papel común:
-       "desde 200 gr hasta 300 gr Y AUTOADHESIVO" */
-    if(adEsAutoadhesivo(papel)) return maq.tarifas.pantone200;
-    return gramaje <= 170 ? maq.tarifas.pantone170 : maq.tarifas.pantone200;
-  }
   if(adEsAutoadhesivo(papel)) return maq.tarifas.mas180;
   return gramaje <= 170 ? maq.tarifas.hasta170 : maq.tarifas.mas180;
 }
@@ -8174,9 +8308,6 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     }else{
       des.push('🔩 Chapas: ' + v.chapas + ' × ' + plata(maq.ctp) + ' = ' + plata(chapasCosto));
       des.push('⚙️ Posturas: ' + v.posturas + ' → ' + plata(v.postCosto));
-    }
-    if(adEsOpp(papel) && !maq.tarifas.opp){
-      des.push('⚠️ OPP: no tengo la tarifa de OPP de la ' + maq.nombre + ' (solo la de la GTO). Se está cobrando con el tramo de 180-300 g, que es más barato: pedile la fila a AD.');
     }
     for(const g of v.pasadas){
       const cambios = g.cambios || 1;
@@ -8371,13 +8502,6 @@ function calcularAd(){
   const col = AD_COLORES.find(c=>c[0]===adColSel);
   if(!pzW || !pzH || !papel || !col){ res.innerHTML = '<div class="vacio" style="padding:10px">Completá pieza, colores y papel.</div>'; return; }
   if(!papel.precio){ res.innerHTML = '<div class="vacio" style="padding:10px;color:#ff7a7a">⚠️ Ese papel no tiene precio cargado: ponéselo en ⚙️ Papeles (mirá papeles.net).</div>'; return; }
-  if(adEsPantone() && (col[1] >= 4 || col[2] >= 4)){
-    res.innerHTML = '<div class="vacio" style="padding:10px;color:#ff7a7a">🎯 Con tinta Pantone AD no cotiza 4 colores (la lista lo deja en 0). Elegí 1 o 2 colores, o destildá Pantone.</div>';
-    return;
-  }
-  if(adEsPantone() && adEsOpp(papel)){
-    res.innerHTML = '<div class="vacio" style="padding:10px;color:#ffb86c">🎯 La lista de AD no tiene Pantone sobre OPP: el OPP tiene renglón propio. Se va a cobrar con la tarifa de OPP; confirmalo con AD si el trabajo lleva Pantone.</div>';
-  }
   const [, cf, cd] = col;
   const opciones = [];
   const rowTapa = document.getElementById('adTapaRow');
@@ -8668,7 +8792,6 @@ function calcularAd(){
 }
 for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg','adOriginales','adHojasColor','adIntercalado','adBinder']) document.getElementById(id).addEventListener('input', calcularAd);
 document.getElementById('adRecargoChk').addEventListener('change', calcularAd);
-document.getElementById('adPantoneChk').addEventListener('change', calcularAd);
 document.getElementById('adPapAgregar').onclick = ()=>{
   const n = document.getElementById('adPapNombre').value.trim();
   if(!n) return;
@@ -8948,6 +9071,19 @@ function vcRenderConfig(){
   fila('× ploteado (instalado)', adCfg.vc, 'multCon', 76);
 }
 document.getElementById('btnViniloCorte').onclick = ()=>{ if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirViniloCorte(p); } };
+let cartPedido = null;
+function abrirCarteleria(p){
+  cartPedido = p;
+  renderInsumos();
+  renderCartCfg();
+  document.getElementById('modalCarteleria').classList.add('abierto');
+}
+document.getElementById('btnCarteleria').onclick = ()=>{
+  if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirCarteleria(p); }
+};
+document.getElementById('cartCerrar').onclick = ()=>{
+  document.getElementById('modalCarteleria').classList.remove('abierto');
+};
 document.getElementById('vcCerrar').onclick = ()=>{ document.getElementById('modalViniloCorte').classList.remove('abierto'); if(vcPedido) abrirPedido(vcPedido.id); };
 document.getElementById('vcAgregarPieza').onclick = ()=>{ vcPzs.push({w:'',h:'',cant:1}); vcRenderPiezas(); };
 document.getElementById('vcAgregarDes').onclick = ()=>{ vcDes.push({w:'',h:''}); vcRenderDes(); };
@@ -9621,6 +9757,7 @@ function toast(msg){
 }
 
 cargar();
+if(!insumos || !insumos.length) insumos = insumosSemilla();   /* primera vez */
 // prueba de persistencia al arrancar: escribir y releer una clave de test
 (async ()=>{
   try{
