@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v132</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v134</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1553,10 +1553,10 @@ function migrarSoldadoRuis(){
     adCfg.maquinas.komori.H = 47;
   }
   // proveedor de impresión UV (lona y vinilo) + sus materiales + limpieza de vidriera
-  if(!proveedores.find(x=> normalizarTexto(x.nombre||'').includes('soldado'))){
+  if(!proveedores.find(x=> /soldado|grafismo/i.test(x.nombre||''))){
     proveedores.push({id:uid(), nombre:'Grafismos', dir:'', mail:'', notas:'Impresión UV con tintas alternativas · Soldado Ruiz'});
   }
-  if(uv && uv.mats && !uv.mats.find(m=> (m.prov||'').toLowerCase().includes('soldado') || normalizarTexto(m.nombre||'').includes('soldado'))){
+  if(uv && uv.mats && !uv.mats.find(m=> /soldado|grafismo/i.test(m.prov||'') || /soldado|grafismo/i.test(m.nombre||''))){
     const matsSR = [
       {nombre:'Lona UV 13 oz · tintas UV alternativas', costo:6319, instM2:15000, prov:'Grafismos'},
       {nombre:'Lona UV 8 oz · tintas UV alternativas', costo:4971, instM2:15000, prov:'Grafismos'},
@@ -4015,7 +4015,8 @@ async function procesarBandejaCotizador(){
     let abrirDestino = null;
     for(const e of bandeja){
       const item = {prod:null, nombre: e.nombreCompleto || ('Letras corpóreas' + (e.desc ? ' — ' + e.desc : '')),
-        cant: 1, precio: e.venta||0, costoU: e.costo||0};
+        cant: 1, precio: e.venta||0, costoU: e.costo||0,
+        tecnica: e.tecnica || null, muestra: e.muestra || null};
       const destino = e.pedidoDestino ? pedidos.find(x=>x.id===e.pedidoDestino) : null;
       if(destino){
         destino.items.push(item);
@@ -6650,6 +6651,7 @@ function lineasPresupuesto(p){
     if(it.titulo){ out.push({titulo:true, nombre: it.nombre || ''}); continue; }
     out.push({
       nombre: nombreItem(it) + (p.presuBastidor && it.cart ? detalleBastidor(it.cart) : ''),
+      tecnica: it.tecnica || '',
       medidas: conMed ? medidasItem(it) : '',
       cant: it.cant || 1,
       unidad: it.mo ? ' h' : (it.uv ? 'u' : ''),
@@ -9861,6 +9863,13 @@ async function generarPDFPedido(p, version){
       doc.text(parrafo, margen, y);
       doc.setFont('Fira','bold');
       doc.text(plata(it.sub), W - margen, y, {align:'right'});
+      if(it.tecnica){
+        const tec = doc.splitTextToSize(it.tecnica, W - margen*2 - 110);
+        doc.setFont('Fira','normal'); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
+        doc.text(tec, margen + 10, y + 12);
+        y += tec.length * 10 + 4;
+        doc.setFontSize(11); doc.setTextColor(40,40,40);
+      }
       y += alto;
       doc.setDrawColor(210,210,210); doc.setLineWidth(0.5);
       doc.line(margen, y - 7, W - margen, y - 7);
@@ -9938,6 +9947,16 @@ async function generarPDFPedido(p, version){
               doc.setFillColor(parseInt(hv.slice(0,2),16), parseInt(hv.slice(2,4),16), parseInt(hv.slice(4,6),16));
               doc.rect(ox, oy, w2, h2, 'F');
             }
+          }
+
+          /* las letras corpóreas van encima de todo, con fondo transparente */
+          const letrasDeEste = (p.items||[]).find(z=> z.muestra && z.conf !== false);
+          if(letrasDeEste){
+            try{
+              const m = Math.min(w2, h2) * 0.72;
+              doc.addImage(letrasDeEste.muestra, 'PNG',
+                ox + (w2 - m)/2, oy + (h2 - m*0.45)/2, m, m*0.45);
+            }catch(e){}
           }
 
           doc.setDrawColor(60,60,60); doc.setLineWidth(2);
@@ -11884,6 +11903,41 @@ function renombrarGrafismos(){
 }
 renombrarGrafismos();
 setTimeout(renombrarGrafismos, 4000);
+
+/* Un reemplazo de nombres mal hecho dejó muchos "Grafismos" repetidos.
+   Los juntamos en uno solo y reapuntamos todo lo que los usaba. */
+function unificarProveedoresRepetidos(){
+  if(!Array.isArray(proveedores)) return;
+  const porNombre = {};
+  const sobran = [];
+  for(const p of proveedores){
+    const k = (p.nombre||'').trim().toLowerCase();
+    if(!k) continue;
+    if(!porNombre[k]) porNombre[k] = p;
+    else sobran.push({viejo: p.id, bueno: porNombre[k].id});
+  }
+  if(!sobran.length) return;
+  const mapa = {};
+  for(const x of sobran) mapa[x.viejo] = x.bueno;
+  /* reapuntar movimientos, pedidos y configs */
+  for(const m of (movimientos||[])) if(mapa[m.quien]) m.quien = mapa[m.quien];
+  for(const c of (compras||[]))     if(mapa[c.prov])  c.prov  = mapa[c.prov];
+  for(const pd of (pedidos||[])) for(const it of (pd.items||[])){
+    if(it.adMeta && it.adMeta.proveedores)
+      for(const k of Object.keys(it.adMeta.proveedores))
+        if(mapa[it.adMeta.proveedores[k]]) it.adMeta.proveedores[k] = mapa[it.adMeta.proveedores[k]];
+    if(it.cart && mapa[it.cart.herreroId]) it.cart.herreroId = mapa[it.cart.herreroId];
+  }
+  if(od && mapa[od.proveedor]) od.proveedor = mapa[od.proveedor];
+  if(offset && mapa[offset.proveedor]) offset.proveedor = mapa[offset.proveedor];
+  if(adCfg && mapa[adCfg.proveedor]) adCfg.proveedor = mapa[adCfg.proveedor];
+  const ids = new Set(sobran.map(x=> x.viejo));
+  proveedores = proveedores.filter(p=> !ids.has(p.id));
+  registrar('unificó ' + sobran.length + ' proveedores repetidos');
+  guardarDatos();
+}
+unificarProveedoresRepetidos();
+setTimeout(unificarProveedoresRepetidos, 4000);
 // prueba de persistencia al arrancar: escribir y releer una clave de test
 (async ()=>{
   try{
