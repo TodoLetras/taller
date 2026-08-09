@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v127</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v128</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1513,7 +1513,7 @@ function migrarSoldadoRuis(){
     if(uv.varillaCosto === undefined) uv.varillaCosto = 500;
   }
   // Lista LMK 01/08/2026 · columna Mimaki UV-LED Premium (sin IVA, salido de máquina).
-  // Actualiza UNA sola vez los costos de los materiales propios (no toca los de Soldado Ruis).
+  // Actualiza UNA sola vez los costos de los materiales propios (no toca los de Grafismos).
   if(typeof uv === 'object' && uv && uv.mats && !uv.lmk0826){
     const reglas = [
       [['medio corte'], 26808],
@@ -1551,15 +1551,15 @@ function migrarSoldadoRuis(){
   }
   // proveedor de impresión UV (lona y vinilo) + sus materiales + limpieza de vidriera
   if(!proveedores.find(x=> normalizarTexto(x.nombre||'').includes('soldado'))){
-    proveedores.push({id:uid(), nombre:'Soldado Ruis', dir:'', mail:'', notas:'Proveedor de impresión UV (lona y vinilo)'});
+    proveedores.push({id:uid(), nombre:'Grafismos', dir:'', mail:'', notas:'Impresión UV con tintas alternativas · Soldado Ruiz'});
   }
   if(uv && uv.mats && !uv.mats.find(m=> (m.prov||'').toLowerCase().includes('soldado') || normalizarTexto(m.nombre||'').includes('soldado'))){
     const matsSR = [
-      {nombre:'Lona UV 13 oz · tintas UV alternativas', costo:6319, instM2:15000, prov:'Soldado Ruis'},
-      {nombre:'Lona UV 8 oz · tintas UV alternativas', costo:4971, instM2:15000, prov:'Soldado Ruis'},
-      {nombre:'Vinilo UV base blanca · tintas UV alternativas', costo:4941, prov:'Soldado Ruis'},
-      {nombre:'Vinilo UV base gris · tintas UV alternativas', costo:5558, prov:'Soldado Ruis'},
-      {nombre:'Vinilo UV microperforado · tintas UV alternativas', costo:11532.15, prov:'Soldado Ruis'},
+      {nombre:'Lona UV 13 oz · tintas UV alternativas', costo:6319, instM2:15000, prov:'Grafismos'},
+      {nombre:'Lona UV 8 oz · tintas UV alternativas', costo:4971, instM2:15000, prov:'Grafismos'},
+      {nombre:'Vinilo UV base blanca · tintas UV alternativas', costo:4941, prov:'Grafismos'},
+      {nombre:'Vinilo UV base gris · tintas UV alternativas', costo:5558, prov:'Grafismos'},
+      {nombre:'Vinilo UV microperforado · tintas UV alternativas', costo:11532.15, prov:'Grafismos'},
     ];
     for(const m of matsSR) uv.mats.push({id:uid()+Math.random().toString(36).slice(2,4), ...m});
   }
@@ -1585,11 +1585,11 @@ function migrarSoldadoRuis(){
   // el proveedor NO va en el nombre (el nombre lo ve el cliente): pasa a campo interno
   if(uv && uv.mats) for(const m of uv.mats){
     if(normalizarTexto(m.nombre||'').includes('soldado')){
-      m.prov = 'Soldado Ruis';
+      m.prov = 'Grafismos';
       m.nombre = m.nombre.replace(/\s*·\s*Soldado Rui[sz]/gi, '').trim();
     }
   }
-  // etiquetas de tintas: Soldado Ruis = alternativas, el resto (Pablo) = originales Mimaki
+  // etiquetas de tintas: Grafismos = alternativas, el resto (Pablo) = originales Mimaki
   if(uv && uv.mats) for(const m of uv.mats){
     const n = normalizarTexto(m.nombre||'');
     const esSR = (m.prov||'').toLowerCase().includes('soldado');
@@ -11644,6 +11644,26 @@ function ponerELA(){
 }
 ponerELA();
 setTimeout(ponerELA, 4000);
+
+/* "Grafismos" era la calle: el proveedor se llama Grafismos */
+function renombrarGrafismos(){
+  let toco = false;
+  if(Array.isArray(proveedores)){
+    for(const x of proveedores){
+      if(/soldado\s*rui/i.test(x.nombre || '')){
+        x.nombre = 'Grafismos';
+        x.notas = 'Impresión UV con tintas alternativas · Soldado Ruiz';
+        toco = true;
+      }
+    }
+  }
+  if(uv && Array.isArray(uv.mats)){
+    for(const m of uv.mats) if(/soldado\s*rui/i.test(m.prov || '')){ m.prov = 'Grafismos'; toco = true; }
+  }
+  if(toco) guardarDatos();
+}
+renombrarGrafismos();
+setTimeout(renombrarGrafismos, 4000);
 // prueba de persistencia al arrancar: escribir y releer una clave de test
 (async ()=>{
   try{
