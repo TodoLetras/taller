@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v128</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v129</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -576,6 +576,7 @@
     <div id="cartBastidor"></div>
     <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">APLICACIONES</div>
     <div id="cartVinilo"></div>
+    <div id="cartCorporeas"></div>
     <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">MONTAJE</div>
     <div id="cartPerchas"></div>
     <details style="margin-top:12px">
@@ -6316,6 +6317,37 @@ function renderPerchas(){
   perchaDibujar(cv, r);
 }
 
+/* Las corpóreas ya tienen su propio cotizador: desde acá lo abrimos
+   con el pedido y la medida del cartel, en vez de duplicar la lógica. */
+function renderCorporeas(){
+  const cont = document.getElementById('cartCorporeas');
+  if(!cont) return;
+  cont.innerHTML = '';
+  const W = parseFloat((document.getElementById('cartW')||{}).value) || 0;
+  const H = parseFloat((document.getElementById('cartH')||{}).value) || 0;
+
+  const b = document.createElement('button');
+  b.textContent = '🔤 Agregar letras corpóreas encima';
+  b.style.cssText = 'width:100%;margin-top:6px;border-radius:10px;padding:11px;font-weight:700;' +
+    'font-size:.74rem;background:var(--panel2);border:1px dashed #ffa730;color:#ffa730';
+  b.onclick = ()=>{
+    if(!cartPedido){ toast('Abrí un pedido primero'); return; }
+    guardarDatos();
+    let url = 'cotizador.html?pedido=' + cartPedido.id;
+    if(W > 0 && H > 0) url += '&cartelW=' + W + '&cartelH=' + H;
+    location.href = url;
+  };
+  cont.appendChild(b);
+
+  const n = document.createElement('div');
+  n.style.cssText = 'font-size:.64rem;color:var(--texto2);margin-top:5px;line-height:1.4';
+  n.textContent = W > 0 && H > 0
+    ? 'Abre el cotizador de corpóreas con este pedido y la medida del cartel (' +
+      Math.round(W) + '×' + Math.round(H) + ' cm). Lo que cotices vuelve como ítem acá.'
+    : 'Abre el cotizador de corpóreas con este pedido. Lo que cotices vuelve como ítem acá.';
+  cont.appendChild(n);
+}
+
 function renderCartCfg(){
   const cont = document.getElementById('cartCfgPanel');
   if(!cont) return;
@@ -10872,6 +10904,7 @@ function abrirCarteleria(p, item){
   renderCara();
   renderBastidor();
   renderVinilo();
+  renderCorporeas();
   renderPerchas();
   document.getElementById('modalCarteleria').classList.add('abierto');
 }
@@ -10893,7 +10926,7 @@ function cartGuardarItem(nuevo, tipo){
 }
 ['cartW','cartH'].forEach(id=>{
   const el = document.getElementById(id);
-  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderCara(); renderBastidor(); renderVinilo(); renderPerchas(); });
+  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderCara(); renderBastidor(); renderVinilo(); renderCorporeas(); renderPerchas(); });
 });
 document.getElementById('btnCarteleria').onclick = ()=>{
   if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirCarteleria(p); }
