@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v115</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v119</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -4610,7 +4610,7 @@ function sincronizarPedido(){
    La grilla arranca con la regla del metro y medio, pero la manda el humano.
    El sobrante se suma AL COSTO sin markup: es plata que ya gastaste. */
 
-let bast = {on:false, W:0, H:0, perimId:null, grillaId:null, vert:null, horiz:null};
+let bast = {on:false, W:0, H:0, perimId:null, grillaId:null, vert:null, horiz:null, corte:'90', margen:null};
 
 function canos(){ return insumos.filter(x=> x.cat==='cano'); }
 function precioMetro(x){ return (!x || !x.precio || !x.tiraM) ? 0 : x.precio / x.tiraM; }
@@ -4629,8 +4629,23 @@ function bastCalcular(){
   const vert  = (bast.vert  == null) ? bastVarillasAuto(W) : bast.vert;
   const horiz = (bast.horiz == null) ? bastVarillasAuto(H) : bast.horiz;
 
-  const mPerim  = 2 * (W + H);
-  const mGrilla = vert * H + horiz * W;
+  /* Con corte a 90° el caño horizontal pasa entero y tapa al vertical,
+     así que los verticales se cortan más cortos. Con 45° van a inglete, enteros. */
+  const anchoP = anchoCanoPerim() / 100;
+  const a90 = (bast.corte !== '45');
+  const piezas = [];
+  if(a90){
+    piezas.push({q:2, l:W,             d:'Perímetro horizontal (pasante)', cano:'perim'});
+    piezas.push({q:2, l:H - 2*anchoP,  d:'Perímetro vertical (entre horizontales)', cano:'perim'});
+  }else{
+    piezas.push({q:2, l:W, d:'Perímetro horizontal (inglete 45°)', cano:'perim'});
+    piezas.push({q:2, l:H, d:'Perímetro vertical (inglete 45°)',   cano:'perim'});
+  }
+  if(vert)  piezas.push({q:vert,  l:H - 2*anchoP, d:'Varilla vertical',   cano:'grilla'});
+  if(horiz) piezas.push({q:horiz, l:W - 2*anchoP, d:'Varilla horizontal', cano:'grilla'});
+
+  const mPerim  = piezas.filter(x=>x.cano==='perim').reduce((s,x)=> s + x.q*x.l, 0);
+  const mGrilla = piezas.filter(x=>x.cano==='grilla').reduce((s,x)=> s + x.q*x.l, 0);
 
   const tramo = (metros, cano)=>{
     const pm = precioMetro(cano);
@@ -4646,11 +4661,12 @@ function bastCalcular(){
   const cano     = tp.costo + tg.costo;
   const herrero  = cano * ((cartCfg.herrero||0) / 100);
   const costo    = cano + herrero;
-  const venta    = costo * (1 + (cartCfg.margen||0) / 100);
+  const mrg      = (bast.margen == null) ? (cartCfg.margen||0) : bast.margen;
+  const venta    = costo * (1 + mrg / 100);
   const sobrante = tp.costoSobra + tg.costoSobra;
 
   return {W, H, perim, grilla, vert, horiz, tp, tg, cano, herrero, costo, venta,
-          sobrante, total: venta + sobrante};
+          sobrante, total: venta + sobrante, piezas, corte: a90 ? '90' : '45', anchoP, mrg};
 }
 
 function bastDibujar(cv, r){
@@ -4748,6 +4764,49 @@ function renderBastidor(){
   fv.appendChild(numero('Horizontales', r.horiz, v=> bast.horiz = v));
   cont.appendChild(fv);
 
+  /* corte a 45 o a 90 */
+  const fc = document.createElement('div');
+  fc.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
+  for(const [v, txt] of [['90','⊥ Corte a 90°'],['45','◹ Corte a 45°']]){
+    const b2 = document.createElement('button');
+    b2.textContent = txt;
+    const act = r.corte === v;
+    b2.style.cssText = 'flex:1;border-radius:8px;padding:7px;font-size:.68rem;font-weight:700;' +
+      (act ? 'background:rgba(180,142,173,.20);border:1px solid #b48ead;color:#b48ead'
+           : 'background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)');
+    b2.onclick = ()=>{ bast.corte = v; renderBastidor(); };
+    fc.appendChild(b2);
+  }
+  cont.appendChild(fc);
+  if(r.corte === '90'){
+    const nota = document.createElement('div');
+    nota.style.cssText = 'font-size:.64rem;color:var(--texto2);margin:-4px 0 8px;line-height:1.4';
+    nota.textContent = 'El horizontal pasa entero y tapa al vertical, así que los verticales van ' +
+      (r.anchoP*200).toFixed(0) + ' cm más cortos.';
+    cont.appendChild(nota);
+  }
+
+  /* margen propio de este bastidor */
+  const fm = document.createElement('div');
+  fm.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
+  const lm = document.createElement('span');
+  lm.style.cssText = 'flex:1 1 120px;font-size:.7rem;color:var(--texto2)';
+  lm.textContent = 'Margen de este bastidor';
+  const im = document.createElement('input');
+  im.type = 'text'; im.setAttribute('inputmode','decimal');
+  im.value = r.mrg;
+  im.style.cssText = 'width:70px;margin:0;padding:7px;font-size:13px;text-align:right;background:var(--fondo);' +
+    'border:1px ' + (bast.margen==null ? 'solid var(--borde)' : 'dashed var(--ambar)') + ';border-radius:8px;color:var(--texto)';
+  im.addEventListener('change', ()=>{
+    const v = parseFloat(im.value);
+    bast.margen = isNaN(v) ? null : v;
+    renderBastidor();
+  });
+  const um = document.createElement('span');
+  um.style.cssText = 'font-size:.68rem;color:var(--texto2)'; um.textContent = '%';
+  fm.appendChild(lm); fm.appendChild(im); fm.appendChild(um);
+  cont.appendChild(fm);
+
   const auto = document.createElement('button');
   auto.textContent = '↻ Volver al automático (una varilla cada ' + cartCfg.varillaCadaM + ' m)';
   auto.style.cssText = 'width:100%;border-radius:8px;padding:7px;font-size:.66rem;margin-bottom:10px;' +
@@ -4768,7 +4827,7 @@ function renderBastidor(){
     linea('Herrero ' + cartCfg.herrero + '% (corte, soldadura y pintura)', plata(r.herrero)) +
     '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
     linea('Costo', plata(r.costo)) +
-    linea('Venta con +' + cartCfg.margen + '%', plata(r.venta)) +
+    linea('Venta con +' + r.mrg + '%', plata(r.venta)) +
     (r.sobrante > 0.5
       ? linea('Sobrante ' + cartCfg.sobrantePct + '% · ' + (r.tp.sobra + r.tg.sobra).toFixed(2) + ' m (sin markup)', plata(r.sobrante))
       : '') +
@@ -4783,6 +4842,28 @@ function renderBastidor(){
     cont.appendChild(av);
   }
 
+  /* despiece para el herrero */
+  const dz = document.createElement('details');
+  dz.style.cssText = 'margin-top:8px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px';
+  const sz = document.createElement('summary');
+  sz.style.cssText = 'padding:9px 11px;font-size:.72rem;font-weight:700;cursor:pointer;color:#b48ead';
+  sz.textContent = '📐 Despiece para el herrero';
+  dz.appendChild(sz);
+  const cz2 = document.createElement('div');
+  cz2.style.cssText = 'padding:0 11px 10px;font-size:.7rem;line-height:1.7';
+  cz2.innerHTML = r.piezas.map(x=>
+    '<div style="display:flex;justify-content:space-between;gap:8px;border-top:1px dashed var(--borde);padding-top:3px">' +
+    '<span style="color:var(--texto2)">' + x.d + '</span>' +
+    '<b>' + x.q + ' × ' + (x.l*100).toFixed(1) + ' cm</b></div>').join('');
+  dz.appendChild(cz2);
+  const bPlano = document.createElement('button');
+  bPlano.textContent = '📄 Plano para el herrero (PDF)';
+  bPlano.style.cssText = 'width:calc(100% - 22px);margin:0 11px 11px;border-radius:9px;padding:9px;' +
+    'font-size:.7rem;font-weight:700;background:var(--panel);border:1px dashed #b48ead;color:#b48ead';
+  bPlano.onclick = ()=> planoHerrero(r);
+  dz.appendChild(bPlano);
+  cont.appendChild(dz);
+
   const bAdd = document.createElement('button');
   const editando = cartEditando && cartEditando.cart && cartEditando.cart.tipo === 'bastidor';
   bAdd.textContent = (editando ? '✓ Corregir el bastidor · ' : '＋ Agregar el bastidor al pedido · ') + plata(r.total);
@@ -4796,7 +4877,7 @@ function renderBastidor(){
       precio: Math.round(r.total),
       costoReal: Math.round(r.costo),
       cart: {tipo:'bastidor', W:r.W, H:r.H, vert:r.vert, horiz:r.horiz,
-             perim:r.perim.nombre, grilla:r.grilla.nombre,
+             perim:r.perim.nombre, grilla:r.grilla.nombre, corte:r.corte, mrg:r.mrg,
              metros: +(r.tp.metros + r.tg.metros).toFixed(2)}
     }, 'bastidor');
   };
@@ -4809,7 +4890,19 @@ function renderBastidor(){
    Hojas (galvanizada, aluco, MDF): cuántas entran y cuánto sobra.
    Rollo a medida (trapezoidal, acanalada): ancho fijo, largo exacto, flete si pasa los 5 m. */
 
-let cara = {matId:null, orient:'auto', zing:false};
+let cara = {matId:null, orient:'auto', zing:false, pestana:null, margen:null};
+
+/* El ancho del caño del perímetro, sacado del nombre (ej: "30×30×1,2" → 3 cm) */
+function anchoCanoPerim(){
+  const c = insumos.find(x=> x.id === bast.perimId) ||
+            insumos.filter(x=> x.cat==='cano')[0];
+  if(!c) return 3;
+  const m = (c.nombre||'').match(/(\d+)\s*[×x]\s*\d+/);
+  return m ? parseInt(m[1]) / 10 : 3;   // mm a cm
+}
+function pestanaCm(){
+  return (cara.pestana == null) ? anchoCanoPerim() : cara.pestana;
+}
 
 function carasDisponibles(){
   return insumos.filter(x=> ['chapa','aluco','mdf'].includes(x.cat));
@@ -4842,6 +4935,11 @@ function caraCalcular(){
   const pu = insumoPrecio(m);
   const r = {W, H, mat:m, m2:W*H};
 
+  /* OJO: el precio cargado NO es por m².
+     En hojas es el precio de LA HOJA ENTERA.
+     En rollo a medida es el precio del METRO LINEAL al ancho útil. */
+  let precioM2 = 0;
+
   if(m.aMedida){
     /* rollo: el ancho útil manda, el largo es exacto */
     const ancho = m.anchoUtil || 1.07;
@@ -4854,23 +4952,39 @@ function caraCalcular(){
     r.tiras = tiras; r.largoReal = largoReal; r.vertical = vertical;
     r.m2Comprado = tiras * ancho * largoReal;
     r.aprov = r.m2 / r.m2Comprado;
-    r.costoMat = r.m2Comprado * pu;
+    r.metrosLineales = tiras * largoReal;
+    r.costoMat = r.metrosLineales * pu;      // pu = $ por metro lineal
+    precioM2 = ancho > 0 ? pu / ancho : 0;
     r.flete = (largoReal > (cartCfg.fleteDesdeM || 5)) ? (cartCfg.fleteLargo || 0) : 0;
     r.avisoLargo = largoReal > (m.largoMax || 13);
   }else if(m.hojaW){
-    const h = caraEnHojas(W, H, m.hojaW, m.hojaH);
+    /* con zinguería, cada chapa dobla su pestaña para abrazar el caño:
+       ese doblez sale del ancho útil de la propia chapa */
+    const pest = cara.zing ? (pestanaCm() / 100) : 0;
+    const utilW = Math.max(0.1, m.hojaW - pest);
+    const utilH = Math.max(0.1, m.hojaH - pest);
+    const h = caraEnHojas(W, H, utilW, utilH);
     Object.assign(r, h);
-    r.costoMat = h.m2Comprado * pu;
+    r.pest = pest;
+    r.hojaW = m.hojaW; r.hojaH = m.hojaH;
+    const areaHoja = m.hojaW * m.hojaH;
+    r.m2Comprado = h.hojas * areaHoja;       // se paga la chapa entera, no la útil
+    r.aprov = r.m2 / r.m2Comprado;
+    r.costoMat = h.hojas * pu;               // pu = $ por hoja entera
+    precioM2 = areaHoja > 0 ? pu / areaHoja : 0;
     r.flete = 0;
   }else{
     r.costoMat = pu; r.aprov = 1; r.flete = 0;
+    precioM2 = r.m2 > 0 ? pu / r.m2 : 0;
   }
 
+  r.precioM2 = precioM2;
   r.zing = cara.zing ? r.costoMat * ((cartCfg.zingueria||0)/100) : 0;
   const sobraM2 = Math.max(0, (r.m2Comprado || r.m2) - r.m2);
-  r.sobrante = sobraM2 * pu * ((cartCfg.sobrantePct||0)/100);
+  r.sobrante = sobraM2 * precioM2 * ((cartCfg.sobrantePct||0)/100);
   r.costo = r.costoMat + r.zing + r.flete;
-  r.venta = r.costo * (1 + (cartCfg.margen||0)/100);
+  r.mrg = (cara.margen == null) ? (cartCfg.margen||0) : cara.margen;
+  r.venta = r.costo * (1 + r.mrg/100);
   r.total = r.venta + r.sobrante;
   r.sobraM2 = sobraM2;
   return r;
@@ -4928,6 +5042,57 @@ function renderCara(){
   lz.appendChild(document.createTextNode('Zinguería: plegados y corte (+' + cartCfg.zingueria + '% sobre la chapa)'));
   cont.appendChild(lz);
 
+  /* la pestaña solo tiene sentido en chapas planas y aluco, no en las de rollo */
+  if(cara.zing && !r.mat.aMedida && r.mat.hojaW){
+    const fp = document.createElement('div');
+    fp.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-2px 0 8px;' +
+      'padding:8px 10px;background:rgba(180,142,173,.10);border:1px solid #b48ead;border-radius:9px';
+    const lp = document.createElement('span');
+    lp.style.cssText = 'flex:1 1 170px;font-size:.68rem;color:var(--texto2);line-height:1.4';
+    lp.textContent = 'Pestaña que abraza el caño (sale del ancho útil de cada chapa)';
+    const ip = document.createElement('input');
+    ip.type = 'text'; ip.setAttribute('inputmode','decimal');
+    ip.value = pestanaCm();
+    ip.style.cssText = 'width:70px;margin:0;padding:7px;font-size:13px;text-align:right;' +
+      'background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+    ip.addEventListener('change', ()=>{
+      const v = parseFloat(ip.value);
+      cara.pestana = isNaN(v) ? null : v;
+      renderCara();
+    });
+    const up = document.createElement('span');
+    up.style.cssText = 'font-size:.68rem;color:var(--texto2)';
+    up.textContent = 'cm';
+    const auto = document.createElement('button');
+    auto.textContent = '↻ auto';
+    auto.title = 'Volver al ancho del caño del perímetro';
+    auto.style.cssText = 'border-radius:7px;padding:6px 9px;font-size:.64rem;background:var(--panel2);' +
+      'border:1px dashed var(--borde);color:var(--texto2)';
+    auto.onclick = ()=>{ cara.pestana = null; renderCara(); };
+    fp.appendChild(lp); fp.appendChild(ip); fp.appendChild(up); fp.appendChild(auto);
+    cont.appendChild(fp);
+  }
+
+  const fmc = document.createElement('div');
+  fmc.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
+  const lmc = document.createElement('span');
+  lmc.style.cssText = 'flex:1 1 120px;font-size:.7rem;color:var(--texto2)';
+  lmc.textContent = 'Margen de esta cara';
+  const imc = document.createElement('input');
+  imc.type = 'text'; imc.setAttribute('inputmode','decimal');
+  imc.value = r.mrg;
+  imc.style.cssText = 'width:70px;margin:0;padding:7px;font-size:13px;text-align:right;background:var(--fondo);' +
+    'border:1px ' + (cara.margen==null ? 'solid var(--borde)' : 'dashed var(--ambar)') + ';border-radius:8px;color:var(--texto)';
+  imc.addEventListener('change', ()=>{
+    const v = parseFloat(imc.value);
+    cara.margen = isNaN(v) ? null : v;
+    renderCara();
+  });
+  const umc = document.createElement('span');
+  umc.style.cssText = 'font-size:.68rem;color:var(--texto2)'; umc.textContent = '%';
+  fmc.appendChild(lmc); fmc.appendChild(imc); fmc.appendChild(umc);
+  cont.appendChild(fmc);
+
   const d = document.createElement('div');
   d.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;' +
     'padding:10px;font-size:.7rem;line-height:1.7';
@@ -4940,15 +5105,18 @@ function renderCara(){
           (r.vertical ? ' (paradas)' : ' (acostadas)');
   }else if(r.hojas){
     cab = r.hojas + ' hoja' + (r.hojas===1?'':'s') + (r.rotada ? ' (girada)' : '') +
-          ' · ' + r.cols + '×' + r.filas;
+          ' · ' + r.cols + '×' + r.filas +
+          (r.pest ? ' · pestaña ' + Math.round(r.pest*100) + ' cm' : '');
   }else cab = 'por unidad';
   d.innerHTML =
     linea(cab + ' · aprovecha ' + Math.round((r.aprov||1)*100) + '%', plata(r.costoMat)) +
+    (r.precioM2 ? '<div style="font-size:.62rem;color:var(--texto2);margin-top:-3px">equivale a ' +
+       plata(r.precioM2) + ' el m²</div>' : '') +
     (r.zing > 0.5 ? linea('Zinguería ' + cartCfg.zingueria + '%', plata(r.zing)) : '') +
     (r.flete > 0.5 ? linea('Flete (chapa de más de ' + cartCfg.fleteDesdeM + ' m, por viaje)', plata(r.flete)) : '') +
     '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
     linea('Costo', plata(r.costo)) +
-    linea('Venta con +' + cartCfg.margen + '%', plata(r.venta)) +
+    linea('Venta con +' + r.mrg + '%', plata(r.venta)) +
     (r.sobrante > 0.5 ? linea('Sobrante ' + cartCfg.sobrantePct + '% · ' + r.sobraM2.toFixed(2) + ' m² (sin markup)', plata(r.sobrante)) : '') +
     '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
     linea('TOTAL', plata(r.total), true);
@@ -4982,10 +5150,103 @@ function renderCara(){
       costoReal: Math.round(r.costo),
       cart: {tipo:'cara', W:r.W, H:r.H, mat:r.mat.nombre,
              hojas:r.hojas||null, tiras:r.tiras||null, largo:r.largoReal||null,
-             zing:cara.zing, aprov:+(r.aprov||1).toFixed(3)}
+             zing:cara.zing, pest:r.pest||0, mrg:r.mrg, aprov:+(r.aprov||1).toFixed(3)}
     }, 'cara');
   };
   cont.appendChild(bAdd);
+}
+
+/* Plano para el herrero: dibujo con cotas y lista de piezas.
+   No lleva ningún precio: es una orden de taller. */
+async function planoHerrero(r){
+  try{
+    await prepararPDFLibs();
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'a4'});
+    const W = doc.internal.pageSize.getWidth();
+    const mg = 40;
+    let y = 50;
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(20,20,20);
+    doc.text('ESTRUCTURA · PLANO DE TALLER', mg, y); y += 18;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(90,90,90);
+    const cli = cartPedido ? nombreClienteId(cartPedido.cliente) : '';
+    const f = new Date();
+    doc.text('Todo Letras · ' + f.getDate() + '/' + (f.getMonth()+1) + '/' + f.getFullYear() +
+             (cli && cli !== '(sin cliente)' ? '  ·  ' + cli : ''), mg, y);
+    y += 24;
+
+    /* dibujo a escala con cotas */
+    const anchoDib = W - mg*2 - 60;
+    const esc = Math.min(anchoDib / r.W, 300 / r.H);
+    const w = r.W * esc, h = r.H * esc;
+    const ox = mg + 30, oy = y + 10;
+
+    doc.setDrawColor(30,30,30); doc.setLineWidth(3);
+    doc.rect(ox, oy, w, h);
+    doc.setLineWidth(1.2);
+    for(let i=1; i<=r.vert; i++){
+      const x = ox + (w*i)/(r.vert+1);
+      doc.line(x, oy, x, oy+h);
+    }
+    for(let j=1; j<=r.horiz; j++){
+      const yy = oy + (h*j)/(r.horiz+1);
+      doc.line(ox, yy, ox+w, yy);
+    }
+
+    /* cotas */
+    doc.setDrawColor(150,150,150); doc.setLineWidth(0.6);
+    doc.setFontSize(9); doc.setTextColor(60,60,60);
+    const cotaY = oy + h + 20;
+    doc.line(ox, cotaY, ox+w, cotaY);
+    doc.line(ox, cotaY-4, ox, cotaY+4);
+    doc.line(ox+w, cotaY-4, ox+w, cotaY+4);
+    doc.text(Math.round(r.W*100) + ' cm', ox + w/2, cotaY - 4, {align:'center'});
+    const cotaX = ox - 18;
+    doc.line(cotaX, oy, cotaX, oy+h);
+    doc.line(cotaX-4, oy, cotaX+4, oy);
+    doc.line(cotaX-4, oy+h, cotaX+4, oy+h);
+    doc.text(Math.round(r.H*100) + ' cm', cotaX - 4, oy + h/2, {align:'right'});
+
+    /* cota entre varillas, si hay */
+    if(r.vert > 0){
+      const paso = r.W / (r.vert + 1);
+      const cY = oy - 12;
+      doc.line(ox, cY, ox + paso*esc, cY);
+      doc.line(ox, cY-3, ox, cY+3);
+      doc.line(ox+paso*esc, cY-3, ox+paso*esc, cY+3);
+      doc.text(Math.round(paso*100) + ' cm', ox + paso*esc/2, cY - 3, {align:'center'});
+    }
+
+    y = oy + h + 46;
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(20,20,20);
+    doc.text('Corte a ' + r.corte + '°' +
+      (r.corte === '90' ? '  ·  el horizontal pasa entero y tapa al vertical' : '  ·  a inglete'), mg, y);
+    y += 20;
+
+    doc.setFontSize(10);
+    doc.text('DESPIECE', mg, y); y += 6;
+    doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
+    doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40);
+    for(const x of r.piezas){
+      doc.text(x.q + ' pieza' + (x.q===1?'':'s') + ' de ' + (x.l*100).toFixed(1) + ' cm', mg, y);
+      doc.setTextColor(110,110,110);
+      doc.text(x.d, mg + 170, y);
+      doc.setTextColor(40,40,40);
+      y += 15;
+    }
+    y += 6;
+    doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 15;
+    doc.setFont('helvetica','bold');
+    doc.text('Perímetro: ' + r.perim.nombre, mg, y); y += 14;
+    doc.text('Grilla: ' + r.grilla.nombre, mg, y); y += 14;
+    doc.setFont('helvetica','normal'); doc.setTextColor(90,90,90);
+    doc.text('Total de caño: ' + (r.tp.metros + r.tg.metros).toFixed(2) + ' m  ·  ' +
+             (r.tp.tiras + r.tg.tiras) + ' tiras de ' + r.tp.tiraM + ' m', mg, y);
+
+    doc.save('Estructura ' + Math.round(r.W*100) + 'x' + Math.round(r.H*100) + '.pdf');
+  }catch(e){ toast('No pude generar el plano: ' + e.message); }
 }
 
 /* ============ CARTELERÍA · CATÁLOGO DE INSUMOS ============ */
@@ -5004,8 +5265,17 @@ function insumoFormato(x){
   if(x.aMedida)  return 'rollo ' + x.anchoUtil + ' m de ancho · largo a medida (' +
                         x.largoMin + ' a ' + x.largoMax + ' m)';
   if(x.hojaW)    return 'hoja de ' + Math.round(x.hojaW*100) + '×' + Math.round(x.hojaH*100) + ' cm';
-  if(x.ancho)    return 'rollo de ' + Math.round(x.ancho*100) + ' cm · por metro lineal';
+  if(x.ancho)    return 'rollo de ' + Math.round(x.ancho*100) + ' cm';
   return 'por unidad';
+}
+
+/* Qué precio hay que escribir. Es la fuente de confusión más grande del módulo. */
+function insumoQuePrecio(x){
+  if(x.tiraM)   return 'precio de la TIRA de ' + x.tiraM + ' m';
+  if(x.aMedida) return 'precio del METRO LINEAL';
+  if(x.hojaW)   return 'precio de la HOJA entera (' + (x.hojaW*x.hojaH).toFixed(2) + ' m²)';
+  if(x.ancho)   return 'precio del METRO LINEAL';
+  return 'precio por unidad';
 }
 
 /* Precio efectivo: el de lista más el recargo si lo tiene (caso Moconá) */
@@ -5077,8 +5347,13 @@ function renderInsumos(){
 
       const l2 = document.createElement('div');
       l2.style.cssText = 'font-size:.64rem;color:var(--texto2);margin:2px 0 5px';
-      l2.textContent = insumoFormato(x) + (x.prov ? ' · ' + x.prov : '') +
-        (x.recargo ? ' · +' + x.recargo + '% sobre lista' : '');
+      l2.innerHTML = '';
+      l2.appendChild(document.createTextNode(insumoFormato(x) + (x.prov ? ' · ' + x.prov : '') +
+        (x.recargo ? ' · +' + x.recargo + '% sobre lista' : '')));
+      const q = document.createElement('div');
+      q.style.cssText = 'color:var(--ambar);font-weight:700;margin-top:2px';
+      q.textContent = '↳ ' + insumoQuePrecio(x);
+      l2.appendChild(q);
       f.appendChild(l2);
 
       const fila = document.createElement('div');
@@ -5087,7 +5362,7 @@ function renderInsumos(){
       const inp = document.createElement('input');
       inp.type = 'text'; inp.setAttribute('inputmode','decimal');
       inp.value = x.precio || '';
-      inp.placeholder = '$ precio';
+      inp.placeholder = '$ ' + insumoQuePrecio(x).replace('precio de la ','').replace('precio del ','').replace('precio ','');
       inp.style.cssText = 'flex:1 1 110px;min-width:100px;margin:0;padding:8px;font-size:13px;' +
         'background:var(--fondo);border:1px solid ' + (x.precio ? 'var(--borde)' : 'var(--ambar)') +
         ';border-radius:8px;color:var(--texto)';
@@ -5452,6 +5727,7 @@ function detalleBastidor(c){
     if(c.horiz) v.push(c.horiz + ' horizontal' + (c.horiz===1?'':'es'));
     partes.push('refuerzos: ' + v.join(' y '));
   }
+  if(c.corte)  partes.push('corte a ' + c.corte + '°');
   if(c.perim)  partes.push('perímetro ' + c.perim);
   if(c.grilla && c.grilla !== c.perim) partes.push('grilla ' + c.grilla);
   return partes.length ? ' (' + partes.join(' · ') + ')' : '';
@@ -5761,6 +6037,16 @@ function renderBuscadorItems(p){
     lblB.appendChild(cbB);
     lblB.appendChild(document.createTextNode('Detallar bastidores (refuerzos y caños)'));
     barra.appendChild(lblB);
+
+    const lblE = document.createElement('label');
+    lblE.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2)';
+    const cbE = document.createElement('input');
+    cbE.type = 'checkbox'; cbE.checked = !!p.presuEsquema;
+    cbE.onchange = ()=>{ p.presuEsquema = cbE.checked; guardarDatos();
+      toast(cbE.checked ? 'El PDF va a incluir el esquema' : 'PDF sin esquema'); };
+    lblE.appendChild(cbE);
+    lblE.appendChild(document.createTextNode('Incluir esquema en el PDF (solo medidas exteriores)'));
+    barra.appendChild(lblE);
   }
 
   cont.appendChild(barra);
@@ -8593,6 +8879,41 @@ async function generarPDFPedido(p, version){
     y += 6;
     doc.setFont('Fira','bold'); doc.setFontSize(14.5); doc.setTextColor(0,0,0);
     doc.text('TOTAL: ' + plata(version ? version.total : totalPedido(p)), W - margen, y, {align:'right'});
+
+    /* Esquema para el cliente: solo el rectángulo y las medidas de afuera a afuera.
+       Nada de varillas ni caños: eso va en el plano del herrero. */
+    if(p.presuEsquema){
+      const bs = (p.items||[]).filter(i=> i.cart && i.cart.tipo === 'bastidor' && i.conf !== false);
+      if(bs.length){
+        y += 26;
+        if(y > 640){ doc.addPage(); y = 60; }
+        doc.setFont('Fira','bold'); doc.setFontSize(11); doc.setTextColor(30,30,30);
+        doc.text('Medidas', margen, y);
+        y += 18;
+        for(const it of bs){
+          const c = it.cart;
+          const escala = Math.min((W - margen*2 - 90) / c.W, 120 / c.H);
+          const w2 = c.W * escala, h2 = c.H * escala;
+          if(y + h2 + 50 > 780){ doc.addPage(); y = 60; }
+          const ox = margen + 26, oy = y;
+          doc.setDrawColor(60,60,60); doc.setLineWidth(2);
+          doc.rect(ox, oy, w2, h2);
+          doc.setDrawColor(160,160,160); doc.setLineWidth(0.6);
+          doc.setFont('Fira','normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
+          const cy = oy + h2 + 16;
+          doc.line(ox, cy, ox + w2, cy);
+          doc.line(ox, cy-4, ox, cy+4);
+          doc.line(ox+w2, cy-4, ox+w2, cy+4);
+          doc.text(Math.round(c.W*100) + ' cm', ox + w2/2, cy - 4, {align:'center'});
+          const cx = ox - 14;
+          doc.line(cx, oy, cx, oy + h2);
+          doc.line(cx-4, oy, cx+4, oy);
+          doc.line(cx-4, oy+h2, cx+4, oy+h2);
+          doc.text(Math.round(c.H*100) + ' cm', cx - 3, oy + h2/2, {align:'right'});
+          y += h2 + 34;
+        }
+      }
+    }
     y += 20;
     if(lineas.some(it=> !it.titulo && it.abierto)){
       doc.setFont('Fira','normal'); doc.setFontSize(9); doc.setTextColor(110,110,110);
@@ -9685,6 +10006,8 @@ function abrirCarteleria(p, item){
     ih.value = Math.round(c.H*100);
     if(c.tipo === 'bastidor'){
       bast.vert = c.vert; bast.horiz = c.horiz;
+      bast.corte = c.corte || '90';
+      bast.margen = (c.mrg == null) ? null : c.mrg;
       const bp = insumos.find(x=> x.cat==='cano' && x.nombre === c.perim);
       const bg = insumos.find(x=> x.cat==='cano' && x.nombre === c.grilla);
       if(bp) bast.perimId = bp.id;
@@ -9693,6 +10016,8 @@ function abrirCarteleria(p, item){
       const cm = insumos.find(x=> x.nombre === c.mat);
       if(cm) cara.matId = cm.id;
       cara.zing = !!c.zing;
+      cara.pestana = c.pest ? Math.round(c.pest*100) : null;
+      cara.margen = (c.mrg == null) ? null : c.mrg;
       if(c.largo) cara.orient = c.tiras && c.W && (c.largo === +c.H.toFixed(2)) ? 'vertical' : 'horizontal';
     }
   }else{
