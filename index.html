@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v120</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v122</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -574,6 +574,8 @@
     <div id="cartCara"></div>
     <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">ESTRUCTURA</div>
     <div id="cartBastidor"></div>
+    <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">MONTAJE</div>
+    <div id="cartPerchas"></div>
     <details style="margin-top:12px">
       <summary style="font-size:.74rem;color:var(--texto2);cursor:pointer;padding:6px 0">📦 Precios de insumos</summary>
       <div id="cartInsumos" style="margin-top:8px"></div>
@@ -4610,7 +4612,7 @@ function sincronizarPedido(){
    La grilla arranca con la regla del metro y medio, pero la manda el humano.
    El sobrante se suma AL COSTO sin markup: es plata que ya gastaste. */
 
-let bast = {on:false, W:0, H:0, perimId:null, grillaId:null, vert:null, horiz:null, corte:'90', margen:null};
+let bast = {on:false, W:0, H:0, perimId:null, grillaId:null, vert:null, horiz:null, corte:'90', margen:null, herreroId:null};
 
 function canos(){ return insumos.filter(x=> x.cat==='cano'); }
 function precioMetro(x){ return (!x || !x.precio || !x.tiraM) ? 0 : x.precio / x.tiraM; }
@@ -4807,6 +4809,22 @@ function renderBastidor(){
   fm.appendChild(lm); fm.appendChild(im); fm.appendChild(um);
   cont.appendChild(fm);
 
+  /* a qué herrero se lo mandamos */
+  const fh = document.createElement('div');
+  fh.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
+  const lh = document.createElement('span');
+  lh.style.cssText = 'flex:1 1 80px;font-size:.7rem;color:var(--texto2)';
+  lh.textContent = 'Herrero';
+  const sh = document.createElement('select');
+  sh.style.cssText = 'flex:2 1 170px;margin:0;padding:8px;font-size:12.5px;background:var(--fondo);' +
+    'border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+  sh.innerHTML = '<option value="">— sin asignar —</option>' +
+    proveedores.map(pr=> '<option value="' + pr.id + '"' +
+      (pr.id === bast.herreroId ? ' selected' : '') + '>' + pr.nombre + '</option>').join('');
+  sh.onchange = ()=>{ bast.herreroId = sh.value || null; };
+  fh.appendChild(lh); fh.appendChild(sh);
+  cont.appendChild(fh);
+
   const auto = document.createElement('button');
   auto.textContent = '↻ Volver al automático (una varilla cada ' + cartCfg.varillaCadaM + ' m)';
   auto.style.cssText = 'width:100%;border-radius:8px;padding:7px;font-size:.66rem;margin-bottom:10px;' +
@@ -4824,16 +4842,19 @@ function renderBastidor(){
   d.innerHTML =
     linea('Perímetro · ' + r.tp.metros.toFixed(2) + ' m (' + r.tp.tiras + ' tira' + (r.tp.tiras===1?'':'s') + ')', plata(r.tp.costo)) +
     linea('Grilla · ' + r.tg.metros.toFixed(2) + ' m (' + r.tg.tiras + ' tira' + (r.tg.tiras===1?'':'s') + ')', plata(r.tg.costo)) +
-    linea('Herrero ' + cartCfg.herrero + '% (corte, soldadura y pintura)', plata(r.herrero)) +
+    '<div class="phHerrero"></div>' +
     '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
     linea('Costo', plata(r.costo)) +
     linea('Venta con +' + r.mrg + '%', plata(r.venta)) +
-    (r.sobrante > 0.5
-      ? linea('Sobrante ' + cartCfg.sobrantePct + '% · ' + (r.tp.sobra + r.tg.sobra).toFixed(2) + ' m (sin markup)', plata(r.sobrante))
-      : '') +
+    '<div class="phSobra"></div>' +
     '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
     linea('TOTAL', plata(r.total), true);
   cont.appendChild(d);
+  lineaPct(d.querySelector('.phHerrero'), 'Herrero (corte, soldadura y pintura)', 'herrero',
+           r.herrero, ()=> renderBastidor());
+  const phS = d.querySelector('.phSobra');
+  if(phS) lineaPct(phS, 'Sobrante · ' + (r.tp.sobra + r.tg.sobra).toFixed(2) + ' m (sin markup)',
+                   'sobrantePct', r.sobrante, ()=> renderBastidor());
 
   if(!r.perim.precio || !r.grilla.precio){
     const av = document.createElement('div');
@@ -4852,9 +4873,12 @@ function renderBastidor(){
   const cz2 = document.createElement('div');
   cz2.style.cssText = 'padding:0 11px 10px;font-size:.7rem;line-height:1.7';
   cz2.innerHTML = r.piezas.map(x=>
-    '<div style="display:flex;justify-content:space-between;gap:8px;border-top:1px dashed var(--borde);padding-top:3px">' +
+    '<div style="border-top:1px dashed var(--borde);padding-top:3px">' +
+    '<div style="display:flex;justify-content:space-between;gap:8px">' +
     '<span style="color:var(--texto2)">' + x.d + '</span>' +
-    '<b>' + x.q + ' × ' + (x.l*100).toFixed(1) + ' cm</b></div>').join('');
+    '<b>' + x.q + ' × ' + (x.l*100).toFixed(1) + ' cm</b></div>' +
+    '<div style="font-size:.62rem;color:#b48ead">' +
+    (x.cano === 'perim' ? r.perim.nombre : r.grilla.nombre) + '</div></div>').join('');
   dz.appendChild(cz2);
   /* plan de corte en pantalla */
   const plan = planCorteBastidor(r);
@@ -4897,6 +4921,7 @@ function renderBastidor(){
       costoReal: Math.round(r.costo),
       cart: {tipo:'bastidor', W:r.W, H:r.H, vert:r.vert, horiz:r.horiz,
              perim:r.perim.nombre, grilla:r.grilla.nombre, corte:r.corte, mrg:r.mrg,
+             herreroId: bast.herreroId || null,
              metros: +(r.tp.metros + r.tg.metros).toFixed(2)}
     }, 'bastidor');
   };
@@ -5131,15 +5156,20 @@ function renderCara(){
     linea(cab + ' · aprovecha ' + Math.round((r.aprov||1)*100) + '%', plata(r.costoMat)) +
     (r.precioM2 ? '<div style="font-size:.62rem;color:var(--texto2);margin-top:-3px">equivale a ' +
        plata(r.precioM2) + ' el m²</div>' : '') +
-    (r.zing > 0.5 ? linea('Zinguería ' + cartCfg.zingueria + '%', plata(r.zing)) : '') +
+    (cara.zing ? '<div class="phZing"></div>' : '') +
     (r.flete > 0.5 ? linea('Flete (chapa de más de ' + cartCfg.fleteDesdeM + ' m, por viaje)', plata(r.flete)) : '') +
     '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
     linea('Costo', plata(r.costo)) +
     linea('Venta con +' + r.mrg + '%', plata(r.venta)) +
-    (r.sobrante > 0.5 ? linea('Sobrante ' + cartCfg.sobrantePct + '% · ' + r.sobraM2.toFixed(2) + ' m² (sin markup)', plata(r.sobrante)) : '') +
+    '<div class="phSobraC"></div>' +
     '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
     linea('TOTAL', plata(r.total), true);
   cont.appendChild(d);
+  const phZ = d.querySelector('.phZing');
+  if(phZ) lineaPct(phZ, 'Zinguería (plegados y corte)', 'zingueria', r.zing, ()=> renderCara());
+  const phSC = d.querySelector('.phSobraC');
+  if(phSC) lineaPct(phSC, 'Sobrante · ' + r.sobraM2.toFixed(2) + ' m² (sin markup)',
+                    'sobrantePct', r.sobrante, ()=> renderCara());
 
   if(r.avisoLargo){
     const av = document.createElement('div');
@@ -5173,6 +5203,110 @@ function renderCara(){
     }, 'cara');
   };
   cont.appendChild(bAdd);
+}
+
+/* ============ CARTELERÍA · PERCHAS ============
+   Marco de alto × profundidad con una diagonal que forma el triángulo.
+   Una en cada punta y una cada tantos metros. Se puede partir en dos
+   cuando algo del medio no deja pasar la percha entera. */
+
+let perch = {on:false, prof:40, alto:null, cada:2, partida:false,
+             altoA:null, altoB:null, perimId:null, diagId:null, cantOver:null, margen:null};
+
+function perchasCuantas(W){
+  const cada = perch.cada || 2;
+  return Math.max(2, Math.ceil(W / cada) + 1);
+}
+
+function perchaPiezas(alto, prof){
+  const diag = Math.sqrt(alto*alto + prof*prof);
+  return [
+    {q:2, l:prof, d:'Percha · horizontal', cano:'perim'},
+    {q:2, l:alto, d:'Percha · vertical',   cano:'perim'},
+    {q:1, l:diag, d:'Percha · diagonal',   cano:'diag'}
+  ];
+}
+
+function perchasCalcular(){
+  if(!perch.on) return null;
+  const W = (parseFloat((document.getElementById('cartW')||{}).value) || 0) / 100;
+  const H = (parseFloat((document.getElementById('cartH')||{}).value) || 0) / 100;
+  if(W <= 0 || H <= 0) return null;
+  const cn = insumos.filter(x=> x.cat === 'cano');
+  if(!cn.length) return null;
+  const perim = insumos.find(x=> x.id === perch.perimId) ||
+                cn.find(x=> /30\s*[×x]\s*30/.test(x.nombre)) || cn[0];
+  const diagC = insumos.find(x=> x.id === perch.diagId) ||
+                cn.find(x=> /20\s*[×x]\s*20/.test(x.nombre)) || cn[0];
+
+  const prof = (perch.prof || 40) / 100;
+  const cant = (perch.cantOver == null) ? perchasCuantas(W) : perch.cantOver;
+
+  /* alto: entero, o partido en dos tramos */
+  let marcos;
+  if(perch.partida){
+    const a1 = (perch.altoA == null ? Math.round(H*100/2) : perch.altoA) / 100;
+    const a2 = (perch.altoB == null ? Math.round(H*100/2) : perch.altoB) / 100;
+    marcos = [a1, a2];
+  }else{
+    marcos = [(perch.alto == null ? Math.round(H*100) : perch.alto) / 100];
+  }
+
+  /* piezas de UNA posición (uno o dos marcos), después por la cantidad */
+  const piezasUna = [];
+  for(const al of marcos) for(const pz of perchaPiezas(al, prof)) piezasUna.push(pz);
+
+  const piezas = piezasUna.map(x=> ({...x, q: x.q * cant}));
+
+  const mPerim = piezas.filter(x=>x.cano==='perim').reduce((s,x)=> s + x.q*x.l, 0);
+  const mDiag  = piezas.filter(x=>x.cano==='diag').reduce((s,x)=> s + x.q*x.l, 0);
+
+  const tramo = (metros, cano)=>{
+    const pm = precioMetro(cano);
+    const tiraM = (cano && cano.tiraM) || 6;
+    const tiras = metros > 0 ? Math.ceil(metros / tiraM) : 0;
+    const sobra = tiras * tiraM - metros;
+    return {metros, pm, tiraM, tiras, sobra, costo: metros*pm,
+            costoSobra: sobra * pm * ((cartCfg.sobrantePct||0)/100)};
+  };
+  const tp = tramo(mPerim, perim), td = tramo(mDiag, diagC);
+
+  const cano = tp.costo + td.costo;
+  const herrero = cano * ((cartCfg.herrero||0)/100);
+  const costo = cano + herrero;
+  const mrg = (perch.margen == null) ? (cartCfg.margen||0) : perch.margen;
+  const venta = costo * (1 + mrg/100);
+  const sobrante = tp.costoSobra + td.costoSobra;
+
+  return {W, H, cant, prof, marcos, perim, diag:diagC, piezas, tp, td,
+          cano, herrero, costo, venta, sobrante, mrg, total: venta + sobrante};
+}
+
+/* Una línea del desglose con el porcentaje editable ahí mismo.
+   Al cambiarlo se guarda en cartCfg y se recalcula todo. */
+function lineaPct(cont, etq, clave, monto, alCambiar){
+  const f = document.createElement('div');
+  f.style.cssText = 'display:flex;justify-content:space-between;gap:8px;align-items:center';
+  const iz = document.createElement('span');
+  iz.style.cssText = 'color:var(--texto2);display:flex;gap:5px;align-items:center;flex-wrap:wrap';
+  iz.appendChild(document.createTextNode(etq));
+  const i = document.createElement('input');
+  i.type = 'text'; i.setAttribute('inputmode','decimal');
+  i.value = cartCfg[clave];
+  i.style.cssText = 'width:50px;margin:0;padding:3px 5px;font-size:12px;text-align:right;' +
+    'background:var(--fondo);border:1px dashed var(--ambar);border-radius:6px;color:var(--ambar);font-weight:700';
+  i.addEventListener('change', ()=>{
+    cartCfg[clave] = parseFloat(i.value) || 0;
+    guardarDatos();
+    alCambiar();
+  });
+  iz.appendChild(i);
+  iz.appendChild(document.createTextNode('%'));
+  const de = document.createElement('b');
+  de.style.color = 'var(--texto)';
+  de.textContent = plata(monto);
+  f.appendChild(iz); f.appendChild(de);
+  cont.appendChild(f);
 }
 
 /* Plan de corte: acomoda las piezas en tiras enteras, de la más larga a la más
@@ -5289,7 +5423,9 @@ async function planoHerrero(r){
     for(const x of r.piezas){
       doc.text(x.q + ' pieza' + (x.q===1?'':'s') + ' de ' + (x.l*100).toFixed(1) + ' cm', mg, y);
       doc.setTextColor(110,110,110);
-      doc.text(x.d, mg + 170, y);
+      doc.text(x.d, mg + 150, y);
+      doc.setTextColor(60,60,60);
+      doc.text((x.cano === 'perim' ? r.perim.nombre : r.grilla.nombre), W - mg, y, {align:'right'});
       doc.setTextColor(40,40,40);
       y += 15;
     }
@@ -5331,6 +5467,77 @@ async function planoHerrero(r){
     doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
     doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(40,40,40);
     doc.text('Sobrante total: ' + sobraTotal.toFixed(2) + ' m de caño', mg, y);
+
+    /* perchas, si el trabajo las lleva */
+    const rp = perchasCalcular();
+    if(rp){
+      doc.addPage(); y = 50;
+      doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(20,20,20);
+      doc.text('PERCHAS · ' + rp.cant + ' unidades', mg, y); y += 8;
+      doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 22;
+
+      /* dibujo lateral con el triángulo */
+      const escP = Math.min(160 / rp.prof, 300 / rp.marcos.reduce((s,a)=>s+a,0));
+      let oyP = y, oxP = mg + 40;
+      for(const al of rp.marcos){
+        const w2 = rp.prof*escP, h2 = al*escP;
+        doc.setDrawColor(30,30,30); doc.setLineWidth(3);
+        doc.rect(oxP, oyP, w2, h2);
+        doc.setLineWidth(1.2);
+        doc.line(oxP, oyP, oxP + w2, oyP + h2);
+        doc.setDrawColor(150,150,150); doc.setLineWidth(0.6);
+        doc.setFontSize(9); doc.setTextColor(60,60,60);
+        doc.line(oxP - 14, oyP, oxP - 14, oyP + h2);
+        doc.text(Math.round(al*100) + ' cm', oxP - 18, oyP + h2/2, {align:'right'});
+        oyP += h2 + 16;
+      }
+      const cyP = oyP + 4;
+      doc.line(oxP, cyP, oxP + rp.prof*escP, cyP);
+      doc.text('prof. ' + Math.round(rp.prof*100) + ' cm', oxP + rp.prof*escP/2, cyP - 4, {align:'center'});
+      y = cyP + 26;
+
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(20,20,20);
+      doc.text('DESPIECE DE PERCHAS  (' + rp.cant + ' unidades' +
+               (rp.marcos.length>1 ? ', partidas en dos' : '') + ')', mg, y); y += 6;
+      doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
+      doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40);
+      for(const x of rp.piezas){
+        doc.text(x.q + ' pieza' + (x.q===1?'':'s') + ' de ' + (x.l*100).toFixed(1) + ' cm', mg, y);
+        doc.setTextColor(110,110,110);
+        doc.text(x.d, mg + 150, y);
+        doc.setTextColor(60,60,60);
+        doc.text(x.cano === 'diag' ? rp.diag.nombre : rp.perim.nombre, W - mg, y, {align:'right'});
+        doc.setTextColor(40,40,40);
+        y += 15;
+      }
+      y += 8;
+      doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+      doc.text('PLAN DE CORTE · PERCHAS', mg, y); y += 14;
+      doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+      let sobraP = 0;
+      for(const g of [{t:rp.perim, pz:rp.piezas.filter(x=>x.cano==='perim')},
+                      {t:rp.diag,  pz:rp.piezas.filter(x=>x.cano==='diag')}]){
+        if(!g.pz.length) continue;
+        const tiraM = g.t.tiraM || 6;
+        const bs = planCorte(g.pz, tiraM);
+        doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
+        doc.text(g.t.nombre + ' · ' + bs.length + ' tiras de ' + tiraM + ' m', mg, y); y += 13;
+        doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+        bs.forEach((b2, i)=>{
+          if(y > 770){ doc.addPage(); y = 60; }
+          doc.text('Tira ' + (i+1) + ':  ' + b2.cortes.map(c=> (c.l*100).toFixed(0)+' cm').join('  +  '), mg + 10, y);
+          doc.setTextColor(140,140,140);
+          doc.text('sobra ' + (b2.libre*100).toFixed(0) + ' cm', W - mg, y, {align:'right'});
+          doc.setTextColor(60,60,60);
+          sobraP += b2.libre;
+          y += 13;
+        });
+        y += 6;
+      }
+      doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
+      doc.text('Sobrante de perchas: ' + sobraP.toFixed(2) + ' m', mg, y);
+    }
 
     doc.save('Estructura ' + Math.round(r.W*100) + 'x' + Math.round(r.H*100) + '.pdf');
   }catch(e){ toast('No pude generar el plano: ' + e.message); }
@@ -5625,6 +5832,156 @@ function panelNuevoInsumo(cat, caja, boton){
 
   caja.appendChild(z);
   inNombre.focus();
+}
+
+function perchaDibujar(cv, r){
+  if(!cv || !r) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.min(240, cv.parentElement ? cv.parentElement.clientWidth : 240);
+  const altoTot = r.marcos.reduce((s,a)=> s+a, 0) + (r.marcos.length>1 ? 0.06 : 0);
+  const esc = Math.min((cssW - 60) / r.prof, 150 / altoTot);
+  const cssH = altoTot * esc + 30;
+  cv.style.height = cssH + 'px';
+  cv.width = cssW * dpr; cv.height = cssH * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+  let oy = 6;
+  const ox = 34;
+  for(const al of r.marcos){
+    const w = r.prof * esc, h = al * esc;
+    ctx.strokeStyle = '#8b5f9f'; ctx.lineWidth = 4;
+    ctx.strokeRect(ox, oy, w, h);
+    ctx.strokeStyle = '#b48ead'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox+w, oy+h); ctx.stroke();
+    ctx.fillStyle = '#888'; ctx.font = '9px system-ui, sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(al*100) + ' cm', ox - 5, oy + h/2 + 3);
+    oy += h + (r.marcos.length>1 ? 6*esc/esc*6 : 0);
+  }
+  ctx.fillStyle = '#666'; ctx.textAlign = 'center';
+  ctx.fillText('prof. ' + Math.round(r.prof*100) + ' cm', ox + r.prof*esc/2, cssH - 6);
+}
+
+function renderPerchas(){
+  const cont = document.getElementById('cartPerchas');
+  if(!cont) return;
+  cont.innerHTML = '';
+
+  const lb = document.createElement('label');
+  lb.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--texto2);margin-bottom:8px';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = perch.on;
+  cb.onchange = ()=>{ perch.on = cb.checked; renderPerchas(); };
+  lb.appendChild(cb);
+  lb.appendChild(document.createTextNode('Lleva perchas (separadas de la pared)'));
+  cont.appendChild(lb);
+  if(!perch.on) return;
+
+  const r = perchasCalcular();
+  if(!r){ cont.innerHTML += '<div style="font-size:.7rem;color:var(--texto2)">Poné la medida del cartel.</div>'; return; }
+
+  const num = (etq, valor, unidad, alCambiar, marcado)=>{
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px';
+    const l = document.createElement('span');
+    l.style.cssText = 'flex:1 1 150px;font-size:.7rem;color:var(--texto2)';
+    l.textContent = etq;
+    const i = document.createElement('input');
+    i.type = 'text'; i.setAttribute('inputmode','decimal');
+    i.value = valor;
+    i.style.cssText = 'width:76px;margin:0;padding:7px;font-size:13px;text-align:right;background:var(--fondo);' +
+      'border:1px ' + (marcado ? 'dashed var(--ambar)' : 'solid var(--borde)') + ';border-radius:8px;color:var(--texto)';
+    i.addEventListener('change', ()=>{ alCambiar(parseFloat(i.value)); renderPerchas(); });
+    const u = document.createElement('span');
+    u.style.cssText = 'font-size:.68rem;color:var(--texto2)'; u.textContent = unidad;
+    f.appendChild(l); f.appendChild(i); f.appendChild(u);
+    return f;
+  };
+
+  cont.appendChild(num('Profundidad', perch.prof, 'cm', v=> perch.prof = isNaN(v)?40:v));
+  cont.appendChild(num('Una percha cada', perch.cada, 'm', v=> perch.cada = isNaN(v)?2:v));
+  cont.appendChild(num('Cantidad de perchas', r.cant, 'u',
+    v=> perch.cantOver = isNaN(v)?null:Math.max(1,Math.round(v)), perch.cantOver!=null));
+
+  const lp = document.createElement('label');
+  lp.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2);margin:2px 0 6px';
+  const cp = document.createElement('input');
+  cp.type = 'checkbox'; cp.checked = perch.partida;
+  cp.onchange = ()=>{ perch.partida = cp.checked; renderPerchas(); };
+  lp.appendChild(cp);
+  lp.appendChild(document.createTextNode('Partir en dos (algo del medio no deja pasar la percha entera)'));
+  cont.appendChild(lp);
+
+  if(perch.partida){
+    cont.appendChild(num('Alto de arriba', r.marcos[0]*100, 'cm', v=> perch.altoA = isNaN(v)?null:v, perch.altoA!=null));
+    cont.appendChild(num('Alto de abajo',  r.marcos[1]*100, 'cm', v=> perch.altoB = isNaN(v)?null:v, perch.altoB!=null));
+  }else{
+    cont.appendChild(num('Alto de la percha', r.marcos[0]*100, 'cm', v=> perch.alto = isNaN(v)?null:v, perch.alto!=null));
+  }
+
+  const cn = insumos.filter(x=> x.cat==='cano');
+  const selC = (etq, val, fn)=>{
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px';
+    const l = document.createElement('span');
+    l.style.cssText = 'flex:1 1 80px;font-size:.7rem;color:var(--texto2)'; l.textContent = etq;
+    const se = document.createElement('select');
+    se.style.cssText = 'flex:2 1 170px;margin:0;padding:8px;font-size:12.5px;background:var(--fondo);' +
+      'border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+    se.innerHTML = cn.map(c=> '<option value="' + c.id + '"' + (c.id===val ? ' selected' : '') +
+      '>' + c.nombre + '</option>').join('');
+    se.onchange = ()=>{ fn(se.value); renderPerchas(); };
+    f.appendChild(l); f.appendChild(se);
+    return f;
+  };
+  cont.appendChild(selC('Marco', r.perim.id, v=> perch.perimId = v));
+  cont.appendChild(selC('Diagonal', r.diag.id, v=> perch.diagId = v));
+
+  const cv = document.createElement('canvas');
+  cv.style.cssText = 'width:100%;max-width:240px;display:block;margin:6px auto 10px';
+  cont.appendChild(cv);
+
+  const d = document.createElement('div');
+  d.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;' +
+    'padding:10px;font-size:.7rem;line-height:1.7';
+  const linea = (a2,b2,f)=> '<div style="display:flex;justify-content:space-between;gap:8px">' +
+    '<span style="color:var(--texto2)">' + a2 + '</span><b style="' +
+    (f ? 'color:var(--ambar)' : 'color:var(--texto)') + '">' + b2 + '</b></div>';
+  d.innerHTML =
+    linea(r.cant + ' percha' + (r.cant===1?'':'s') + (r.marcos.length>1 ? ' partidas en dos' : '') +
+          ' · ' + r.tp.metros.toFixed(2) + ' m de marco', plata(r.tp.costo)) +
+    linea('Diagonales · ' + r.td.metros.toFixed(2) + ' m', plata(r.td.costo)) +
+    '<div class="phHerreroP"></div>' +
+    '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
+    linea('Costo', plata(r.costo)) +
+    linea('Venta con +' + r.mrg + '%', plata(r.venta)) +
+    (r.sobrante > 0.5 ? linea('Sobrante (sin markup)', plata(r.sobrante)) : '') +
+    '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
+    linea('TOTAL', plata(r.total), true);
+  cont.appendChild(d);
+  lineaPct(d.querySelector('.phHerreroP'), 'Herrero', 'herrero', r.herrero, ()=> renderPerchas());
+
+  const bAdd = document.createElement('button');
+  const edP = cartEditando && cartEditando.cart && cartEditando.cart.tipo === 'perchas';
+  bAdd.textContent = (edP ? '✓ Corregir las perchas · ' : '＋ Agregar las perchas al pedido · ') + plata(r.total);
+  bAdd.style.cssText = 'width:100%;margin-top:10px;border-radius:10px;padding:11px;font-weight:800;' +
+    'font-size:.76rem;background:#b48ead;border:none;color:#1a1420';
+  bAdd.onclick = ()=>{
+    if(!cartPedido){ toast('Abrí un pedido primero'); return; }
+    cartGuardarItem({
+      nombre: r.cant + ' percha' + (r.cant===1?'':'s') + ' de ' +
+              r.marcos.map(a=>Math.round(a*100)).join('+') + '×' + Math.round(r.prof*100) + ' cm',
+      cant: 1,
+      precio: Math.round(r.total),
+      costoReal: Math.round(r.costo),
+      cart: {tipo:'perchas', W:r.W, H:r.H, cant:r.cant, prof:r.prof, marcos:r.marcos,
+             perim:r.perim.nombre, diag:r.diag.nombre, mrg:r.mrg,
+             metros: +(r.tp.metros + r.td.metros).toFixed(2)}
+    }, 'perchas');
+  };
+  cont.appendChild(bAdd);
+
+  perchaDibujar(cv, r);
 }
 
 function renderCartCfg(){
@@ -8970,7 +9327,8 @@ async function generarPDFPedido(p, version){
     /* Esquema para el cliente: solo el rectángulo y las medidas de afuera a afuera.
        Nada de varillas ni caños: eso va en el plano del herrero. */
     if(p.presuEsquema){
-      const bs = (p.items||[]).filter(i=> i.cart && i.cart.tipo === 'bastidor' && i.conf !== false);
+      const bs = (p.items||[]).filter(i=> i.cart &&
+        (i.cart.tipo === 'bastidor' || i.cart.tipo === 'perchas') && i.conf !== false);
       if(bs.length){
         y += 26;
         if(y > 640){ doc.addPage(); y = 60; }
@@ -8979,6 +9337,16 @@ async function generarPDFPedido(p, version){
         y += 18;
         for(const it of bs){
           const c = it.cart;
+          if(c.tipo === 'perchas'){
+            /* al cliente solo le decimos cuántas y de qué medida */
+            if(y + 40 > 780){ doc.addPage(); y = 60; }
+            doc.setFont('Fira','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+            doc.text('▪ ' + c.cant + ' percha' + (c.cant===1?'':'s') + ' de separación · ' +
+                     (c.marcos||[]).map(a=>Math.round(a*100)).join(' + ') + ' × ' +
+                     Math.round(c.prof*100) + ' cm', margen, y);
+            y += 20;
+            continue;
+          }
           const escala = Math.min((W - margen*2 - 90) / c.W, 120 / c.H);
           const w2 = c.W * escala, h2 = c.H * escala;
           if(y + h2 + 50 > 780){ doc.addPage(); y = 60; }
@@ -10094,11 +10462,20 @@ function abrirCarteleria(p, item){
     if(c.tipo === 'bastidor'){
       bast.vert = c.vert; bast.horiz = c.horiz;
       bast.corte = c.corte || '90';
+      bast.herreroId = c.herreroId || null;
       bast.margen = (c.mrg == null) ? null : c.mrg;
       const bp = insumos.find(x=> x.cat==='cano' && x.nombre === c.perim);
       const bg = insumos.find(x=> x.cat==='cano' && x.nombre === c.grilla);
       if(bp) bast.perimId = bp.id;
       if(bg) bast.grillaId = bg.id;
+    }else if(c.tipo === 'perchas'){
+      perch.on = true;
+      perch.prof = Math.round(c.prof*100);
+      perch.cantOver = c.cant;
+      perch.partida = (c.marcos||[]).length > 1;
+      if(perch.partida){ perch.altoA = Math.round(c.marcos[0]*100); perch.altoB = Math.round(c.marcos[1]*100); }
+      else perch.alto = Math.round((c.marcos||[0])[0]*100);
+      perch.margen = (c.mrg == null) ? null : c.mrg;
     }else{
       const cm = insumos.find(x=> x.nombre === c.mat);
       if(cm) cara.matId = cm.id;
@@ -10115,6 +10492,7 @@ function abrirCarteleria(p, item){
   renderCartCfg();
   renderCara();
   renderBastidor();
+  renderPerchas();
   document.getElementById('modalCarteleria').classList.add('abierto');
 }
 
@@ -10135,7 +10513,7 @@ function cartGuardarItem(nuevo, tipo){
 }
 ['cartW','cartH'].forEach(id=>{
   const el = document.getElementById(id);
-  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderCara(); renderBastidor(); });
+  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderCara(); renderBastidor(); renderPerchas(); });
 });
 document.getElementById('btnCarteleria').onclick = ()=>{
   if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirCarteleria(p); }
@@ -10837,6 +11215,21 @@ function reponerAlucos(){
 }
 reponerAlucos();
 setTimeout(reponerAlucos, 4000);   /* por si los datos de la nube llegan más tarde */
+
+/* Los herreros con los que trabajamos, para que el bastidor vaya a su cuenta */
+function reponerHerreros(){
+  if(!Array.isArray(proveedores)) return;
+  let sumo = false;
+  for(const n of ['Fedrizzi', 'Vargas']){
+    if(!proveedores.some(x=> (x.nombre||'').toLowerCase() === n.toLowerCase())){
+      proveedores.push({id: uid(), nombre: n, rubro: 'Herrería', creado: Date.now()});
+      sumo = true;
+    }
+  }
+  if(sumo) guardarDatos();
+}
+reponerHerreros();
+setTimeout(reponerHerreros, 4000);
 // prueba de persistencia al arrancar: escribir y releer una clave de test
 (async ()=>{
   try{
