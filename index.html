@@ -284,12 +284,13 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v129</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v130</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
       <button id="btnNube" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☁️</button>
       <button id="btnBackup" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">💾</button>
+      <button id="btnGuardarYa" title="Guardar ahora y confirmar" style="background:var(--panel);border:1px solid #4cd27d;color:#4cd27d;border-radius:10px;padding:7px 12px;font-size:.95rem">✓</button>
     </div>
   </div>
   <div class="vistas">
@@ -7801,6 +7802,10 @@ const DBX_REDIRECT = 'https://todoletras.github.io/taller/';
 let dbxTokens = null, dbxRev = null, dbxEstado = 'off', dbxUltima = null;
 let ultimoCambioLocal = null, dbxTimerSubida = null, dbxSubiendo = false;
 let dbxTamRemoto = null;
+/* CANDADO DE ARRANQUE: hasta que este dispositivo no baje los datos de la nube
+   (o confirme que la nube está vacía), NO puede subir nada. Un dispositivo recién
+   abierto está vacío, y si sube, pisa todo. Esto lo hace imposible. */
+let dbxBajoOk = false;
 function tamanioDatos(d){
   return (d.tareas||[]).length + (d.clientes||[]).length + (d.proveedores||[]).length +
          (d.pedidos||[]).length + (d.movimientos||[]).length;
@@ -7819,6 +7824,53 @@ function pintarNube(){
   b.style.color = colores[dbxEstado] || 'var(--texto2)';
   b.style.borderColor = dbxEstado==='ok' ? 'rgba(76,210,125,.5)' : dbxEstado==='error' ? '#ff7a7a' : 'var(--borde)';
 }
+/* Cartel grande y fijo cuando el dispositivo todavía no bajó los datos */
+function avisoSinBajar(mostrar){
+  let el = document.getElementById('avisoSinBajar');
+  if(!mostrar){ if(el) el.remove(); return; }
+  if(el) return;
+  el = document.createElement('div');
+  el.id = 'avisoSinBajar';
+  el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#7a1f1f;' +
+    'color:#fff;padding:12px 14px;font-size:.78rem;line-height:1.45;box-shadow:0 -4px 18px rgba(0,0,0,.4)';
+  el.innerHTML = '<b>⚠️ Este dispositivo todavía no bajó tus datos.</b><br>' +
+    'No cargues nada acá: no se va a guardar en la nube. ' +
+    'Tocá <b>☁️ → Sincronizar ahora</b> para traerlos.';
+  const b2 = document.createElement('button');
+  b2.textContent = '☁️ Traer mis datos ahora';
+  b2.style.cssText = 'width:100%;margin-top:9px;border-radius:9px;padding:10px;font-weight:800;' +
+    'font-size:.76rem;background:#fff;border:none;color:#7a1f1f';
+  b2.onclick = ()=> dbxSincronizar(true);
+  el.appendChild(b2);
+  document.body.appendChild(el);
+}
+
+/* Guardar ahora: sube sí o sí y avisa si quedó guardado de verdad */
+async function guardarAhora(btn){
+  const orig = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = 'Guardando…'; btn.disabled = true; }
+  try{
+    await guardarDatos();
+    if(!dbxTokens){
+      toast('Guardado en este dispositivo (sin nube conectada)');
+    }else if(!dbxBajoOk){
+      avisoSinBajar(true);
+      toast('⚠️ No se puede subir: este dispositivo todavía no bajó tus datos');
+    }else{
+      clearTimeout(dbxTimerSubida);
+      const ok = await dbxSubir();
+      toast(ok ? '✅ Guardado en la nube. Podés cerrar tranquilo.'
+               : '⚠️ No se pudo subir. Probá Sincronizar ahora antes de cerrar.');
+    }
+  }catch(e){ toast('⚠️ No se pudo guardar'); }
+  if(btn){ btn.textContent = orig; btn.disabled = false; }
+}
+
+(function engancharGuardarYa(){
+  const b = document.getElementById('btnGuardarYa');
+  if(b) b.onclick = (e)=> guardarAhora(e.target);
+})();
+
 function dbxProgramarSubida(){
   if(!dbxTokens) return;
   clearTimeout(dbxTimerSubida);
@@ -7881,6 +7933,11 @@ async function dbxProcesarRetorno(){
 }
 async function dbxSubir(){
   if(dbxSubiendo || !dbxTokens) return false;
+  // CANDADO: sin haber bajado primero, este dispositivo no sube NADA.
+  if(!dbxBajoOk){
+    dbxEstado = 'error'; pintarNube(); avisoSinBajar(true);
+    return false;
+  }
   // PROTECCIÓN: si este dispositivo tiene muchos menos datos que la nube, no la pisa
   if(dbxTamRemoto !== null && dbxTamRemoto >= 10 && tamanioLocal() < dbxTamRemoto * 0.5){
     dbxEstado = 'error'; pintarNube();
@@ -7956,7 +8013,8 @@ async function dbxSincronizar(mostrar){
       headers:{'Authorization':'Bearer '+t, 'Content-Type':'application/json'},
       body: JSON.stringify({path:'/datos.json'})});
     if(rm.status===409){
-      // no existe todavía en la nube: subir lo local
+      // no existe todavía en la nube: este dispositivo es el primero, puede subir
+      dbxBajoOk = true; avisoSinBajar(false);
       const ok = await dbxSubir();
       if(mostrar && ok) toast('☁️ Datos subidos a la nube ✓');
       return;
@@ -7964,6 +8022,7 @@ async function dbxSincronizar(mostrar){
     if(!rm.ok){ dbxEstado='error'; pintarNube(); return; }
     const meta = await rm.json();
     if(meta.rev === dbxRev){
+      dbxBajoOk = true; avisoSinBajar(false);
       dbxUltima = Date.now(); dbxEstado='ok'; pintarNube();
       if(mostrar) toast('☁️ Todo sincronizado ✓');
       return;
@@ -7974,6 +8033,7 @@ async function dbxSincronizar(mostrar){
         'Dropbox-API-Arg': JSON.stringify({path:'/datos.json'})}});
     if(!rd.ok){ dbxEstado='error'; pintarNube(); return; }
     const d = JSON.parse(await rd.text());
+    dbxBajoOk = true; avisoSinBajar(false);   // ya tenemos los datos de la nube
     const remoto = Date.parse(d.fecha||0) || 0;
     const local = Date.parse(ultimoCambioLocal||0) || 0;
     dbxRev = meta.rev;
@@ -7982,6 +8042,8 @@ async function dbxSincronizar(mostrar){
     await window.storage.set('dbx-tam', String(dbxTamRemoto)).catch(()=>{});
     const localEsChico = dbxTamRemoto >= 10 && tamanioLocal() < dbxTamRemoto * 0.5;
     if(remoto >= local || localEsChico){
+      /* red de seguridad: antes de que lo remoto pise lo local, guardamos una copia */
+      try{ await window.storage.set('respaldo-antes-de-bajar', datosCompletos()); }catch(e){}
       aplicarDatosRemotos(d);
       ultimoCambioLocal = d.fecha;
       guardarDatos();
@@ -8085,6 +8147,12 @@ function renderNube(){
       est.style.cssText = 'background:rgba(76,210,125,.1);color:#4cd27d;border:1px solid rgba(76,210,125,.4)';
       est.textContent = '✓ Conectado. ' + (dbxUltima ? 'Última sincronización: ' + new Date(dbxUltima).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : 'Sincronizando…');
     }
+    if(!dbxBajoOk){
+      est.style.cssText = 'background:rgba(255,122,122,.15);color:#ff7a7a;border:1px solid #ff7a7a';
+      est.textContent = '⚠️ Este dispositivo TODAVÍA NO bajó tus datos. No cargues nada hasta traerlos.';
+    }
+    boton('💾 Guardar ahora (y confirmar)', 'background:#4cd27d;color:#0a1a10')
+      .onclick = async (e)=>{ await guardarAhora(e.target); renderNube(); };
     boton('🔄 Sincronizar ahora', 'background:var(--ambar);color:#1a1200')
       .onclick = async ()=>{ await dbxSincronizar(true); renderNube(); };
     boton('Desconectar este dispositivo', 'background:var(--panel2);color:#ff7a7a;border:1px solid #ff7a7a')
@@ -8111,6 +8179,7 @@ modalNube.addEventListener('click', e=>{ if(e.target===modalNube) modalNube.clas
     if(rv && rv.value) dbxRev = rv.value;
     const tm = await window.storage.get('dbx-tam').catch(()=>null);
     if(tm && tm.value) dbxTamRemoto = parseInt(tm.value)||null;
+    dbxBajoOk = false;   /* arranca bloqueado hasta bajar de la nube */
   }catch(e){}
   pintarNube();
   await pedirIdentidad();
