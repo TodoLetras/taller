@@ -138,6 +138,11 @@
   .hoja label{display:block;font-size:.72rem;color:var(--texto2);margin-bottom:5px;
     text-transform:uppercase;letter-spacing:.08em;font-weight:700}
   input[type="date"]{color-scheme:dark}
+  /* los tildes no deben estirarse como los campos de texto */
+  input[type="checkbox"]{width:19px;height:19px;min-width:19px;flex:0 0 19px;margin:0;accent-color:var(--ambar)}
+  /* etiqueta de un tilde: texto normal al lado, no en mayúsculas al fondo */
+  label.tilde{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;
+    font-weight:500;font-size:.74rem;color:var(--texto2);line-height:1.35;margin-bottom:8px}
   .cats-pick{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
   .cats-pick button{background:var(--panel2);border:1px solid var(--borde);color:var(--texto2);
     border-radius:999px;padding:9px 14px;font-size:.78rem;font-weight:700}
@@ -284,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v134</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v135</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -4220,7 +4225,7 @@ function panelMaterialUV(p, idx, filaDom){
 
   let aTodos = iguales.length > 1;
   const chk = document.createElement('label');
-  chk.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2);flex:1';
+  chk.style.cssText = 'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:500;font-size:.74rem;color:var(--texto2);flex:1';
   const cb = document.createElement('input');
   cb.type = 'checkbox'; cb.checked = aTodos;
   cb.onchange = ()=> aTodos = cb.checked;
@@ -5118,7 +5123,7 @@ function renderCara(){
 
   /* zinguería */
   const lz = document.createElement('label');
-  lz.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2);margin-bottom:8px';
+  lz.style.cssText = 'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:500;font-size:.74rem;color:var(--texto2);margin-bottom:8px';
   const cz = document.createElement('input');
   cz.type = 'checkbox'; cz.checked = cara.zing;
   cz.onchange = ()=>{ cara.zing = cz.checked; renderCara(); };
@@ -5313,7 +5318,7 @@ function renderVinilo(){
   cont.innerHTML = '';
 
   const lb = document.createElement('label');
-  lb.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--texto2);margin-bottom:8px';
+  lb.style.cssText = 'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:500;font-size:.74rem;color:var(--texto2);margin-bottom:8px';
   const cb = document.createElement('input');
   cb.type = 'checkbox'; cb.checked = vin.on;
   cb.onchange = ()=>{ vin.on = cb.checked; renderVinilo(); };
@@ -6208,7 +6213,7 @@ function renderPerchas(){
   cont.innerHTML = '';
 
   const lb = document.createElement('label');
-  lb.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--texto2);margin-bottom:8px';
+  lb.style.cssText = 'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:500;font-size:.74rem;color:var(--texto2);margin-bottom:8px';
   const cb = document.createElement('input');
   cb.type = 'checkbox'; cb.checked = perch.on;
   cb.onchange = ()=>{ perch.on = cb.checked; renderPerchas(); };
@@ -6244,7 +6249,7 @@ function renderPerchas(){
     v=> perch.cantOver = isNaN(v)?null:Math.max(1,Math.round(v)), perch.cantOver!=null));
 
   const lp = document.createElement('label');
-  lp.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2);margin:2px 0 6px';
+  lp.style.cssText = 'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:500;font-size:.74rem;color:var(--texto2);margin:2px 0 6px';
   const cp = document.createElement('input');
   cp.type = 'checkbox'; cp.checked = perch.partida;
   cp.onchange = ()=>{ perch.partida = cp.checked; renderPerchas(); };
@@ -6928,7 +6933,7 @@ function renderBuscadorItems(p){
   barra.appendChild(bTit);
 
   const lblMed = document.createElement('label');
-  lblMed.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2)';
+  lblMed.style.cssText = 'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:500;font-size:.74rem;color:var(--texto2)';
   const cbMed = document.createElement('input');
   cbMed.type = 'checkbox'; cbMed.checked = presuConMedidas(p);
   cbMed.onchange = ()=>{ p.presuMedidas = cbMed.checked; guardarDatos();
@@ -6940,7 +6945,7 @@ function renderBuscadorItems(p){
   /* solo aparece si el pedido tiene algún bastidor */
   if((p.items||[]).some(i=> i.cart && i.cart.tipo === 'bastidor')){
     const lblB = document.createElement('label');
-    lblB.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2)';
+    lblB.style.cssText = 'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:500;font-size:.74rem;color:var(--texto2)';
     const cbB = document.createElement('input');
     cbB.type = 'checkbox'; cbB.checked = !!p.presuBastidor;
     cbB.onchange = ()=>{ p.presuBastidor = cbB.checked; guardarDatos();
@@ -6950,7 +6955,7 @@ function renderBuscadorItems(p){
     barra.appendChild(lblB);
 
     const lblE = document.createElement('label');
-    lblE.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2)';
+    lblE.style.cssText = 'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:500;font-size:.74rem;color:var(--texto2)';
     const cbE = document.createElement('input');
     cbE.type = 'checkbox'; cbE.checked = !!p.presuEsquema;
     cbE.onchange = ()=>{ p.presuEsquema = cbE.checked; guardarDatos();
