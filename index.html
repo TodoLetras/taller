@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v114</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v115</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -998,9 +998,9 @@ function insumosSemilla(){
     I({cat:'chapa', nombre:'Chapa Cincalum acanalada C-22', prov:'Acerco', unidad:'u', precio:21116.11}),
     I({cat:'chapa', nombre:'Chapa Cincalum trapezoidal T-1010 C-25', prov:'Acerco', unidad:'u', precio:14750.19}),
     /* --- aluco --- */
-    I({cat:'aluco', nombre:'Aluminio compuesto Cril 150×500', prov:'Cril', unidad:'m2',
+    I({cat:'aluco', nombre:'Aluminio compuesto 150×500', prov:'Colorcril', unidad:'m2',
        hojaW:1.50, hojaH:5.00, precio:528165}),
-    I({cat:'aluco', nombre:'Aluminio compuesto Cril 150×250', prov:'Cril', unidad:'m2',
+    I({cat:'aluco', nombre:'Aluminio compuesto 150×250', prov:'Colorcril', unidad:'m2',
        hojaW:1.50, hojaH:2.50, precio:264082}),
     /* --- MDF: recargo del 10% porque no lo compramos en Moconá --- */
     I({cat:'mdf', nombre:'MDF crudo 5,5 mm', prov:'Moconá', unidad:'m2', hojaW:1.83, hojaH:2.60, recargo:10}),
@@ -4288,7 +4288,20 @@ function renderPedidoItems(p){
 
     const d = document.createElement('div');
     d.className = 'ped-item' + ((it.uv || it.od) ? ' uv' : '');
-    if(it.od){
+    if(it.cart){
+      /* bastidor o cara: se toca el lápiz y vuelve a abrir Cartelería con todo puesto */
+      d.innerHTML =
+        '<div class="pi-cab"><div class="pi-nombre"></div>' +
+        '<button class="editar-cart" title="Editar">✎</button>' +
+        '<button class="mover-item" title="Mover este ítem">⇅</button><button class="dup-item" title="Duplicar este ítem">⧉</button><button class="copiar-item">📋</button><button class="quitar-item">✕</button></div>' +
+        '<div class="pi-medidas"><span style="color:#b48ead">🏗 ' +
+        (it.cart.tipo === 'bastidor' ? 'bastidor' : 'cara') +
+        '</span><span class="pi-sub">= ' + plata(subtotalItem(it)) + '</span></div>';
+      d.querySelector('.pi-nombre').textContent = it.nombre;
+      const bE = d.querySelector('.editar-cart');
+      bE.style.cssText = 'background:none;border:none;color:#b48ead;font-size:.9rem;padding:2px 4px';
+      bE.onclick = ()=>{ modalPedido.classList.remove('abierto'); abrirCarteleria(p, it); };
+    }else if(it.od){
       d.innerHTML =
         '<div class="pi-cab"><div class="pi-nombre"></div>' +
         '<button class="editar-od" title="Editar">✎</button>' +
@@ -4771,13 +4784,13 @@ function renderBastidor(){
   }
 
   const bAdd = document.createElement('button');
-  bAdd.textContent = '＋ Agregar el bastidor al pedido · ' + plata(r.total);
+  const editando = cartEditando && cartEditando.cart && cartEditando.cart.tipo === 'bastidor';
+  bAdd.textContent = (editando ? '✓ Corregir el bastidor · ' : '＋ Agregar el bastidor al pedido · ') + plata(r.total);
   bAdd.style.cssText = 'width:100%;margin-top:10px;border-radius:10px;padding:11px;font-weight:800;' +
     'font-size:.76rem;background:#b48ead;border:none;color:#1a1420';
   bAdd.onclick = ()=>{
     if(!cartPedido){ toast('Abrí un pedido primero'); return; }
-    cartPedido.items.push({
-      id: uid(),
+    cartGuardarItem({
       nombre: 'Bastidor ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) + ' cm',
       cant: 1,
       precio: Math.round(r.total),
@@ -4785,11 +4798,7 @@ function renderBastidor(){
       cart: {tipo:'bastidor', W:r.W, H:r.H, vert:r.vert, horiz:r.horiz,
              perim:r.perim.nombre, grilla:r.grilla.nombre,
              metros: +(r.tp.metros + r.tg.metros).toFixed(2)}
-    });
-    registrar('cargó un bastidor de ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) +
-              ' cm en el pedido de ' + nombreClienteId(cartPedido.cliente) + ' (' + plata(r.total) + ')');
-    guardarDatos(); renderPedidos(); renderPedidoItems(cartPedido);
-    toast('Bastidor agregado ✓');
+    }, 'bastidor');
   };
   cont.appendChild(bAdd);
 
@@ -4960,13 +4969,13 @@ function renderCara(){
   }
 
   const bAdd = document.createElement('button');
-  bAdd.textContent = '＋ Agregar la cara al pedido · ' + plata(r.total);
+  const editando = cartEditando && cartEditando.cart && cartEditando.cart.tipo === 'cara';
+  bAdd.textContent = (editando ? '✓ Corregir la cara · ' : '＋ Agregar la cara al pedido · ') + plata(r.total);
   bAdd.style.cssText = 'width:100%;margin-top:10px;border-radius:10px;padding:11px;font-weight:800;' +
     'font-size:.76rem;background:#b48ead;border:none;color:#1a1420';
   bAdd.onclick = ()=>{
     if(!cartPedido){ toast('Abrí un pedido primero'); return; }
-    cartPedido.items.push({
-      id: uid(),
+    cartGuardarItem({
       nombre: r.mat.nombre + ' · ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) + ' cm',
       cant: 1,
       precio: Math.round(r.total),
@@ -4974,11 +4983,7 @@ function renderCara(){
       cart: {tipo:'cara', W:r.W, H:r.H, mat:r.mat.nombre,
              hojas:r.hojas||null, tiras:r.tiras||null, largo:r.largoReal||null,
              zing:cara.zing, aprov:+(r.aprov||1).toFixed(3)}
-    });
-    registrar('cargó una cara de ' + r.mat.nombre + ' en el pedido de ' +
-              nombreClienteId(cartPedido.cliente) + ' (' + plata(r.total) + ')');
-    guardarDatos(); renderPedidos(); renderPedidoItems(cartPedido);
-    toast('Cara agregada ✓');
+    }, 'cara');
   };
   cont.appendChild(bAdd);
 }
@@ -5027,7 +5032,8 @@ function renderInsumos(){
 
   for(const [cat, titulo] of CART_CATS){
     const items = insumos.filter(x=> x.cat === cat);
-    if(!items.length) continue;
+    /* la categoría se muestra igual aunque esté vacía: si no, borrás todo
+       y te quedás sin el botón para volver a cargar */
 
     const d = document.createElement('details');
     d.open = !!cartAbiertos[cat];
@@ -5036,7 +5042,8 @@ function renderInsumos(){
     const sum = document.createElement('summary');
     sum.style.cssText = 'padding:9px 11px;font-size:.76rem;font-weight:700;cursor:pointer';
     const conPrecio = items.filter(x=>x.precio).length;
-    sum.textContent = titulo + '  (' + conPrecio + '/' + items.length + ' con precio)';
+    sum.textContent = titulo + (items.length ? '  (' + conPrecio + '/' + items.length + ' con precio)'
+                                             : '  (vacío)');
     d.appendChild(sum);
 
     const caja = document.createElement('div');
@@ -9663,14 +9670,56 @@ function vcRenderConfig(){
 }
 document.getElementById('btnViniloCorte').onclick = ()=>{ if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirViniloCorte(p); } };
 let cartPedido = null;
-function abrirCarteleria(p){
+let cartEditando = null;   /* el ítem que estamos corrigiendo, si venimos del lápiz */
+
+function abrirCarteleria(p, item){
   cartPedido = p;
+  cartEditando = item || null;
   bast = {on:false, W:0, H:0, perimId:bast.perimId, grillaId:bast.grillaId, vert:null, horiz:null};
+  cara = {matId:cara.matId, orient:'auto', zing:false};
+
+  const iw = document.getElementById('cartW'), ih = document.getElementById('cartH');
+  if(item && item.cart){
+    const c = item.cart;
+    iw.value = Math.round(c.W*100);
+    ih.value = Math.round(c.H*100);
+    if(c.tipo === 'bastidor'){
+      bast.vert = c.vert; bast.horiz = c.horiz;
+      const bp = insumos.find(x=> x.cat==='cano' && x.nombre === c.perim);
+      const bg = insumos.find(x=> x.cat==='cano' && x.nombre === c.grilla);
+      if(bp) bast.perimId = bp.id;
+      if(bg) bast.grillaId = bg.id;
+    }else{
+      const cm = insumos.find(x=> x.nombre === c.mat);
+      if(cm) cara.matId = cm.id;
+      cara.zing = !!c.zing;
+      if(c.largo) cara.orient = c.tiras && c.W && (c.largo === +c.H.toFixed(2)) ? 'vertical' : 'horizontal';
+    }
+  }else{
+    iw.value = ''; ih.value = '';
+  }
+
   renderInsumos();
   renderCartCfg();
   renderCara();
   renderBastidor();
   document.getElementById('modalCarteleria').classList.add('abierto');
+}
+
+/* Guarda: si venimos del lápiz corrige ese ítem, si no agrega uno nuevo */
+function cartGuardarItem(nuevo, tipo){
+  if(cartEditando && cartEditando.cart && cartEditando.cart.tipo === tipo){
+    Object.assign(cartEditando, nuevo, {id: cartEditando.id});
+    registrar('corrigió ' + (tipo==='bastidor' ? 'un bastidor' : 'una cara') +
+              ' en el pedido de ' + nombreClienteId(cartPedido.cliente) + ' (' + plata(nuevo.precio) + ')');
+    toast('Corregido ✓');
+  }else{
+    cartPedido.items.push(Object.assign({id: uid()}, nuevo));
+    registrar('cargó ' + (tipo==='bastidor' ? 'un bastidor' : 'una cara') +
+              ' en el pedido de ' + nombreClienteId(cartPedido.cliente) + ' (' + plata(nuevo.precio) + ')');
+    toast((tipo==='bastidor' ? 'Bastidor' : 'Cara') + ' agregada ✓');
+  }
+  guardarDatos(); renderPedidos(); renderPedidoItems(cartPedido);
 }
 ['cartW','cartH'].forEach(id=>{
   const el = document.getElementById(id);
@@ -10357,21 +10406,25 @@ function toast(msg){
 cargar();
 if(!insumos || !insumos.length) insumos = insumosSemilla();   /* primera vez */
 
-/* Los alucos arrancaron con medidas equivocadas. Si están los viejos SIN precio,
-   los reemplazamos por los reales de Cril. Si ya les cargaste precio, no se tocan. */
-(function arreglarAluco(){
-  const viejos = insumos.filter(x=> x.cat==='aluco' &&
-    /122×244|200×100/.test(x.nombre) && !x.precio);
-  if(!viejos.length) return;
-  insumos = insumos.filter(x=> !viejos.includes(x));
-  if(!insumos.some(x=> x.cat==='aluco' && /150×500/.test(x.nombre)))
-    insumos.push({id: uid(), cat:'aluco', nombre:'Aluminio compuesto Cril 150×500', prov:'Cril',
-                  unidad:'m2', hojaW:1.50, hojaH:5.00, precio:528165, precioAnt:null, fecha:hoyISO()});
-  if(!insumos.some(x=> x.cat==='aluco' && /150×250/.test(x.nombre)))
-    insumos.push({id: uid(), cat:'aluco', nombre:'Aluminio compuesto Cril 150×250', prov:'Cril',
-                  unidad:'m2', hojaW:1.50, hojaH:2.50, precio:264082, precioAnt:null, fecha:hoyISO()});
-  guardarDatos();
-})();
+/* Los alucos de Colorcril: se reponen si no están. Corre después de que
+   llegan los datos de Dropbox, si no los pisa la copia de la nube. */
+function reponerAlucos(){
+  if(!Array.isArray(insumos)) return;
+  /* los viejos con medidas equivocadas y sin precio se van */
+  insumos = insumos.filter(x=> !(x.cat==='aluco' && /122×244|200×100/.test(x.nombre) && !x.precio));
+  let sumo = false;
+  const alta = (nombre, w, h, precio)=>{
+    if(insumos.some(x=> x.cat==='aluco' && x.nombre === nombre)) return;
+    insumos.push({id: uid(), cat:'aluco', nombre, prov:'Colorcril', unidad:'m2',
+                  hojaW:w, hojaH:h, precio, precioAnt:null, fecha:hoyISO()});
+    sumo = true;
+  };
+  alta('Aluminio compuesto 150×500', 1.50, 5.00, 528165);
+  alta('Aluminio compuesto 150×250', 1.50, 2.50, 264082);
+  if(sumo) guardarDatos();
+}
+reponerAlucos();
+setTimeout(reponerAlucos, 4000);   /* por si los datos de la nube llegan más tarde */
 // prueba de persistencia al arrancar: escribir y releer una clave de test
 (async ()=>{
   try{
