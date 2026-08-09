@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v113</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v114</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -570,6 +570,9 @@
       <span style="color:var(--texto2)">×</span>
       <input id="cartH" type="text" inputmode="decimal" placeholder="Alto" style="flex:1 1 90px;min-width:80px;margin:0">
     </div>
+    <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:10px 0 4px">CARA</div>
+    <div id="cartCara"></div>
+    <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">ESTRUCTURA</div>
     <div id="cartBastidor"></div>
     <details style="margin-top:12px">
       <summary style="font-size:.74rem;color:var(--texto2);cursor:pointer;padding:6px 0">📦 Precios de insumos</summary>
@@ -4775,8 +4778,7 @@ function renderBastidor(){
     if(!cartPedido){ toast('Abrí un pedido primero'); return; }
     cartPedido.items.push({
       id: uid(),
-      nombre: 'Bastidor ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) + ' cm · ' +
-              r.perim.nombre + ' perímetro, ' + r.grilla.nombre + ' grilla',
+      nombre: 'Bastidor ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) + ' cm',
       cant: 1,
       precio: Math.round(r.total),
       costoReal: Math.round(r.costo),
@@ -4792,6 +4794,193 @@ function renderBastidor(){
   cont.appendChild(bAdd);
 
   bastDibujar(cv, r);
+}
+
+/* ============ CARTELERÍA · CARA ============
+   Hojas (galvanizada, aluco, MDF): cuántas entran y cuánto sobra.
+   Rollo a medida (trapezoidal, acanalada): ancho fijo, largo exacto, flete si pasa los 5 m. */
+
+let cara = {matId:null, orient:'auto', zing:false};
+
+function carasDisponibles(){
+  return insumos.filter(x=> ['chapa','aluco','mdf'].includes(x.cat));
+}
+
+/* Cuántas hojas hacen falta y cuánto se desperdicia */
+function caraEnHojas(W, H, hojaW, hojaH){
+  const opcion = (hw, hh)=>{
+    const cols = Math.max(1, Math.ceil(W / hw));
+    const filas = Math.max(1, Math.ceil(H / hh));
+    return {hojas: cols * filas, cols, filas, hw, hh};
+  };
+  const a = opcion(hojaW, hojaH), b = opcion(hojaH, hojaW);
+  const mej = (b.hojas < a.hojas) ? b : a;
+  const areaHoja = hojaW * hojaH;
+  return Object.assign(mej, {
+    m2Comprado: mej.hojas * areaHoja,
+    m2Util: W * H,
+    aprov: (W * H) / (mej.hojas * areaHoja),
+    rotada: mej === b
+  });
+}
+
+function caraCalcular(){
+  const W = (parseFloat((document.getElementById('cartW')||{}).value) || 0) / 100;
+  const H = (parseFloat((document.getElementById('cartH')||{}).value) || 0) / 100;
+  if(W <= 0 || H <= 0) return null;
+  const m = insumos.find(x=> x.id === cara.matId);
+  if(!m) return null;
+  const pu = insumoPrecio(m);
+  const r = {W, H, mat:m, m2:W*H};
+
+  if(m.aMedida){
+    /* rollo: el ancho útil manda, el largo es exacto */
+    const ancho = m.anchoUtil || 1.07;
+    /* el humano elige si las chapas van paradas o acostadas */
+    const vertical = cara.orient !== 'horizontal';
+    const cubrir = vertical ? W : H;      // a lo ancho del cartel
+    const largo  = vertical ? H : W;      // cada chapa mide esto
+    const tiras  = Math.max(1, Math.ceil(cubrir / ancho));
+    const largoReal = Math.max(m.largoMin || 1, largo);
+    r.tiras = tiras; r.largoReal = largoReal; r.vertical = vertical;
+    r.m2Comprado = tiras * ancho * largoReal;
+    r.aprov = r.m2 / r.m2Comprado;
+    r.costoMat = r.m2Comprado * pu;
+    r.flete = (largoReal > (cartCfg.fleteDesdeM || 5)) ? (cartCfg.fleteLargo || 0) : 0;
+    r.avisoLargo = largoReal > (m.largoMax || 13);
+  }else if(m.hojaW){
+    const h = caraEnHojas(W, H, m.hojaW, m.hojaH);
+    Object.assign(r, h);
+    r.costoMat = h.m2Comprado * pu;
+    r.flete = 0;
+  }else{
+    r.costoMat = pu; r.aprov = 1; r.flete = 0;
+  }
+
+  r.zing = cara.zing ? r.costoMat * ((cartCfg.zingueria||0)/100) : 0;
+  const sobraM2 = Math.max(0, (r.m2Comprado || r.m2) - r.m2);
+  r.sobrante = sobraM2 * pu * ((cartCfg.sobrantePct||0)/100);
+  r.costo = r.costoMat + r.zing + r.flete;
+  r.venta = r.costo * (1 + (cartCfg.margen||0)/100);
+  r.total = r.venta + r.sobrante;
+  r.sobraM2 = sobraM2;
+  return r;
+}
+
+function renderCara(){
+  const cont = document.getElementById('cartCara');
+  if(!cont) return;
+  cont.innerHTML = '';
+  const lista = carasDisponibles();
+  if(!lista.length){ cont.textContent = ''; return; }
+
+  const fila = document.createElement('div');
+  fila.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px';
+  const l = document.createElement('span');
+  l.style.cssText = 'flex:1 1 80px;font-size:.7rem;color:var(--texto2)';
+  l.textContent = 'Material';
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:2 1 190px;margin:0;padding:8px;font-size:12.5px;background:var(--fondo);' +
+    'border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+  sel.innerHTML = '<option value="">— sin cara —</option>' + lista.map(c=>
+    '<option value="' + c.id + '"' + (c.id===cara.matId ? ' selected' : '') + '>' +
+    c.nombre + (c.precio ? '' : ' · sin precio') + '</option>').join('');
+  sel.onchange = ()=>{ cara.matId = sel.value || null; renderCara(); };
+  fila.appendChild(l); fila.appendChild(sel);
+  cont.appendChild(fila);
+
+  const r = caraCalcular();
+  if(!r) return;
+
+  /* orientación, solo cuando es chapa de rollo */
+  if(r.mat.aMedida){
+    const fo = document.createElement('div');
+    fo.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px';
+    for(const [v, txt] of [['vertical','⬍ Chapas paradas'],['horizontal','⬌ Chapas acostadas']]){
+      const b = document.createElement('button');
+      b.textContent = txt;
+      const act = (cara.orient === v) || (cara.orient === 'auto' && v === 'vertical');
+      b.style.cssText = 'flex:1;border-radius:8px;padding:7px;font-size:.68rem;font-weight:700;' +
+        (act ? 'background:rgba(180,142,173,.20);border:1px solid #b48ead;color:#b48ead'
+             : 'background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)');
+      b.onclick = ()=>{ cara.orient = v; renderCara(); };
+      fo.appendChild(b);
+    }
+    cont.appendChild(fo);
+  }
+
+  /* zinguería */
+  const lz = document.createElement('label');
+  lz.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2);margin-bottom:8px';
+  const cz = document.createElement('input');
+  cz.type = 'checkbox'; cz.checked = cara.zing;
+  cz.onchange = ()=>{ cara.zing = cz.checked; renderCara(); };
+  lz.appendChild(cz);
+  lz.appendChild(document.createTextNode('Zinguería: plegados y corte (+' + cartCfg.zingueria + '% sobre la chapa)'));
+  cont.appendChild(lz);
+
+  const d = document.createElement('div');
+  d.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;' +
+    'padding:10px;font-size:.7rem;line-height:1.7';
+  const linea = (a2,b2,f)=> '<div style="display:flex;justify-content:space-between;gap:8px">' +
+    '<span style="color:var(--texto2)">' + a2 + '</span><b style="' +
+    (f ? 'color:var(--ambar)' : 'color:var(--texto)') + '">' + b2 + '</b></div>';
+  let cab;
+  if(r.mat.aMedida){
+    cab = r.tiras + ' chapa' + (r.tiras===1?'':'s') + ' de ' + r.largoReal.toFixed(2) + ' m' +
+          (r.vertical ? ' (paradas)' : ' (acostadas)');
+  }else if(r.hojas){
+    cab = r.hojas + ' hoja' + (r.hojas===1?'':'s') + (r.rotada ? ' (girada)' : '') +
+          ' · ' + r.cols + '×' + r.filas;
+  }else cab = 'por unidad';
+  d.innerHTML =
+    linea(cab + ' · aprovecha ' + Math.round((r.aprov||1)*100) + '%', plata(r.costoMat)) +
+    (r.zing > 0.5 ? linea('Zinguería ' + cartCfg.zingueria + '%', plata(r.zing)) : '') +
+    (r.flete > 0.5 ? linea('Flete (chapa de más de ' + cartCfg.fleteDesdeM + ' m, por viaje)', plata(r.flete)) : '') +
+    '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
+    linea('Costo', plata(r.costo)) +
+    linea('Venta con +' + cartCfg.margen + '%', plata(r.venta)) +
+    (r.sobrante > 0.5 ? linea('Sobrante ' + cartCfg.sobrantePct + '% · ' + r.sobraM2.toFixed(2) + ' m² (sin markup)', plata(r.sobrante)) : '') +
+    '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
+    linea('TOTAL', plata(r.total), true);
+  cont.appendChild(d);
+
+  if(r.avisoLargo){
+    const av = document.createElement('div');
+    av.style.cssText = 'margin-top:8px;font-size:.68rem;color:#ff7a7a;line-height:1.4';
+    av.textContent = '⚠️ ' + r.largoReal.toFixed(2) + ' m supera el largo práctico de transporte (' +
+      (r.mat.largoMax||13) + ' m). Conviene partirlo en dos tramos.';
+    cont.appendChild(av);
+  }
+  if(!r.mat.precio){
+    const av2 = document.createElement('div');
+    av2.style.cssText = 'margin-top:8px;font-size:.68rem;color:#ff7a7a';
+    av2.textContent = '⚠️ Este material no tiene precio cargado.';
+    cont.appendChild(av2);
+  }
+
+  const bAdd = document.createElement('button');
+  bAdd.textContent = '＋ Agregar la cara al pedido · ' + plata(r.total);
+  bAdd.style.cssText = 'width:100%;margin-top:10px;border-radius:10px;padding:11px;font-weight:800;' +
+    'font-size:.76rem;background:#b48ead;border:none;color:#1a1420';
+  bAdd.onclick = ()=>{
+    if(!cartPedido){ toast('Abrí un pedido primero'); return; }
+    cartPedido.items.push({
+      id: uid(),
+      nombre: r.mat.nombre + ' · ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) + ' cm',
+      cant: 1,
+      precio: Math.round(r.total),
+      costoReal: Math.round(r.costo),
+      cart: {tipo:'cara', W:r.W, H:r.H, mat:r.mat.nombre,
+             hojas:r.hojas||null, tiras:r.tiras||null, largo:r.largoReal||null,
+             zing:cara.zing, aprov:+(r.aprov||1).toFixed(3)}
+    });
+    registrar('cargó una cara de ' + r.mat.nombre + ' en el pedido de ' +
+              nombreClienteId(cartPedido.cliente) + ' (' + plata(r.total) + ')');
+    guardarDatos(); renderPedidos(); renderPedidoItems(cartPedido);
+    toast('Cara agregada ✓');
+  };
+  cont.appendChild(bAdd);
 }
 
 /* ============ CARTELERÍA · CATÁLOGO DE INSUMOS ============ */
@@ -5245,6 +5434,22 @@ function renderBrief(p){
    Así, si mañana cambian los costos y la lista de precios, la versión
    que le pasaste al cliente sigue diciendo exactamente lo mismo. */
 
+/* Texto del bastidor para el cliente: siempre la medida, y si está el tilde,
+   también las varillas y los caños. Nunca costos ni proveedores. */
+function detalleBastidor(c){
+  if(!c || c.tipo !== 'bastidor') return '';
+  const partes = [];
+  if(c.vert || c.horiz){
+    const v = [];
+    if(c.vert)  v.push(c.vert + ' vertical' + (c.vert===1?'':'es'));
+    if(c.horiz) v.push(c.horiz + ' horizontal' + (c.horiz===1?'':'es'));
+    partes.push('refuerzos: ' + v.join(' y '));
+  }
+  if(c.perim)  partes.push('perímetro ' + c.perim);
+  if(c.grilla && c.grilla !== c.perim) partes.push('grilla ' + c.grilla);
+  return partes.length ? ' (' + partes.join(' · ') + ')' : '';
+}
+
 function lineasPresupuesto(p){
   const conMed = presuConMedidas(p);
   const out = [];
@@ -5252,7 +5457,7 @@ function lineasPresupuesto(p){
     if(it.conf === false) continue;
     if(it.titulo){ out.push({titulo:true, nombre: it.nombre || ''}); continue; }
     out.push({
-      nombre: nombreItem(it),
+      nombre: nombreItem(it) + (p.presuBastidor && it.cart ? detalleBastidor(it.cart) : ''),
       medidas: conMed ? medidasItem(it) : '',
       cant: it.cant || 1,
       unidad: it.mo ? ' h' : (it.uv ? 'u' : ''),
@@ -5537,6 +5742,19 @@ function renderBuscadorItems(p){
   lblMed.appendChild(cbMed);
   lblMed.appendChild(document.createTextNode('Mostrar medidas en el presupuesto'));
   barra.appendChild(lblMed);
+
+  /* solo aparece si el pedido tiene algún bastidor */
+  if((p.items||[]).some(i=> i.cart && i.cart.tipo === 'bastidor')){
+    const lblB = document.createElement('label');
+    lblB.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--texto2)';
+    const cbB = document.createElement('input');
+    cbB.type = 'checkbox'; cbB.checked = !!p.presuBastidor;
+    cbB.onchange = ()=>{ p.presuBastidor = cbB.checked; guardarDatos();
+      toast(cbB.checked ? 'El presupuesto detalla los bastidores' : 'Bastidores sin detalle'); };
+    lblB.appendChild(cbB);
+    lblB.appendChild(document.createTextNode('Detallar bastidores (refuerzos y caños)'));
+    barra.appendChild(lblB);
+  }
 
   cont.appendChild(barra);
   function filtrar(){
@@ -9450,12 +9668,13 @@ function abrirCarteleria(p){
   bast = {on:false, W:0, H:0, perimId:bast.perimId, grillaId:bast.grillaId, vert:null, horiz:null};
   renderInsumos();
   renderCartCfg();
+  renderCara();
   renderBastidor();
   document.getElementById('modalCarteleria').classList.add('abierto');
 }
 ['cartW','cartH'].forEach(id=>{
   const el = document.getElementById(id);
-  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderBastidor(); });
+  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderCara(); renderBastidor(); });
 });
 document.getElementById('btnCarteleria').onclick = ()=>{
   if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirCarteleria(p); }
