@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v131</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v132</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -4001,7 +4001,11 @@ function renderPedidos(){
 }
 const _bp = document.getElementById('buscarPedidos');
 if(_bp) _bp.addEventListener('input', renderPedidos);
-document.getElementById('btnCotizador').onclick = ()=>{ location.href = 'cotizador.html'; };
+document.getElementById('btnCotizador').onclick = async ()=>{
+  try{ await guardarDatos(); }catch(_){}
+  try{ if(dbxTokens && dbxBajoOk){ clearTimeout(dbxTimerSubida); await dbxSubir(); } }catch(_){}
+  location.href = 'cotizador.html';
+};
 async function procesarBandejaCotizador(){
   try{
     const g = await window.storage.get('pedidos-entrantes').catch(()=>null);
@@ -6422,9 +6426,14 @@ function renderCorporeas(){
   b.textContent = '🔤 Agregar letras corpóreas encima';
   b.style.cssText = 'width:100%;margin-top:6px;border-radius:10px;padding:11px;font-weight:700;' +
     'font-size:.74rem;background:var(--panel2);border:1px dashed #ffa730;color:#ffa730';
-  b.onclick = ()=>{
+  b.onclick = async (e)=>{
     if(!cartPedido){ toast('Abrí un pedido primero'); return; }
-    guardarDatos();
+    const btn = e.target;
+    btn.textContent = 'Guardando antes de salir…'; btn.disabled = true;
+    /* IMPORTANTE: esperar el guardado. Si saltamos antes, el navegador
+       corta la escritura y se pierde lo que estabas haciendo. */
+    try{ await guardarDatos(); }catch(_){}
+    try{ if(dbxTokens && dbxBajoOk){ clearTimeout(dbxTimerSubida); await dbxSubir(); } }catch(_){}
     let url = 'cotizador.html?pedido=' + cartPedido.id;
     if(W > 0 && H > 0) url += '&cartelW=' + W + '&cartelH=' + H;
     location.href = url;
@@ -7962,6 +7971,17 @@ async function guardarAhora(btn){
   if(b) b.onclick = (e)=> guardarAhora(e.target);
 })();
 
+/* Si cerrás o dejás la app con cambios sin subir, intenta subirlos ahí mismo. */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'hidden' && dbxTokens && dbxBajoOk && dbxTimerSubida){
+    clearTimeout(dbxTimerSubida);
+    dbxSubir();
+  }
+});
+window.addEventListener('pagehide', ()=>{
+  if(dbxTokens && dbxBajoOk && dbxTimerSubida){ clearTimeout(dbxTimerSubida); dbxSubir(); }
+});
+
 function dbxProgramarSubida(){
   if(!dbxTokens) return;
   clearTimeout(dbxTimerSubida);
@@ -9219,10 +9239,15 @@ document.getElementById('odAgregar').onclick = ()=>{
   abrirPedido(odPedido.id);
 };
 modalOffDig.addEventListener('click', e=>{ if(e.target===modalOffDig){ modalOffDig.classList.remove('abierto'); if(odPedido) abrirPedido(odPedido.id); } });
-document.getElementById('btnCorpPed').onclick = ()=>{
+document.getElementById('btnCorpPed').onclick = async (e)=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
   if(!p) return;
-  guardarDatos();
+  const btn = e.target;
+  const txt = btn.textContent;
+  btn.textContent = 'Guardando…'; btn.disabled = true;
+  try{ await guardarDatos(); }catch(_){}
+  try{ if(dbxTokens && dbxBajoOk){ clearTimeout(dbxTimerSubida); await dbxSubir(); } }catch(_){}
+  btn.textContent = txt; btn.disabled = false;
   location.href = 'cotizador.html?pedido=' + p.id;
 };
 document.getElementById('btnOffDig').onclick = ()=>{
