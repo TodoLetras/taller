@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v122</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v123</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -993,9 +993,9 @@ function insumosSemilla(){
        hojaW:1.22, hojaH:2.44}),
     /* --- chapas de rollo: ancho fijo, largo a medida --- */
     I({cat:'chapa', nombre:'Chapa trapezoidal T-1010 galvanizada', prov:'Acerco', unidad:'m2',
-       anchoUtil:1.07, largoMin:1, largoMax:13, aMedida:true}),
+       anchoUtil:1.00, anchoNom:1.07, largoMin:1, largoMax:13, aMedida:true}),
     I({cat:'chapa', nombre:'Chapa acanalada galvanizada', prov:'Acerco', unidad:'m2',
-       anchoUtil:1.07, largoMin:1, largoMax:13, aMedida:true}),
+       anchoUtil:1.00, anchoNom:1.10, largoMin:1, largoMax:13, aMedida:true}),
     I({cat:'chapa', nombre:'Chapa Cincalum lisa C-25', prov:'Acerco', unidad:'u', precio:37102.04}),
     I({cat:'chapa', nombre:'Chapa Cincalum acanalada C-22', prov:'Acerco', unidad:'u', precio:21116.11}),
     I({cat:'chapa', nombre:'Chapa Cincalum trapezoidal T-1010 C-25', prov:'Acerco', unidad:'u', precio:14750.19}),
@@ -4934,7 +4934,19 @@ function renderBastidor(){
    Hojas (galvanizada, aluco, MDF): cuántas entran y cuánto sobra.
    Rollo a medida (trapezoidal, acanalada): ancho fijo, largo exacto, flete si pasa los 5 m. */
 
-let cara = {matId:null, orient:'auto', zing:false, pestana:null, margen:null};
+let cara = {matId:null, orient:'auto', zing:false, pestana:null, margen:null, color:null};
+
+/* Color por defecto según el material, para el esquema del cliente */
+function caraColor(m){
+  if(cara.color) return cara.color;
+  const n = (m && m.nombre || '').toLowerCase();
+  if(/negra|negro/.test(n)) return '#2b2b2b';
+  if(/blanc/.test(n))       return '#f2f2f2';
+  if(/galvaniz|cincalum/.test(n)) return '#c9ced3';
+  if(/mdf/.test(n))         return '#c9a97a';
+  if(/alumin/.test(n))      return '#d8dade';
+  return '#dfe3e6';
+}
 
 /* El ancho del caño del perímetro, sacado del nombre (ej: "30×30×1,2" → 3 cm) */
 function anchoCanoPerim(){
@@ -5117,6 +5129,26 @@ function renderCara(){
     cont.appendChild(fp);
   }
 
+  /* color, para que el cliente vea cómo queda */
+  const fco = document.createElement('div');
+  fco.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
+  const lco = document.createElement('span');
+  lco.style.cssText = 'flex:1 1 120px;font-size:.7rem;color:var(--texto2)';
+  lco.textContent = 'Color del cartel (se ve en el esquema)';
+  const ico = document.createElement('input');
+  ico.type = 'color';
+  ico.value = caraColor(r.mat);
+  ico.style.cssText = 'width:52px;height:32px;margin:0;padding:2px;background:var(--fondo);' +
+    'border:1px solid var(--borde);border-radius:8px';
+  ico.addEventListener('input', ()=>{ cara.color = ico.value; renderCara(); });
+  const bco = document.createElement('button');
+  bco.textContent = '↻ auto';
+  bco.style.cssText = 'border-radius:7px;padding:6px 9px;font-size:.64rem;background:var(--panel2);' +
+    'border:1px dashed var(--borde);color:var(--texto2)';
+  bco.onclick = ()=>{ cara.color = null; renderCara(); };
+  fco.appendChild(lco); fco.appendChild(ico); fco.appendChild(bco);
+  cont.appendChild(fco);
+
   const fmc = document.createElement('div');
   fmc.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
   const lmc = document.createElement('span');
@@ -5199,7 +5231,9 @@ function renderCara(){
       costoReal: Math.round(r.costo),
       cart: {tipo:'cara', W:r.W, H:r.H, mat:r.mat.nombre,
              hojas:r.hojas||null, tiras:r.tiras||null, largo:r.largoReal||null,
-             zing:cara.zing, pest:r.pest||0, mrg:r.mrg, aprov:+(r.aprov||1).toFixed(3)}
+             zing:cara.zing, pest:r.pest||0, mrg:r.mrg, color:caraColor(r.mat),
+             perfil: r.mat.aMedida ? (/trapez/i.test(r.mat.nombre)?'trapez':'acanal') : 'liso',
+             aprov:+(r.aprov||1).toFixed(3)}
     }, 'cara');
   };
   cont.appendChild(bAdd);
@@ -5556,7 +5590,8 @@ const CART_CATS = [
 /* Cómo se compra cada insumo, en una línea legible */
 function insumoFormato(x){
   if(x.tiraM)    return 'tira de ' + x.tiraM + ' m';
-  if(x.aMedida)  return 'rollo ' + x.anchoUtil + ' m de ancho · largo a medida (' +
+  if(x.aMedida)  return 'chapa de ' + (x.anchoNom || x.anchoUtil) + ' m · cubre ' +
+                        x.anchoUtil + ' m (el resto es solape) · largo a medida (' +
                         x.largoMin + ' a ' + x.largoMax + ' m)';
   if(x.hojaW)    return 'hoja de ' + Math.round(x.hojaW*100) + '×' + Math.round(x.hojaH*100) + ' cm';
   if(x.ancho)    return 'rollo de ' + Math.round(x.ancho*100) + ' cm';
@@ -5708,6 +5743,27 @@ function renderInsumos(){
       f.appendChild(fila);
 
       f.appendChild(accion);
+
+      if(x.aMedida){
+        const fu = document.createElement('div');
+        fu.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px';
+        const lu = document.createElement('span');
+        lu.style.cssText = 'font-size:.64rem;color:var(--texto2)';
+        lu.textContent = 'Ancho que cubre (ya con el solape)';
+        const iu = document.createElement('input');
+        iu.type = 'text'; iu.setAttribute('inputmode','decimal');
+        iu.value = x.anchoUtil;
+        iu.style.cssText = 'width:66px;margin:0;padding:5px;font-size:12px;text-align:right;' +
+          'background:var(--fondo);border:1px dashed var(--borde);border-radius:7px;color:var(--texto)';
+        iu.addEventListener('change', ()=>{
+          const v = parseFloat(iu.value);
+          if(v > 0){ x.anchoUtil = v; guardarDatos(); cartAbiertos[cat] = true; renderInsumos(); renderCara(); }
+        });
+        const uu = document.createElement('span');
+        uu.style.cssText = 'font-size:.64rem;color:var(--texto2)'; uu.textContent = 'm';
+        fu.appendChild(lu); fu.appendChild(iu); fu.appendChild(uu);
+        f.appendChild(fu);
+      }
 
       if(x.nota){
         const nt = document.createElement('div');
@@ -9327,8 +9383,14 @@ async function generarPDFPedido(p, version){
     /* Esquema para el cliente: solo el rectángulo y las medidas de afuera a afuera.
        Nada de varillas ni caños: eso va en el plano del herrero. */
     if(p.presuEsquema){
-      const bs = (p.items||[]).filter(i=> i.cart &&
+      let bs = (p.items||[]).filter(i=> i.cart &&
         (i.cart.tipo === 'bastidor' || i.cart.tipo === 'perchas') && i.conf !== false);
+      /* si hay cara sin bastidor, igual dibujamos el cartel */
+      const caras = (p.items||[]).filter(i=> i.cart && i.cart.tipo === 'cara' && i.conf !== false);
+      for(const cs of caras){
+        if(!bs.some(z=> z.cart.tipo === 'bastidor' &&
+             Math.abs(z.cart.W - cs.cart.W) < 0.02 && Math.abs(z.cart.H - cs.cart.H) < 0.02)) bs.push(cs);
+      }
       if(bs.length){
         y += 26;
         if(y > 640){ doc.addPage(); y = 60; }
@@ -9351,6 +9413,25 @@ async function generarPDFPedido(p, version){
           const w2 = c.W * escala, h2 = c.H * escala;
           if(y + h2 + 50 > 780){ doc.addPage(); y = 60; }
           const ox = margen + 26, oy = y;
+
+          /* fondo con el color del material, para que el cliente lo vea */
+          const caraDeEste = (p.items||[]).find(z=> z.cart && z.cart.tipo === 'cara' &&
+            Math.abs(z.cart.W - c.W) < 0.02 && Math.abs(z.cart.H - c.H) < 0.02 && z.conf !== false);
+          if(caraDeEste && caraDeEste.cart.color){
+            const hx = caraDeEste.cart.color.replace('#','');
+            const R = parseInt(hx.slice(0,2),16), G = parseInt(hx.slice(2,4),16), B = parseInt(hx.slice(4,6),16);
+            doc.setFillColor(R, G, B);
+            doc.rect(ox, oy, w2, h2, 'F');
+            /* si es chapa de perfil, insinuamos las ondas */
+            const perf = caraDeEste.cart.perfil;
+            if(perf === 'trapez' || perf === 'acanal'){
+              doc.setDrawColor(Math.max(0,R-35), Math.max(0,G-35), Math.max(0,B-35));
+              doc.setLineWidth(0.5);
+              const paso = Math.max(5, w2 / 40);
+              for(let x2 = ox + paso; x2 < ox + w2 - 1; x2 += paso) doc.line(x2, oy, x2, oy + h2);
+            }
+          }
+
           doc.setDrawColor(60,60,60); doc.setLineWidth(2);
           doc.rect(ox, oy, w2, h2);
           doc.setDrawColor(160,160,160); doc.setLineWidth(0.6);
@@ -10482,6 +10563,7 @@ function abrirCarteleria(p, item){
       cara.zing = !!c.zing;
       cara.pestana = c.pest ? Math.round(c.pest*100) : null;
       cara.margen = (c.mrg == null) ? null : c.mrg;
+      cara.color = c.color || null;
       if(c.largo) cara.orient = c.tiras && c.W && (c.largo === +c.H.toFixed(2)) ? 'vertical' : 'horizontal';
     }
   }else{
