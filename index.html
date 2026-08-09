@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v111</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v112</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -564,7 +564,17 @@
       Un cartel se arma por capas: <b>cara</b>, <b>estructura</b>, <b>aplicaciones</b> y <b>montaje</b>.
       Primero cargá acá los precios de los insumos; después se van sumando las capas.
     </div>
-    <div id="cartInsumos"></div>
+    <label>Medida del cartel (cm)</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <input id="cartW" type="text" inputmode="decimal" placeholder="Ancho" style="flex:1 1 90px;min-width:80px;margin:0">
+      <span style="color:var(--texto2)">×</span>
+      <input id="cartH" type="text" inputmode="decimal" placeholder="Alto" style="flex:1 1 90px;min-width:80px;margin:0">
+    </div>
+    <div id="cartBastidor"></div>
+    <details style="margin-top:12px">
+      <summary style="font-size:.74rem;color:var(--texto2);cursor:pointer;padding:6px 0">📦 Precios de insumos</summary>
+      <div id="cartInsumos" style="margin-top:8px"></div>
+    </details>
     <details style="margin-top:12px">
       <summary style="font-size:.74rem;color:var(--texto2);cursor:pointer;padding:6px 0">⚙️ Porcentajes y valores generales</summary>
       <div id="cartCfgPanel" style="margin-top:8px"></div>
@@ -1013,7 +1023,8 @@ let cartCfg = {
   sobrantePct: 0,     // % del sobrante que se suma AL COSTO (sin markup)
   unionCm: 1,         // cm que come cada unión de vinilo
   varillaCadaM: 1.5,  // separación máxima entre varillas del bastidor
-  recargoMdf: 10      // % extra sobre el precio de lista de Moconá
+  recargoMdf: 10,     // % extra sobre el precio de lista de Moconá
+  margen: 80          // % de markup sobre el costo (el sobrante NO lo lleva)
 };
 let uv = null, offset = null;
 let movimientos = [], filtroCaja = 'todos', movTipoSel = 'egreso', movQuienSel = null, movPersonaSel = null, movPedidoSel = null;
@@ -4579,6 +4590,210 @@ function sincronizarPedido(){
   timerPedido = setTimeout(()=>{ guardarDatos(); renderPedidos(); }, 500);
 }
 
+/* ============ CARTELERÍA · BASTIDOR ============
+   La grilla arranca con la regla del metro y medio, pero la manda el humano.
+   El sobrante se suma AL COSTO sin markup: es plata que ya gastaste. */
+
+let bast = {on:false, W:0, H:0, perimId:null, grillaId:null, vert:null, horiz:null};
+
+function canos(){ return insumos.filter(x=> x.cat==='cano'); }
+function precioMetro(x){ return (!x || !x.precio || !x.tiraM) ? 0 : x.precio / x.tiraM; }
+
+function bastVarillasAuto(medida){
+  const n = Math.ceil(medida / (cartCfg.varillaCadaM || 1.5)) - 1;
+  return Math.max(0, n);
+}
+
+function bastCalcular(){
+  const W = (parseFloat((document.getElementById('cartW')||{}).value) || 0) / 100;
+  const H = (parseFloat((document.getElementById('cartH')||{}).value) || 0) / 100;
+  if(W <= 0 || H <= 0) return null;
+  const perim  = insumos.find(x=> x.id === bast.perimId)  || canos()[0];
+  const grilla = insumos.find(x=> x.id === bast.grillaId) || canos()[0];
+  const vert  = (bast.vert  == null) ? bastVarillasAuto(W) : bast.vert;
+  const horiz = (bast.horiz == null) ? bastVarillasAuto(H) : bast.horiz;
+
+  const mPerim  = 2 * (W + H);
+  const mGrilla = vert * H + horiz * W;
+
+  const tramo = (metros, cano)=>{
+    const pm = precioMetro(cano);
+    const tiraM = (cano && cano.tiraM) || 6;
+    const tiras = metros > 0 ? Math.ceil(metros / tiraM) : 0;
+    const sobra = tiras * tiraM - metros;
+    return {metros, pm, tiraM, tiras, sobra,
+            costo: metros * pm,
+            costoSobra: sobra * pm * ((cartCfg.sobrantePct||0) / 100)};
+  };
+  const tp = tramo(mPerim, perim), tg = tramo(mGrilla, grilla);
+
+  const cano     = tp.costo + tg.costo;
+  const herrero  = cano * ((cartCfg.herrero||0) / 100);
+  const costo    = cano + herrero;
+  const venta    = costo * (1 + (cartCfg.margen||0) / 100);
+  const sobrante = tp.costoSobra + tg.costoSobra;
+
+  return {W, H, perim, grilla, vert, horiz, tp, tg, cano, herrero, costo, venta,
+          sobrante, total: venta + sobrante};
+}
+
+function bastDibujar(cv, r){
+  if(!cv || !r) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.min(400, cv.parentElement ? cv.parentElement.clientWidth : 400);
+  const esc = (cssW - 20) / r.W;
+  const cssH = r.H * esc + 26;
+  cv.style.height = cssH + 'px';
+  cv.width = cssW * dpr; cv.height = cssH * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+  const ox = 10, oy = 6, w = r.W * esc, h = r.H * esc;
+
+  ctx.fillStyle = 'rgba(180,142,173,.10)';
+  ctx.fillRect(ox, oy, w, h);
+  /* grilla interna, más fina */
+  ctx.strokeStyle = '#b48ead'; ctx.lineWidth = 2;
+  for(let i=1; i<=r.vert; i++){
+    const x = ox + (w * i) / (r.vert + 1);
+    ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy+h); ctx.stroke();
+  }
+  for(let j=1; j<=r.horiz; j++){
+    const y = oy + (h * j) / (r.horiz + 1);
+    ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox+w, y); ctx.stroke();
+  }
+  /* perímetro, más grueso */
+  ctx.strokeStyle = '#8b5f9f'; ctx.lineWidth = 5;
+  ctx.strokeRect(ox, oy, w, h);
+
+  ctx.fillStyle = '#666'; ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(Math.round(r.W*100) + ' × ' + Math.round(r.H*100) + ' cm · ' +
+    (r.tp.metros + r.tg.metros).toFixed(2) + ' m de caño', ox + w/2, oy + h + 17);
+}
+
+function renderBastidor(){
+  const cont = document.getElementById('cartBastidor');
+  if(!cont) return;
+  cont.innerHTML = '';
+  const lista = canos();
+  if(!lista.length){
+    cont.innerHTML = '<div style="font-size:.7rem;color:var(--texto2)">Cargá primero algún caño en los precios de insumos.</div>';
+    return;
+  }
+  const r = bastCalcular();
+  if(!r){
+    cont.innerHTML = '<div style="font-size:.7rem;color:var(--texto2)">Poné el ancho y el alto para calcular el bastidor.</div>';
+    return;
+  }
+
+  const cv = document.createElement('canvas');
+  cv.style.cssText = 'width:100%;max-width:400px;display:block;margin:0 auto 10px';
+  cont.appendChild(cv);
+
+  /* selectores de caño */
+  const selCano = (etq, valorId, alCambiar)=>{
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px';
+    const l = document.createElement('span');
+    l.style.cssText = 'flex:1 1 90px;font-size:.7rem;color:var(--texto2)';
+    l.textContent = etq;
+    const sel = document.createElement('select');
+    sel.style.cssText = 'flex:2 1 170px;margin:0;padding:8px;font-size:12.5px;background:var(--fondo);' +
+      'border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+    sel.innerHTML = lista.map(c=> '<option value="' + c.id + '"' +
+      (c.id === valorId ? ' selected' : '') + '>' + c.nombre +
+      (c.precio ? ' · ' + plata(precioMetro(c)) + '/m' : ' · sin precio') + '</option>').join('');
+    sel.onchange = ()=>{ alCambiar(sel.value); renderBastidor(); };
+    f.appendChild(l); f.appendChild(sel);
+    return f;
+  };
+  cont.appendChild(selCano('Perímetro', r.perim.id, v=> bast.perimId = v));
+  cont.appendChild(selCano('Grilla',    r.grilla.id, v=> bast.grillaId = v));
+
+  /* varillas */
+  const fv = document.createElement('div');
+  fv.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0';
+  const numero = (etq, valor, alCambiar)=>{
+    const c = document.createElement('div');
+    c.style.cssText = 'display:flex;gap:6px;align-items:center;flex:1 1 140px';
+    const l = document.createElement('span');
+    l.style.cssText = 'font-size:.7rem;color:var(--texto2)';
+    l.textContent = etq;
+    const i = document.createElement('input');
+    i.type = 'number'; i.setAttribute('inputmode','numeric'); i.min = '0';
+    i.value = valor;
+    i.style.cssText = 'width:64px;margin:0;padding:7px;font-size:13px;text-align:center;' +
+      'background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+    i.addEventListener('change', ()=>{ alCambiar(Math.max(0, parseInt(i.value)||0)); renderBastidor(); });
+    c.appendChild(l); c.appendChild(i);
+    return c;
+  };
+  fv.appendChild(numero('Verticales',   r.vert,  v=> bast.vert  = v));
+  fv.appendChild(numero('Horizontales', r.horiz, v=> bast.horiz = v));
+  cont.appendChild(fv);
+
+  const auto = document.createElement('button');
+  auto.textContent = '↻ Volver al automático (una varilla cada ' + cartCfg.varillaCadaM + ' m)';
+  auto.style.cssText = 'width:100%;border-radius:8px;padding:7px;font-size:.66rem;margin-bottom:10px;' +
+    'background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)';
+  auto.onclick = ()=>{ bast.vert = null; bast.horiz = null; renderBastidor(); };
+  cont.appendChild(auto);
+
+  /* desglose */
+  const d = document.createElement('div');
+  d.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;' +
+    'padding:10px;font-size:.7rem;line-height:1.7';
+  const linea = (a2, b2, fuerte)=> '<div style="display:flex;justify-content:space-between;gap:8px">' +
+    '<span style="color:var(--texto2)">' + a2 + '</span>' +
+    '<b style="' + (fuerte ? 'color:var(--ambar)' : 'color:var(--texto)') + '">' + b2 + '</b></div>';
+  d.innerHTML =
+    linea('Perímetro · ' + r.tp.metros.toFixed(2) + ' m (' + r.tp.tiras + ' tira' + (r.tp.tiras===1?'':'s') + ')', plata(r.tp.costo)) +
+    linea('Grilla · ' + r.tg.metros.toFixed(2) + ' m (' + r.tg.tiras + ' tira' + (r.tg.tiras===1?'':'s') + ')', plata(r.tg.costo)) +
+    linea('Herrero ' + cartCfg.herrero + '% (corte, soldadura y pintura)', plata(r.herrero)) +
+    '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
+    linea('Costo', plata(r.costo)) +
+    linea('Venta con +' + cartCfg.margen + '%', plata(r.venta)) +
+    (r.sobrante > 0.5
+      ? linea('Sobrante ' + cartCfg.sobrantePct + '% · ' + (r.tp.sobra + r.tg.sobra).toFixed(2) + ' m (sin markup)', plata(r.sobrante))
+      : '') +
+    '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
+    linea('TOTAL', plata(r.total), true);
+  cont.appendChild(d);
+
+  if(!r.perim.precio || !r.grilla.precio){
+    const av = document.createElement('div');
+    av.style.cssText = 'margin-top:8px;font-size:.68rem;color:#ff7a7a';
+    av.textContent = '⚠️ Algún caño no tiene precio cargado, así que el total está incompleto.';
+    cont.appendChild(av);
+  }
+
+  const bAdd = document.createElement('button');
+  bAdd.textContent = '＋ Agregar el bastidor al pedido · ' + plata(r.total);
+  bAdd.style.cssText = 'width:100%;margin-top:10px;border-radius:10px;padding:11px;font-weight:800;' +
+    'font-size:.76rem;background:#b48ead;border:none;color:#1a1420';
+  bAdd.onclick = ()=>{
+    if(!cartPedido){ toast('Abrí un pedido primero'); return; }
+    cartPedido.items.push({
+      id: uid(),
+      nombre: 'Bastidor ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) + ' cm · ' +
+              r.perim.nombre + ' perímetro, ' + r.grilla.nombre + ' grilla',
+      cant: 1,
+      precio: Math.round(r.total),
+      costoReal: Math.round(r.costo),
+      cart: {tipo:'bastidor', W:r.W, H:r.H, vert:r.vert, horiz:r.horiz,
+             perim:r.perim.nombre, grilla:r.grilla.nombre,
+             metros: +(r.tp.metros + r.tg.metros).toFixed(2)}
+    });
+    registrar('cargó un bastidor de ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) +
+              ' cm en el pedido de ' + nombreClienteId(cartPedido.cliente) + ' (' + plata(r.total) + ')');
+    guardarDatos(); renderPedidos(); renderPedidoItems(cartPedido);
+    toast('Bastidor agregado ✓');
+  };
+  cont.appendChild(bAdd);
+
+  bastDibujar(cv, r);
+}
+
 /* ============ CARTELERÍA · CATÁLOGO DE INSUMOS ============ */
 
 const CART_CATS = [
@@ -4850,7 +5065,8 @@ function renderCartCfg(){
     ['sobrantePct','Sobrante que se cobra (va al costo, SIN markup)', '%'],
     ['unionCm',    'Cada unión de vinilo come', 'cm'],
     ['varillaCadaM','Una varilla cada', 'm'],
-    ['recargoMdf', 'Recargo del MDF sobre lista de Moconá', '%']
+    ['recargoMdf', 'Recargo del MDF sobre lista de Moconá', '%'],
+    ['margen',     'Margen de venta sobre el costo', '%']
   ];
   for(const [k, txt, u] of campos){
     const f = document.createElement('div');
@@ -9214,10 +9430,16 @@ document.getElementById('btnViniloCorte').onclick = ()=>{ if(pedidoAbierto){ con
 let cartPedido = null;
 function abrirCarteleria(p){
   cartPedido = p;
+  bast = {on:false, W:0, H:0, perimId:bast.perimId, grillaId:bast.grillaId, vert:null, horiz:null};
   renderInsumos();
   renderCartCfg();
+  renderBastidor();
   document.getElementById('modalCarteleria').classList.add('abierto');
 }
+['cartW','cartH'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderBastidor(); });
+});
 document.getElementById('btnCarteleria').onclick = ()=>{
   if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirCarteleria(p); }
 };
