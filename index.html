@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v123</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v125</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -574,6 +574,8 @@
     <div id="cartCara"></div>
     <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">ESTRUCTURA</div>
     <div id="cartBastidor"></div>
+    <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">APLICACIONES</div>
+    <div id="cartVinilo"></div>
     <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">MONTAJE</div>
     <div id="cartPerchas"></div>
     <details style="margin-top:12px">
@@ -5239,6 +5241,204 @@ function renderCara(){
   cont.appendChild(bAdd);
 }
 
+/* ============ CARTELERÍA · VINILO ============
+   Color liso o impreso. Se calcula por tiras: cada unión come unos centímetros,
+   y si la cara lleva doblez, el vinilo tiene que taparlo. */
+
+let vin = {on:false, matId:null, modo:'color', color:'#c0392b', img:null,
+           orient:'vertical', margen:null};
+
+function vinilosDisponibles(){ return insumos.filter(x=> x.cat === 'vinilo'); }
+
+function vinCalcular(){
+  if(!vin.on) return null;
+  const W = (parseFloat((document.getElementById('cartW')||{}).value) || 0) / 100;
+  const H = (parseFloat((document.getElementById('cartH')||{}).value) || 0) / 100;
+  if(W <= 0 || H <= 0) return null;
+  const lista = vinilosDisponibles();
+  if(!lista.length) return null;
+  const m = insumos.find(x=> x.id === vin.matId) || lista[0];
+  const pu = insumoPrecio(m);                     // $ por metro lineal
+
+  /* el vinilo tapa el doblez de la chapa, si la cara lo tiene */
+  const dob = cara.zing ? (pestanaCm()/100) : 0;
+  const altoCubrir = H + dob*2;
+  const anchoCubrir = W + dob*2;
+
+  const union = (cartCfg.unionCm || 1) / 100;
+  const anchoUtil = Math.max(0.05, (m.ancho || 1) - union);
+
+  const vertical = vin.orient !== 'horizontal';
+  const cubrir = vertical ? anchoCubrir : altoCubrir;
+  const largo  = vertical ? altoCubrir : anchoCubrir;
+  const tiras = Math.max(1, Math.ceil(cubrir / anchoUtil));
+  const ml = tiras * largo;
+
+  const costo = ml * pu;
+  const mrg = (vin.margen == null) ? (cartCfg.margen||0) : vin.margen;
+  const venta = costo * (1 + mrg/100);
+  return {W, H, mat:m, tiras, largo, ml, anchoUtil, union, dob, vertical,
+          costo, venta, mrg, total: venta, uniones: tiras - 1};
+}
+
+function renderVinilo(){
+  const cont = document.getElementById('cartVinilo');
+  if(!cont) return;
+  cont.innerHTML = '';
+
+  const lb = document.createElement('label');
+  lb.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--texto2);margin-bottom:8px';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = vin.on;
+  cb.onchange = ()=>{ vin.on = cb.checked; renderVinilo(); };
+  lb.appendChild(cb);
+  lb.appendChild(document.createTextNode('Lleva vinilo'));
+  cont.appendChild(lb);
+  if(!vin.on) return;
+
+  const lista = vinilosDisponibles();
+  if(!lista.length){
+    cont.innerHTML += '<div style="font-size:.7rem;color:var(--texto2)">Cargá primero algún vinilo en los precios de insumos.</div>';
+    return;
+  }
+
+  /* color o impreso */
+  const fm = document.createElement('div');
+  fm.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
+  for(const [v, txt] of [['color','🎨 Color liso'],['impreso','🖨 Impreso']]){
+    const b2 = document.createElement('button');
+    b2.textContent = txt;
+    const act = vin.modo === v;
+    b2.style.cssText = 'flex:1;border-radius:8px;padding:7px;font-size:.68rem;font-weight:700;' +
+      (act ? 'background:rgba(180,142,173,.20);border:1px solid #b48ead;color:#b48ead'
+           : 'background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)');
+    b2.onclick = ()=>{ vin.modo = v; renderVinilo(); };
+    fm.appendChild(b2);
+  }
+  cont.appendChild(fm);
+
+  const r = vinCalcular();
+  if(!r) return;
+
+  /* material */
+  const fs2 = document.createElement('div');
+  fs2.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px';
+  const ls = document.createElement('span');
+  ls.style.cssText = 'flex:1 1 80px;font-size:.7rem;color:var(--texto2)'; ls.textContent = 'Vinilo';
+  const ss = document.createElement('select');
+  ss.style.cssText = 'flex:2 1 180px;margin:0;padding:8px;font-size:12.5px;background:var(--fondo);' +
+    'border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+  ss.innerHTML = lista.map(c=> '<option value="' + c.id + '"' + (c.id===r.mat.id?' selected':'') +
+    '>' + c.nombre + (c.precio ? '' : ' · sin precio') + '</option>').join('');
+  ss.onchange = ()=>{ vin.matId = ss.value; renderVinilo(); };
+  fs2.appendChild(ls); fs2.appendChild(ss);
+  cont.appendChild(fs2);
+
+  /* orientación de las tiras */
+  const fo = document.createElement('div');
+  fo.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
+  for(const [v, txt] of [['vertical','⬍ Tiras verticales'],['horizontal','⬌ Tiras horizontales']]){
+    const b2 = document.createElement('button');
+    b2.textContent = txt;
+    const act = (vin.orient === v);
+    b2.style.cssText = 'flex:1;border-radius:8px;padding:7px;font-size:.68rem;font-weight:700;' +
+      (act ? 'background:rgba(180,142,173,.20);border:1px solid #b48ead;color:#b48ead'
+           : 'background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)');
+    b2.onclick = ()=>{ vin.orient = v; renderVinilo(); };
+    fo.appendChild(b2);
+  }
+  cont.appendChild(fo);
+
+  if(vin.modo === 'color'){
+    const fc = document.createElement('div');
+    fc.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
+    const lc = document.createElement('span');
+    lc.style.cssText = 'flex:1 1 120px;font-size:.7rem;color:var(--texto2)';
+    lc.textContent = 'Color del vinilo';
+    const ic = document.createElement('input');
+    ic.type = 'color'; ic.value = vin.color || '#c0392b';
+    ic.style.cssText = 'width:52px;height:32px;margin:0;padding:2px;background:var(--fondo);' +
+      'border:1px solid var(--borde);border-radius:8px';
+    ic.addEventListener('input', ()=>{ vin.color = ic.value; renderVinilo(); });
+    fc.appendChild(lc); fc.appendChild(ic);
+    cont.appendChild(fc);
+  }else{
+    const fi = document.createElement('div');
+    fi.style.cssText = 'margin-bottom:8px';
+    const bImg = document.createElement('button');
+    bImg.textContent = vin.img ? '🖼 Cambiar la gráfica' : '📎 Pegar la gráfica que lleva';
+    bImg.style.cssText = 'width:100%;border-radius:9px;padding:9px;font-size:.7rem;font-weight:700;' +
+      'background:var(--panel2);border:1px dashed #b48ead;color:#b48ead';
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
+    inp.onchange = async ()=>{
+      const f = inp.files && inp.files[0];
+      if(!f) return;
+      try{
+        vin.img = await comprimirImagen(f, 900, 0.7);
+        renderVinilo();
+      }catch(e){ toast('No pude cargar la imagen'); }
+    };
+    bImg.onclick = ()=> inp.click();
+    fi.appendChild(bImg); fi.appendChild(inp);
+    if(vin.img){
+      const prev = document.createElement('img');
+      prev.src = vin.img;
+      prev.style.cssText = 'width:100%;max-width:260px;display:block;margin:8px auto 0;' +
+        'border-radius:8px;border:1px solid var(--borde)';
+      fi.appendChild(prev);
+      const bQ = document.createElement('button');
+      bQ.textContent = '✕ Quitar la gráfica';
+      bQ.style.cssText = 'width:100%;margin-top:6px;border-radius:8px;padding:7px;font-size:.66rem;' +
+        'background:none;border:1px solid #ff7a7a;color:#ff7a7a';
+      bQ.onclick = ()=>{ vin.img = null; renderVinilo(); };
+      fi.appendChild(bQ);
+    }
+    cont.appendChild(fi);
+  }
+
+  const d = document.createElement('div');
+  d.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:10px;' +
+    'padding:10px;font-size:.7rem;line-height:1.7';
+  const linea = (a2,b2,f)=> '<div style="display:flex;justify-content:space-between;gap:8px">' +
+    '<span style="color:var(--texto2)">' + a2 + '</span><b style="' +
+    (f ? 'color:var(--ambar)' : 'color:var(--texto)') + '">' + b2 + '</b></div>';
+  d.innerHTML =
+    linea(r.tiras + ' tira' + (r.tiras===1?'':'s') + ' de ' + r.largo.toFixed(2) + ' m · ' +
+          r.ml.toFixed(2) + ' m lineales', plata(r.costo)) +
+    (r.uniones > 0 ? '<div style="font-size:.62rem;color:var(--texto2);margin-top:-3px">' +
+      r.uniones + ' unión' + (r.uniones===1?'':'es') + ' · cada una come ' +
+      (r.union*100).toFixed(0) + ' cm</div>' : '') +
+    (r.dob > 0 ? '<div style="font-size:.62rem;color:var(--texto2)">incluye ' +
+      (r.dob*100).toFixed(0) + ' cm por lado para tapar el doblez</div>' : '') +
+    '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
+    linea('Venta con +' + r.mrg + '%', plata(r.venta)) +
+    '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
+    linea('TOTAL', plata(r.total), true);
+  cont.appendChild(d);
+
+  const bAdd = document.createElement('button');
+  const edV = cartEditando && cartEditando.cart && cartEditando.cart.tipo === 'vinilo';
+  bAdd.textContent = (edV ? '✓ Corregir el vinilo · ' : '＋ Agregar el vinilo al pedido · ') + plata(r.total);
+  bAdd.style.cssText = 'width:100%;margin-top:10px;border-radius:10px;padding:11px;font-weight:800;' +
+    'font-size:.76rem;background:#b48ead;border:none;color:#1a1420';
+  bAdd.onclick = ()=>{
+    if(!cartPedido){ toast('Abrí un pedido primero'); return; }
+    cartGuardarItem({
+      nombre: (vin.modo === 'impreso' ? 'Vinilo impreso' : 'Vinilo de color') + ' · ' +
+              Math.round(r.W*100) + '×' + Math.round(r.H*100) + ' cm',
+      cant: 1,
+      precio: Math.round(r.total),
+      costoReal: Math.round(r.costo),
+      cart: {tipo:'vinilo', W:r.W, H:r.H, mat:r.mat.nombre, modo:vin.modo,
+             color: vin.modo==='color' ? vin.color : null,
+             img: vin.modo==='impreso' ? vin.img : null,
+             tiras:r.tiras, ml:+r.ml.toFixed(2), mrg:r.mrg}
+    }, 'vinilo');
+  };
+  cont.appendChild(bAdd);
+}
+
 /* ============ CARTELERÍA · PERCHAS ============
    Marco de alto × profundidad con una diagonal que forma el triángulo.
    Una en cada punta y una cada tantos metros. Se puede partir en dos
@@ -5290,7 +5490,7 @@ function perchasCalcular(){
   const piezasUna = [];
   for(const al of marcos) for(const pz of perchaPiezas(al, prof)) piezasUna.push(pz);
 
-  const piezas = piezasUna.map(x=> ({...x, q: x.q * cant}));
+  const piezas = agruparPiezas(piezasUna.map(x=> ({...x, q: x.q * cant})));
 
   const mPerim = piezas.filter(x=>x.cano==='perim').reduce((s,x)=> s + x.q*x.l, 0);
   const mDiag  = piezas.filter(x=>x.cano==='diag').reduce((s,x)=> s + x.q*x.l, 0);
@@ -5360,6 +5560,17 @@ function planCorte(piezas, tiraM){
     b.cortes.push(pz); b.libre -= pz.l;
   }
   return barras;
+}
+
+/* junta piezas idénticas en una sola línea */
+function agruparPiezas(arr){
+  const mapa = new Map();
+  for(const x of arr){
+    const k = x.cano + '|' + x.l.toFixed(4) + '|' + x.d;
+    if(mapa.has(k)) mapa.get(k).q += x.q;
+    else mapa.set(k, {...x});
+  }
+  return [...mapa.values()].sort((a,b)=> b.l - a.l);
 }
 
 function planCorteBastidor(r){
@@ -5472,32 +5683,57 @@ async function planoHerrero(r){
     doc.text('Total de caño: ' + (r.tp.metros + r.tg.metros).toFixed(2) + ' m', mg, y);
     y += 24;
 
-    /* de qué tira sale cada corte, para no empalmar nada */
-    const plan = planCorteBastidor(r);
+    /* PLAN DE CORTE UNIFICADO: bastidor y perchas juntos, agrupados por caño,
+       así los recortes de uno sirven para el otro. */
+    const rp0 = perchasCalcular();
+    const todas = [];
+    for(const x of r.piezas)
+      todas.push({...x, canoId: x.cano === 'perim' ? r.perim.id : r.grilla.id,
+                        canoNom: x.cano === 'perim' ? r.perim.nombre : r.grilla.nombre,
+                        origen: 'bastidor'});
+    if(rp0) for(const x of rp0.piezas)
+      todas.push({...x, canoId: x.cano === 'diag' ? rp0.diag.id : rp0.perim.id,
+                        canoNom: x.cano === 'diag' ? rp0.diag.nombre : rp0.perim.nombre,
+                        origen: 'percha'});
+
+    const porCano = {};
+    for(const x of todas){
+      if(!porCano[x.canoId]) porCano[x.canoId] = {nom: x.canoNom, pz: [],
+        tiraM: (insumos.find(z=> z.id === x.canoId)||{}).tiraM || 6};
+      porCano[x.canoId].pz.push(x);
+    }
+
     doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(20,20,20);
-    doc.text('PLAN DE CORTE', mg, y); y += 6;
+    doc.text('PLAN DE CORTE  ·  bastidor y perchas juntos', mg, y); y += 6;
     doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
     let sobraTotal = 0;
-    for(const g of plan){
-      if(y > 740){ doc.addPage(); y = 60; }
+    const anchoTxt = W - mg*2 - 95;
+    for(const k of Object.keys(porCano)){
+      const g = porCano[k];
+      const barras = planCorte(g.pz, g.tiraM);
+      if(y > 720){ doc.addPage(); y = 60; }
       doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(40,40,40);
-      doc.text(g.titulo + '  ·  ' + g.barras.length + ' tira' + (g.barras.length===1?'':'s') +
+      doc.text(g.nom + '  ·  ' + barras.length + ' tira' + (barras.length===1?'':'s') +
                ' de ' + g.tiraM + ' m', mg, y);
       y += 14;
-      doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
-      g.barras.forEach((b, i)=>{
-        if(y > 760){ doc.addPage(); y = 60; }
-        const cortes = b.cortes.map(c=> (c.l*100).toFixed(0) + ' cm').join('  +  ');
-        doc.text('Tira ' + (i+1) + ':  ' + cortes, mg + 10, y);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(60,60,60);
+      barras.forEach((b, i)=>{
+        const txt = b.cortes.map(c=> (c.l*100).toFixed(0) + ' (' + (c.origen==='percha'?'P':'B') + ')').join('  +  ');
+        const lineas = doc.splitTextToSize('Tira ' + (i+1) + ':  ' + txt, anchoTxt);
+        const alto = lineas.length * 11;
+        if(y + alto > 780){ doc.addPage(); y = 60; }
+        doc.text(lineas, mg + 10, y);
         doc.setTextColor(140,140,140);
-        doc.text(b.largaDeMas ? '¡no entra en la tira!' : 'sobra ' + (b.libre*100).toFixed(0) + ' cm',
+        doc.text(b.largaDeMas ? 'no entra' : 'sobra ' + (b.libre*100).toFixed(0) + ' cm',
                  W - mg, y, {align:'right'});
         doc.setTextColor(60,60,60);
         if(!b.largaDeMas) sobraTotal += b.libre;
-        y += 13;
+        y += alto + 3;
       });
-      y += 6;
+      y += 8;
     }
+    doc.setFontSize(8); doc.setTextColor(140,140,140);
+    doc.text('Medidas en cm.  B = bastidor · P = percha', mg + 10, y); y += 14;
     doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
     doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(40,40,40);
     doc.text('Sobrante total: ' + sobraTotal.toFixed(2) + ' m de caño', mg, y);
@@ -5544,33 +5780,7 @@ async function planoHerrero(r){
         doc.setTextColor(40,40,40);
         y += 15;
       }
-      y += 8;
-      doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
-      doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
-      doc.text('PLAN DE CORTE · PERCHAS', mg, y); y += 14;
-      doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
-      let sobraP = 0;
-      for(const g of [{t:rp.perim, pz:rp.piezas.filter(x=>x.cano==='perim')},
-                      {t:rp.diag,  pz:rp.piezas.filter(x=>x.cano==='diag')}]){
-        if(!g.pz.length) continue;
-        const tiraM = g.t.tiraM || 6;
-        const bs = planCorte(g.pz, tiraM);
-        doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
-        doc.text(g.t.nombre + ' · ' + bs.length + ' tiras de ' + tiraM + ' m', mg, y); y += 13;
-        doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
-        bs.forEach((b2, i)=>{
-          if(y > 770){ doc.addPage(); y = 60; }
-          doc.text('Tira ' + (i+1) + ':  ' + b2.cortes.map(c=> (c.l*100).toFixed(0)+' cm').join('  +  '), mg + 10, y);
-          doc.setTextColor(140,140,140);
-          doc.text('sobra ' + (b2.libre*100).toFixed(0) + ' cm', W - mg, y, {align:'right'});
-          doc.setTextColor(60,60,60);
-          sobraP += b2.libre;
-          y += 13;
-        });
-        y += 6;
-      }
-      doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
-      doc.text('Sobrante de perchas: ' + sobraP.toFixed(2) + ' m', mg, y);
+      /* el plan de corte de las perchas va unificado con el del bastidor, más arriba */
     }
 
     doc.save('Estructura ' + Math.round(r.W*100) + 'x' + Math.round(r.H*100) + '.pdf');
@@ -9386,7 +9596,8 @@ async function generarPDFPedido(p, version){
       let bs = (p.items||[]).filter(i=> i.cart &&
         (i.cart.tipo === 'bastidor' || i.cart.tipo === 'perchas') && i.conf !== false);
       /* si hay cara sin bastidor, igual dibujamos el cartel */
-      const caras = (p.items||[]).filter(i=> i.cart && i.cart.tipo === 'cara' && i.conf !== false);
+      const caras = (p.items||[]).filter(i=> i.cart &&
+        (i.cart.tipo === 'cara' || i.cart.tipo === 'vinilo') && i.conf !== false);
       for(const cs of caras){
         if(!bs.some(z=> z.cart.tipo === 'bastidor' &&
              Math.abs(z.cart.W - cs.cart.W) < 0.02 && Math.abs(z.cart.H - cs.cart.H) < 0.02)) bs.push(cs);
@@ -9429,6 +9640,20 @@ async function generarPDFPedido(p, version){
               doc.setLineWidth(0.5);
               const paso = Math.max(5, w2 / 40);
               for(let x2 = ox + paso; x2 < ox + w2 - 1; x2 += paso) doc.line(x2, oy, x2, oy + h2);
+            }
+          }
+
+          /* el vinilo va encima: color liso o la gráfica que lleva */
+          const vinDeEste = (p.items||[]).find(z=> z.cart && z.cart.tipo === 'vinilo' &&
+            Math.abs(z.cart.W - c.W) < 0.02 && Math.abs(z.cart.H - c.H) < 0.02 && z.conf !== false);
+          if(vinDeEste){
+            const vc = vinDeEste.cart;
+            if(vc.modo === 'impreso' && vc.img){
+              try{ doc.addImage(vc.img, 'JPEG', ox, oy, w2, h2); }catch(e){}
+            }else if(vc.color){
+              const hv = vc.color.replace('#','');
+              doc.setFillColor(parseInt(hv.slice(0,2),16), parseInt(hv.slice(2,4),16), parseInt(hv.slice(4,6),16));
+              doc.rect(ox, oy, w2, h2, 'F');
             }
           }
 
@@ -10549,6 +10774,12 @@ function abrirCarteleria(p, item){
       const bg = insumos.find(x=> x.cat==='cano' && x.nombre === c.grilla);
       if(bp) bast.perimId = bp.id;
       if(bg) bast.grillaId = bg.id;
+    }else if(c.tipo === 'vinilo'){
+      vin.on = true; vin.modo = c.modo || 'color';
+      vin.color = c.color || '#c0392b'; vin.img = c.img || null;
+      vin.margen = (c.mrg == null) ? null : c.mrg;
+      const vm = insumos.find(x=> x.nombre === c.mat);
+      if(vm) vin.matId = vm.id;
     }else if(c.tipo === 'perchas'){
       perch.on = true;
       perch.prof = Math.round(c.prof*100);
@@ -10574,6 +10805,7 @@ function abrirCarteleria(p, item){
   renderCartCfg();
   renderCara();
   renderBastidor();
+  renderVinilo();
   renderPerchas();
   document.getElementById('modalCarteleria').classList.add('abierto');
 }
@@ -10595,7 +10827,7 @@ function cartGuardarItem(nuevo, tipo){
 }
 ['cartW','cartH'].forEach(id=>{
   const el = document.getElementById(id);
-  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderCara(); renderBastidor(); renderPerchas(); });
+  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderCara(); renderBastidor(); renderVinilo(); renderPerchas(); });
 });
 document.getElementById('btnCarteleria').onclick = ()=>{
   if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirCarteleria(p); }
