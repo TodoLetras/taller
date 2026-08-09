@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v130</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v131</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -578,6 +578,7 @@
     <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">APLICACIONES</div>
     <div id="cartVinilo"></div>
     <div id="cartCorporeas"></div>
+    <div id="cartVariante"></div>
     <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:14px 0 4px">MONTAJE</div>
     <div id="cartPerchas"></div>
     <details style="margin-top:12px">
@@ -6320,6 +6321,96 @@ function renderPerchas(){
 
 /* Las corpóreas ya tienen su propio cotizador: desde acá lo abrimos
    con el pedido y la medida del cartel, en vez de duplicar la lógica. */
+/* Duplicar como variante: copia el cartel entero y deja cambiar solo la cara.
+   Las dos versiones quedan como ítems separados, cada una con su tilde,
+   así se guardan versiones de presupuesto para comparar. */
+function renderVariante(){
+  const cont = document.getElementById('cartVariante');
+  if(!cont) return;
+  cont.innerHTML = '';
+  if(!cartPedido) return;
+  const capas = (cartPedido.items||[]).filter(i=> i.cart);
+  if(capas.length < 1) return;
+
+  const caraActual = capas.find(i=> i.cart.tipo === 'cara');
+  const lista = carasDisponibles().filter(m=> !caraActual || m.nombre !== caraActual.cart.mat);
+  if(!lista.length) return;
+
+  const d = document.createElement('details');
+  d.style.cssText = 'margin-top:12px;background:var(--panel2);border:1px solid #b48ead;border-radius:10px';
+  const sum = document.createElement('summary');
+  sum.style.cssText = 'padding:10px 12px;font-size:.76rem;font-weight:700;cursor:pointer;color:#b48ead';
+  sum.textContent = '⧉ Duplicar como variante (cambiando la cara)';
+  d.appendChild(sum);
+
+  const caja = document.createElement('div');
+  caja.style.cssText = 'padding:0 12px 12px';
+
+  const nota = document.createElement('div');
+  nota.style.cssText = 'font-size:.66rem;color:var(--texto2);line-height:1.45;margin-bottom:8px';
+  nota.textContent = 'Copia las ' + capas.length + ' capas de este cartel y cambia solo la cara. ' +
+    'Después usá el tilde de cada ítem para armar y guardar cada versión del presupuesto.';
+  caja.appendChild(nota);
+
+  const fila = document.createElement('div');
+  fila.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
+  const l = document.createElement('span');
+  l.style.cssText = 'flex:1 1 90px;font-size:.7rem;color:var(--texto2)';
+  l.textContent = 'Cara nueva';
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:2 1 190px;margin:0;padding:8px;font-size:12.5px;background:var(--fondo);' +
+    'border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
+  sel.innerHTML = lista.map(c=> '<option value="' + c.id + '">' + c.nombre +
+    (c.precio ? '' : ' · sin precio') + '</option>').join('');
+  fila.appendChild(l); fila.appendChild(sel);
+  caja.appendChild(fila);
+
+  const b2 = document.createElement('button');
+  b2.textContent = '⧉ Crear la variante';
+  b2.style.cssText = 'width:100%;border-radius:10px;padding:11px;font-weight:800;font-size:.76rem;' +
+    'background:#b48ead;border:none;color:#1a1420';
+  b2.onclick = ()=>{
+    const nuevo = insumos.find(x=> x.id === sel.value);
+    if(!nuevo){ toast('Elegí un material'); return; }
+
+    /* guardamos el estado actual para recalcular la cara nueva */
+    const matPrevio = cara.matId, orientPrevia = cara.orient;
+    cara.matId = nuevo.id;
+    const r = caraCalcular();
+    cara.matId = matPrevio; cara.orient = orientPrevia;
+    if(!r){ toast('No pude calcular esa cara'); return; }
+
+    /* las capas viejas quedan tildadas; las nuevas también, y vos elegís */
+    let copiadas = 0;
+    for(const it of capas){
+      if(it.cart.tipo === 'cara'){
+        cartPedido.items.push({
+          id: uid(),
+          nombre: r.mat.nombre + ' · ' + Math.round(r.W*100) + '×' + Math.round(r.H*100) + ' cm',
+          cant: 1,
+          precio: Math.round(r.total),
+          costoReal: Math.round(r.costo),
+          conf: false,
+          cart: Object.assign({}, it.cart, {mat: r.mat.nombre, hojas: r.hojas||null,
+            tiras: r.tiras||null, largo: r.largoReal||null, aprov: +(r.aprov||1).toFixed(3)})
+        });
+      }else{
+        cartPedido.items.push(Object.assign({}, it, {id: uid(), conf: false,
+          cart: Object.assign({}, it.cart)}));
+      }
+      copiadas++;
+    }
+    registrar('duplicó el cartel como variante con ' + r.mat.nombre +
+              ' en el pedido de ' + nombreClienteId(cartPedido.cliente));
+    guardarDatos(); renderPedidos(); renderPedidoItems(cartPedido);
+    toast('Variante creada: ' + copiadas + ' capas copiadas, destildadas para que elijas ✓');
+    renderVariante();
+  };
+  caja.appendChild(b2);
+  d.appendChild(caja);
+  cont.appendChild(d);
+}
+
 function renderCorporeas(){
   const cont = document.getElementById('cartCorporeas');
   if(!cont) return;
@@ -10975,6 +11066,7 @@ function abrirCarteleria(p, item){
   renderVinilo();
   renderCorporeas();
   renderPerchas();
+  renderVariante();
   document.getElementById('modalCarteleria').classList.add('abierto');
 }
 
@@ -10992,6 +11084,7 @@ function cartGuardarItem(nuevo, tipo){
     toast((tipo==='bastidor' ? 'Bastidor' : 'Cara') + ' agregada ✓');
   }
   guardarDatos(); renderPedidos(); renderPedidoItems(cartPedido);
+  renderVariante();
 }
 ['cartW','cartH'].forEach(id=>{
   const el = document.getElementById(id);
