@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v119</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v120</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -4856,6 +4856,25 @@ function renderBastidor(){
     '<span style="color:var(--texto2)">' + x.d + '</span>' +
     '<b>' + x.q + ' × ' + (x.l*100).toFixed(1) + ' cm</b></div>').join('');
   dz.appendChild(cz2);
+  /* plan de corte en pantalla */
+  const plan = planCorteBastidor(r);
+  let sobraTot = 0;
+  let hp = '<div style="border-top:1px solid var(--borde);margin-top:6px;padding-top:6px">' +
+           '<b style="font-size:.68rem">Plan de corte (sin empalmar)</b>';
+  for(const g of plan){
+    hp += '<div style="font-size:.66rem;color:#b48ead;margin-top:4px;font-weight:700">' + g.titulo + '</div>';
+    g.barras.forEach((b, i)=>{
+      if(!b.largaDeMas) sobraTot += b.libre;
+      hp += '<div style="display:flex;justify-content:space-between;gap:8px;font-size:.66rem">' +
+        '<span>Tira ' + (i+1) + ': ' + b.cortes.map(c=> (c.l*100).toFixed(0)+' cm').join(' + ') + '</span>' +
+        '<span style="color:var(--texto2)">' +
+        (b.largaDeMas ? '¡no entra!' : 'sobra ' + (b.libre*100).toFixed(0) + ' cm') + '</span></div>';
+    });
+  }
+  hp += '<div style="font-size:.68rem;margin-top:6px;color:var(--ambar);font-weight:700">' +
+        'Sobrante total: ' + sobraTot.toFixed(2) + ' m</div></div>';
+  cz2.innerHTML += hp;
+
   const bPlano = document.createElement('button');
   bPlano.textContent = '📄 Plano para el herrero (PDF)';
   bPlano.style.cssText = 'width:calc(100% - 22px);margin:0 11px 11px;border-radius:9px;padding:9px;' +
@@ -5156,6 +5175,44 @@ function renderCara(){
   cont.appendChild(bAdd);
 }
 
+/* Plan de corte: acomoda las piezas en tiras enteras, de la más larga a la más
+   corta, para que ninguna haya que empalmar. Devuelve qué sale de cada tira. */
+function planCorte(piezas, tiraM){
+  const lista = [];
+  for(const p of piezas) for(let i=0; i<p.q; i++) lista.push({l:p.l, d:p.d});
+  lista.sort((a,b)=> b.l - a.l);
+  const barras = [];
+  for(const pz of lista){
+    if(pz.l > tiraM + 0.0001){
+      barras.push({cortes:[pz], libre:0, largaDeMas:true});
+      continue;
+    }
+    let b = barras.find(x=> !x.largaDeMas && x.libre >= pz.l - 0.0001);
+    if(!b){ b = {cortes:[], libre:tiraM}; barras.push(b); }
+    b.cortes.push(pz); b.libre -= pz.l;
+  }
+  return barras;
+}
+
+function planCorteBastidor(r){
+  const tiraP = (r.perim && r.perim.tiraM) || 6;
+  const tiraG = (r.grilla && r.grilla.tiraM) || 6;
+  const pz = (cual)=> r.piezas.filter(x=> x.cano === cual);
+  const out = [];
+  const pp = pz('perim');
+  if(pp.length) out.push({titulo: r.perim.nombre, tiraM: tiraP, barras: planCorte(pp, tiraP)});
+  const pg = pz('grilla');
+  if(pg.length){
+    /* si es el mismo caño, va todo junto y se aprovecha mejor */
+    if(r.grilla.id === r.perim.id && out.length){
+      out[0].barras = planCorte(r.piezas, tiraP);
+    }else{
+      out.push({titulo: r.grilla.nombre, tiraM: tiraG, barras: planCorte(pg, tiraG)});
+    }
+  }
+  return out;
+}
+
 /* Plano para el herrero: dibujo con cotas y lista de piezas.
    No lleva ningún precio: es una orden de taller. */
 async function planoHerrero(r){
@@ -5242,8 +5299,38 @@ async function planoHerrero(r){
     doc.text('Perímetro: ' + r.perim.nombre, mg, y); y += 14;
     doc.text('Grilla: ' + r.grilla.nombre, mg, y); y += 14;
     doc.setFont('helvetica','normal'); doc.setTextColor(90,90,90);
-    doc.text('Total de caño: ' + (r.tp.metros + r.tg.metros).toFixed(2) + ' m  ·  ' +
-             (r.tp.tiras + r.tg.tiras) + ' tiras de ' + r.tp.tiraM + ' m', mg, y);
+    doc.text('Total de caño: ' + (r.tp.metros + r.tg.metros).toFixed(2) + ' m', mg, y);
+    y += 24;
+
+    /* de qué tira sale cada corte, para no empalmar nada */
+    const plan = planCorteBastidor(r);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(20,20,20);
+    doc.text('PLAN DE CORTE', mg, y); y += 6;
+    doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
+    let sobraTotal = 0;
+    for(const g of plan){
+      if(y > 740){ doc.addPage(); y = 60; }
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(40,40,40);
+      doc.text(g.titulo + '  ·  ' + g.barras.length + ' tira' + (g.barras.length===1?'':'s') +
+               ' de ' + g.tiraM + ' m', mg, y);
+      y += 14;
+      doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+      g.barras.forEach((b, i)=>{
+        if(y > 760){ doc.addPage(); y = 60; }
+        const cortes = b.cortes.map(c=> (c.l*100).toFixed(0) + ' cm').join('  +  ');
+        doc.text('Tira ' + (i+1) + ':  ' + cortes, mg + 10, y);
+        doc.setTextColor(140,140,140);
+        doc.text(b.largaDeMas ? '¡no entra en la tira!' : 'sobra ' + (b.libre*100).toFixed(0) + ' cm',
+                 W - mg, y, {align:'right'});
+        doc.setTextColor(60,60,60);
+        if(!b.largaDeMas) sobraTotal += b.libre;
+        y += 13;
+      });
+      y += 6;
+    }
+    doc.setDrawColor(200,200,200); doc.line(mg, y, W-mg, y); y += 14;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(40,40,40);
+    doc.text('Sobrante total: ' + sobraTotal.toFixed(2) + ' m de caño', mg, y);
 
     doc.save('Estructura ' + Math.round(r.W*100) + 'x' + Math.round(r.H*100) + '.pdf');
   }catch(e){ toast('No pude generar el plano: ' + e.message); }
