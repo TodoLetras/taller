@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v112</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v113</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -4858,8 +4858,25 @@ function renderInsumos(){
       f.style.cssText = 'border-top:1px dashed var(--borde);padding:8px 0';
 
       const l1 = document.createElement('div');
-      l1.style.cssText = 'font-size:.74rem;font-weight:600;color:var(--texto)';
-      l1.textContent = x.nombre;
+      l1.style.cssText = 'font-size:.74rem;font-weight:600;color:var(--texto);display:flex;gap:8px;align-items:baseline';
+      const nom = document.createElement('span');
+      nom.style.flex = '1';
+      nom.textContent = x.nombre;
+      const bx = document.createElement('button');
+      bx.textContent = '✕';
+      bx.title = 'Borrar este insumo';
+      bx.style.cssText = 'background:none;border:1px solid #ff7a7a;color:#ff7a7a;border-radius:7px;' +
+        'padding:3px 8px;font-size:.66rem;font-weight:700;flex:0 0 auto';
+      bx.onclick = (e)=>{
+        dosToques(e.target, '¿Borrar?', ()=>{
+          insumos = insumos.filter(y=> y.id !== x.id);
+          guardarDatos();
+          cartAbiertos[cat] = true;
+          renderInsumos(); renderBastidor();
+          toast('Borrado');
+        });
+      };
+      l1.appendChild(nom); l1.appendChild(bx);
       f.appendChild(l1);
 
       const l2 = document.createElement('div');
