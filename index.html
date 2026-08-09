@@ -284,7 +284,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v126</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v127</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1016,10 +1016,10 @@ function insumosSemilla(){
     I({cat:'mdf', nombre:'MDF crudo 18 mm',  prov:'Moconá', unidad:'m2', hojaW:1.83, hojaH:2.60, recargo:10}),
     I({cat:'mdf', nombre:'MDF blanco 18 mm', prov:'Moconá', unidad:'m2', hojaW:1.83, hojaH:2.60, recargo:10}),
     /* --- vinilos de color, por metro lineal --- */
-    I({cat:'vinilo', nombre:'Vinilo calandrado de color · 60 cm',  unidad:'ml', ancho:0.60}),
-    I({cat:'vinilo', nombre:'Vinilo calandrado de color · 120 cm', unidad:'ml', ancho:1.20}),
-    I({cat:'vinilo', nombre:'Vinilo fundido de color · 90 cm',     unidad:'ml', ancho:0.90}),
-    I({cat:'vinilo', nombre:'Vinilo fundido de color · 150 cm',    unidad:'ml', ancho:1.50})
+    I({cat:'vinilo', nombre:'Vinilo calandrado de color · 60 cm',  prov:'ELA', unidad:'ml', ancho:0.60}),
+    I({cat:'vinilo', nombre:'Vinilo calandrado de color · 120 cm', prov:'ELA', unidad:'ml', ancho:1.20}),
+    I({cat:'vinilo', nombre:'Vinilo fundido de color · 90 cm',     prov:'ELA', unidad:'ml', ancho:0.90}),
+    I({cat:'vinilo', nombre:'Vinilo fundido de color · 150 cm',    prov:'ELA', unidad:'ml', ancho:1.50})
   ];
 }
 
@@ -5347,7 +5347,8 @@ function renderVinilo(){
   ss.style.cssText = 'flex:2 1 180px;margin:0;padding:8px;font-size:12.5px;background:var(--fondo);' +
     'border:1px solid var(--borde);border-radius:8px;color:var(--texto)';
   ss.innerHTML = lista.map(c=> '<option value="' + c.id + '"' + (c.id===r.mat.id?' selected':'') +
-    '>' + c.nombre + (c.precio ? '' : ' · sin precio') + '</option>').join('');
+    '>' + c.nombre + (c.prov ? ' · ' + c.prov : '') +
+    (c.precio ? ' · ' + plata(insumoPrecio(c)) + '/m' : ' · sin precio') + '</option>').join('');
   ss.onchange = ()=>{ vin.matId = ss.value; renderVinilo(); };
   fs2.appendChild(ls); fs2.appendChild(ss);
   cont.appendChild(fs2);
@@ -11629,6 +11630,20 @@ function arreglarCincalum(){
 }
 arreglarCincalum();
 setTimeout(arreglarCincalum, 4000);
+
+/* Los vinilos de color lisos son de ELA */
+function ponerELA(){
+  if(!Array.isArray(insumos) || !Array.isArray(proveedores)) return;
+  let toco = false;
+  if(!proveedores.some(x=> (x.nombre||'').toLowerCase() === 'ela')){
+    proveedores.push({id: uid(), nombre: 'ELA', rubro: 'Vinilos', creado: Date.now()});
+    toco = true;
+  }
+  for(const x of insumos) if(x.cat === 'vinilo' && !x.prov){ x.prov = 'ELA'; toco = true; }
+  if(toco) guardarDatos();
+}
+ponerELA();
+setTimeout(ponerELA, 4000);
 // prueba de persistencia al arrancar: escribir y releer una clave de test
 (async ()=>{
   try{
