@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v138</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v140</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1489,11 +1489,11 @@ function migrarSoldadoRuis(){
     adCfg.vc = {
       multSin: 2, multCon: 3,
       desplote: {horas: 0.5, ventaHora: 20000, costoHora: 9000},
-      cortes: [{hasta: 65, precio: 6000}, {hasta: 125, precio: 8000}, {hasta: 999, precio: 10000}],
+      cortes: [{hasta: 60, precio: 6000}, {hasta: 120, precio: 8000}, {hasta: 999, precio: 10000}],
       materiales: [
         {nombre: 'Vinilo esmerilado', anchos: [
-          {cm: 61, precio: 4700}, {cm: 91, precio: 6900},
-          {cm: 122, precio: 9300}, {cm: 152, precio: 11500},
+          {cm: 60, precio: 4200}, {cm: 90, precio: 6300},
+          {cm: 120, precio: 8400}, {cm: 152, precio: 11500},
         ]},
       ],
     };
@@ -1521,14 +1521,43 @@ function migrarSoldadoRuis(){
         });
       }
     }
-    if(!adCfg.vc.materiales.find(m=> (m.nombre||'').toLowerCase().includes('tigre'))){
+    if(!adCfg.vc.materiales.find(m=> m.prov === 'Tigre' || (m.nombre||'').toLowerCase().includes('tigre'))){
       adCfg.vc.materiales.push({
-        nombre: 'Vinilo impreso látex base blanca · Tigre',
+        nombre: 'Vinilo impreso látex base blanca',
+        prov: 'Tigre',
         tipo: 'impreso',
         anchos: [{cm: 152, precio: 11900}],   // $ por ml IMPRESO (confirmar ancho del rollo)
         blancoMl: 3800,                        // $ por ml SIN imprimir (espacios)
         corteMl: 6000,                         // corte con registro, $ por ml (tarifa propia de Tigre)
       });
+    }
+    // se duplicaba en cada carga: el nombre perdía "Tigre" y el chequeo no lo encontraba
+    if(!adCfg.vc.limpioTigre){
+      const vistos = new Set();
+      adCfg.vc.materiales = adCfg.vc.materiales.filter(m=>{
+        const clave = (m.prov || '') + '|' + (m.nombre || '').toLowerCase().trim();
+        if(vistos.has(clave)) return false;
+        vistos.add(clave);
+        return true;
+      });
+      adCfg.vc.limpioTigre = true;
+    }
+    /* Lista propia 11/08/2026 · rollos de esmerilado y tarifa de corte por ml.
+       El corte va por el ancho REAL que se usa, no por el del rollo. */
+    if(!adCfg.vc.precios0826){
+      const esm = adCfg.vc.materiales.find(m=> /esmerilado/i.test(m.nombre||''));
+      if(esm){
+        const nuevos = {60: 4200, 90: 6300, 120: 8400};
+        for(const a of (esm.anchos||[])){
+          // los rollos viejos venían como 61/91/122: se emparejan por cercanía
+          for(const cm in nuevos) if(Math.abs(a.cm - Number(cm)) <= 3){ a.cm = Number(cm); a.precio = nuevos[cm]; }
+        }
+        for(const cm in nuevos)
+          if(!esm.anchos.find(a=> a.cm === Number(cm))) esm.anchos.push({cm: Number(cm), precio: nuevos[cm]});
+        esm.anchos.sort((a,b)=> a.cm - b.cm);
+      }
+      adCfg.vc.cortes = [{hasta: 60, precio: 6000}, {hasta: 120, precio: 8000}, {hasta: 999, precio: 10000}];
+      adCfg.vc.precios0826 = true;
     }
   }
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
@@ -2814,8 +2843,39 @@ function pasosSiguientes(x, p){
    El que no tiene a nadie atrás, tiene que estar listo para la entrega. */
 function recalcularPasos(p){
   const lista = (p.pendientes || []).filter(x=> x.auto !== false);
+  if(!lista.length) return;
   const entrega = (p.fechas || {}).comprometida;
-  if(!entrega || !lista.length) return;
+
+  /* sin fecha cerrada: se calcula hacia adelante desde hoy, para tener una
+     referencia tentativa. Cuando cierres la fecha, se recalcula hacia atrás. */
+  if(!entrega || p.fechaAbierta){
+    const memo = new Map();
+    const arranqueDe = (x, visitados)=>{
+      if(memo.has(x.id)) return memo.get(x.id);
+      if(visitados.has(x.id)) return hoyISO();
+      visitados.add(x.id);
+      let f = acomodarHabil(hoyISO(), false, x.finde);
+      for(const idDep of (x.dep || [])){
+        const prev = lista.find(y=> y.id === idDep);
+        if(!prev) continue;
+        const listoPrev = sumarHabiles(arranqueDe(prev, visitados), prev.dur || 0, prev.finde);
+        if(listoPrev > f) f = listoPrev;
+      }
+      memo.set(x.id, f);
+      return f;
+    };
+    for(const x of lista){
+      if(x.fechaFija) continue;
+      x.arranca = arranqueDe(x, new Set());
+      x.limite  = sumarHabiles(x.arranca, x.dur || 0, x.finde);
+    }
+    const fines = lista.map(x=> x.limite).filter(Boolean).sort();
+    p.pasosArranque = null;
+    p.entregaEstimada = fines.length ? fines[fines.length - 1] : null;
+    return;
+  }
+
+  p.entregaEstimada = null;
   const porId = new Map(lista.map(x=> [x.id, x]));
   const memo = new Map();
 
@@ -2947,7 +3007,10 @@ function agDesde(){
   const f = (migracion && migracion.hecha) ? String(migracion.hecha).slice(0,10) : null;
   return f || '2026-07-26';
 }
-function agEsCompromiso(x){ return !!x.limite && x.limite >= agDesde(); }
+function agEsCompromiso(x, p){
+  if(p && p.fechaAbierta) return false;   // fecha tentativa, no es un compromiso
+  return !!x.limite && x.limite >= agDesde();
+}
 let agCerrados = {};
 
 function agTodos(){
@@ -3022,7 +3085,7 @@ function agFila(x, p, atrasado){
   }
   if(x.limite){
     const l = document.createElement('span');
-    const compromiso = agEsCompromiso(x);
+    const compromiso = agEsCompromiso(x, p);
     l.className = 'ag-dias' + (compromiso && x.limite <= hoyISO() ? ' viejo' : '');
     l.textContent = (compromiso ? 'para ' : 'anotada ') +
       x.limite.slice(8,10) + '/' + x.limite.slice(5,7);
@@ -3061,7 +3124,9 @@ function agFila(x, p, atrasado){
   return f;
 }
 
-/* ---- los pasos dentro del pedido ---- */
+/* ---- los pasos dentro del pedido ----
+   La fecha y la lista se dibujan por separado: si redibujáramos todo al tocar
+   la fecha, el campo se destruiría mientras escribís el año. */
 function renderPedidoPasos(p){
   const cont = document.getElementById('pedPasos');
   if(!cont) return;
@@ -3075,24 +3140,61 @@ function renderPedidoPasos(p){
   lbl.style.cssText = 'font-size:.74rem;font-weight:700;color:var(--texto2)';
   const inF = document.createElement('input');
   inF.type = 'date';
+  inF.min = '2020-01-01';
+  inF.max = '2099-12-31';
   inF.value = (p.fechas || {}).comprometida || '';
   inF.style.cssText = 'margin:0;padding:8px 10px;font-size:12.5px;background:var(--fondo);' +
     'border:1px dashed var(--ambar);border-radius:9px;color:var(--texto)';
-  inF.onchange = ()=>{
-    p.fechas = p.fechas || {};
-    p.fechas.comprometida = inF.value || null;
-    recalcularPasos(p);
-    guardarDatos(); renderPedidoPasos(p); renderPedidos();
+  const avFinde = document.createElement('span');
+  avFinde.style.cssText = 'font-size:.68rem;color:var(--ambar)';
+
+  /* botón de fecha abierta: los pasos se cargan igual, con fechas tentativas */
+  const bAbierta = document.createElement('button');
+  const pintarAbierta = ()=>{
+    const on = !!p.fechaAbierta;
+    bAbierta.textContent = on ? '📌 Fecha abierta' : '📌 Sin fecha aún';
+    bAbierta.title = on
+      ? 'El trabajo no tiene fecha cerrada. Las fechas de los pasos son tentativas, contadas desde hoy. Tocá para volver a fecha firme.'
+      : 'Todavía no sabés cuándo entrega. Tocá para trabajar sin fecha: los pasos se cargan igual.';
+    bAbierta.style.cssText = 'border-radius:9px;padding:8px 11px;font-size:.72rem;font-weight:700;' +
+      'background:var(--panel2);border:1px dashed ' + (on ? 'var(--ambar);color:var(--ambar)' : 'var(--borde);color:var(--texto2)');
+    inF.style.opacity = on ? '.45' : '1';
+    inF.disabled = !!on;
+    avFinde.textContent = (!on && (p.fechas||{}).comprometida && esFinde(p.fechas.comprometida)) ? '⚠️ cae fin de semana' : '';
   };
+  bAbierta.onclick = ()=>{
+    p.fechaAbierta = !p.fechaAbierta;
+    recalcularPasos(p);
+    guardarDatos(); pintarAbierta(); pintarLista(); renderPedidos();
+  };
+
+  /* sólo se toma la fecha cuando el año es de verdad: así podés escribirlo tranquilo */
+  const guardarFecha = ()=>{
+    const v = inF.value;
+    if(v && v < '2020-01-01') return;      // todavía estás escribiendo el año
+    p.fechas = p.fechas || {};
+    p.fechas.comprometida = v || null;
+    if(v) p.fechaAbierta = false;
+    recalcularPasos(p);
+    guardarDatos(); pintarAbierta(); pintarLista(); renderPedidos();
+  };
+  inF.addEventListener('change', guardarFecha);
+  inF.addEventListener('blur', guardarFecha);
+
   cajaF.appendChild(lbl); cajaF.appendChild(inF);
-  if((p.fechas||{}).comprometida && esFinde(p.fechas.comprometida)){
-    const av = document.createElement('span');
-    av.textContent = '⚠️ cae fin de semana';
-    av.style.cssText = 'font-size:.68rem;color:var(--ambar)';
-    cajaF.appendChild(av);
-  }
+  cajaF.appendChild(bAbierta); cajaF.appendChild(avFinde);
   cont.appendChild(cajaF);
 
+  /* el listado vive en su propia caja, y es lo único que se redibuja */
+  const lista = document.createElement('div');
+  cont.appendChild(lista);
+  const pintarLista = ()=> renderListaPasos(p, lista, pintarLista);
+  pintarAbierta();
+  pintarLista();
+}
+
+function renderListaPasos(p, cont, repintar){
+  cont.innerHTML = '';
   const pasos = p.pendientes || [];
 
   /* si todavía no hay pasos, ofrecer las plantillas */
@@ -3106,10 +3208,12 @@ function renderPedidoPasos(p){
       b.style.cssText = 'flex:1 1 30%;min-width:120px;border-radius:11px;padding:11px 9px;font-size:.74rem;' +
         'font-weight:700;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)';
       b.onclick = ()=>{
-        if(!(p.fechas||{}).comprometida){ toast('Primero poné la fecha de entrega'); return; }
+        if(!(p.fechas||{}).comprometida && !p.fechaAbierta){
+          toast('Poné la fecha de entrega, o marcá "sin fecha aún"'); return;
+        }
         aplicarPlantilla(p, pl.id);
-        renderPedidoPasos(p); renderPedidos();
-        toast('Pasos cargados ✓');
+        repintar(); renderPedidos();
+        toast(p.fechaAbierta ? 'Pasos cargados · fechas tentativas' : 'Pasos cargados ✓');
       };
       cajaP.appendChild(b);
     }
@@ -3119,6 +3223,14 @@ function renderPedidoPasos(p){
     ay.style.cssText = 'font-size:.68rem;color:var(--texto2);margin-top:6px;line-height:1.4';
     cont.appendChild(ay);
     return;
+  }
+
+  if(p.fechaAbierta){
+    const av = document.createElement('div');
+    av.textContent = '📌 Sin fecha de entrega: las fechas de abajo son tentativas, contadas desde hoy. Cuando la cierres, se recalcula todo solo.';
+    av.style.cssText = 'font-size:.68rem;color:var(--ambar);background:var(--panel2);border:1px dashed var(--ambar);' +
+      'border-radius:9px;padding:7px 9px;margin-bottom:7px;line-height:1.35';
+    cont.appendChild(av);
   }
 
   const hoy = hoyISO();
@@ -3133,7 +3245,7 @@ function renderPedidoPasos(p){
     return (a.arranca || a.limite || '9999').localeCompare(b.arranca || b.limite || '9999');
   });
 
-  for(const x of alaVista) cont.appendChild(filaPaso(x, p, hoy));
+  for(const x of alaVista) cont.appendChild(filaPaso(x, p, hoy, repintar));
 
   if(dormidos.length){
     const d = document.createElement('div');
@@ -3150,9 +3262,9 @@ function renderPedidoPasos(p){
   }
 }
 
-function filaPaso(x, p, hoy){
+function filaPaso(x, p, hoy, repintar){
   const f = document.createElement('div');
-  const atrasado = x.limite && x.limite < hoy;
+  const atrasado = !p.fechaAbierta && x.limite && x.limite < hoy;
   const pr = PRIOS.find(z=> z[0] === prioDe(x));
   f.style.cssText = 'display:flex;gap:8px;align-items:flex-start;background:var(--panel2);' +
     'border:1px solid ' + (atrasado ? '#ff7a7a' : 'var(--borde)') + ';border-left:4px solid ' + pr[2] +
@@ -3167,7 +3279,7 @@ function filaPaso(x, p, hoy){
     x.hecho = true; x.hechoFecha = hoyISO();
     const sigs = pasosSiguientes(x, p).filter(y=> !y.hecho && pasoDestapado(y, p));
     registrar('tildó el paso "' + (x.texto||'').slice(0,40) + '"');
-    guardarDatos(); renderPedidoPasos(p); renderPedidos(); if(vista==='agenda') renderAgenda();
+    guardarDatos(); repintar(); renderPedidos(); if(vista==='agenda') renderAgenda();
     toast(sigs.length ? 'Ahora toca: ' + sigs[0].texto : 'Paso listo ✓');
   };
 
@@ -3181,16 +3293,17 @@ function filaPaso(x, p, hoy){
   const meta = document.createElement('div');
   meta.style.cssText = 'font-size:.68rem;color:var(--texto2);margin-top:3px;display:flex;gap:7px;flex-wrap:wrap';
   const dm = (iso)=> iso ? iso.slice(8,10) + '/' + iso.slice(5,7) : '';
+  const tent = p.fechaAbierta ? '~' : '';     // tilde de "tentativa"
   if(x.limite){
     const l = document.createElement('span');
-    l.textContent = 'listo el ' + dm(x.limite);
+    l.textContent = 'listo el ' + tent + dm(x.limite);
     if(atrasado) l.style.color = '#ff7a7a';
     meta.appendChild(l);
   }
   if(x.arranca && x.arranca !== x.limite){
     const a = document.createElement('span');
-    a.textContent = 'arrancar ' + dm(x.arranca);
-    if(x.arranca <= hoy) a.style.color = 'var(--ambar)';
+    a.textContent = 'arrancar ' + tent + dm(x.arranca);
+    if(!p.fechaAbierta && x.arranca <= hoy) a.style.color = 'var(--ambar)';
     meta.appendChild(a);
   }
   if(x.quien && x.quien !== 'yo'){
@@ -3210,7 +3323,7 @@ function filaPaso(x, p, hoy){
   bp.onclick = ()=>{
     const i = PRIOS.findIndex(z=> z[0] === prioDe(x));
     x.prio = PRIOS[(i + 1) % PRIOS.length][0];
-    guardarDatos(); renderPedidoPasos(p); if(vista==='agenda') renderAgenda();
+    guardarDatos(); repintar(); if(vista==='agenda') renderAgenda();
   };
 
   f.appendChild(tilde); f.appendChild(cuerpo); f.appendChild(bp);
@@ -3225,7 +3338,7 @@ function renderAgenda(){
   const hoy = hoyISO();
 
   /* --- hoy y atrasado --- */
-  const urgentes = todos.filter(o => agEsCompromiso(o.x) && o.x.limite <= hoy);
+  const urgentes = todos.filter(o => agEsCompromiso(o.x, o.p) && o.x.limite <= hoy);
   for(const p of pedidos){
     if(p.archivada || p.estado==='anulado') continue;
     const fc = (p.fechas||{}).comprometida;
@@ -11542,13 +11655,15 @@ let vcPedido = null, vcPzs = [], vcDes = [], vcAccSin = null, vcAccCon = null;
   }
 })();
 function vcCortePrecio(anchoCm){
-  for(const c of (adCfg.vc.cortes||[])) if(anchoCm <= c.hasta) return c.precio;
+  for(const c of (adCfg.vc.cortes||[])) if(anchoCm <= c.hasta + 0.001) return c.precio;
   return (adCfg.vc.cortes||[]).length ? adCfg.vc.cortes[adCfg.vc.cortes.length-1].precio : 0;
 }
 function vcMejorRollo(mat, w, h){
   // elige el rollo más barato donde entre la pieza (probando también rotada); largo del rollo: hasta 50 m.
   // El plotter come margen por lado: el ancho útil es rollo − 2×margen.
-  // Si el material tiene corte propio (ej. Tigre: corte con registro), usa ese en vez de la tabla por ancho.
+  // El corte se cobra por el ancho que REALMENTE ocupa la pieza (0–60 paga 60, 60–120 paga 120),
+  // así una pieza angosta en un rollo ancho no paga el corte del rollo.
+  // Si el material tiene corte propio (ej. Tigre: corte con registro), usa ese en vez de la tabla.
   let mejor = null;
   const marg = adCfg.vc.margenPlotter || 0;
   for(const rot of [false, true]){
@@ -11558,9 +11673,9 @@ function vcMejorRollo(mat, w, h){
       const util = r.cm - 2*marg;
       if(a <= util + 0.001){
         const ml = largoCm / 100;
-        const corteMl = (mat.corteMl !== undefined) ? mat.corteMl : vcCortePrecio(r.cm);
+        const corteMl = (mat.corteMl !== undefined) ? mat.corteMl : vcCortePrecio(a);
         const costo = ml * (r.precio + corteMl);
-        if(!mejor || costo < mejor.costo) mejor = {rollo: r.cm, util, ml, costo, rot, precioMl: r.precio, corteMl};
+        if(!mejor || costo < mejor.costo) mejor = {rollo: r.cm, util, ml, costo, rot, precioMl: r.precio, corteMl, anchoUsado: a};
         break;
       }
     }
@@ -11642,7 +11757,7 @@ function vcCalcular(){
       if(r){
         const cU = Math.round(r.costo);
         costo += cU * (pz.cant||1); mlTot += r.ml * (pz.cant||1); ok += (pz.cant||1);
-        el.textContent = 'rollo ' + r.rollo + 'cm' + (r.rot ? ' (rotada)' : '') + ' · ' + (Math.round(r.ml*100)/100) + ' ml · costo ' + plata(cU) + '/u';
+        el.textContent = 'rollo ' + r.rollo + 'cm' + (r.rot ? ' (rotada)' : '') + ' · ' + (Math.round(r.ml*100)/100) + ' ml · corte ' + plata(r.corteMl) + '/ml · costo ' + plata(cU) + '/u';
       }else el.textContent = '⚠️ no entra en ningún rollo';
     }else el.textContent = '';
   });
