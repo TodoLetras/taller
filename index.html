@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v136</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v137</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -901,6 +901,10 @@
 <input type="file" id="fileFoto" accept="image/*" multiple style="display:none">
 <input type="file" id="fileVideo" accept="video/*" style="display:none">
 <input type="file" id="fileAudio" accept="audio/*" style="display:none">
+<!-- adjuntos de "lo que pidió el cliente" (van por su propia vía) -->
+<input type="file" id="briefFileFoto" accept="image/*" multiple style="display:none">
+<input type="file" id="briefFileVideo" accept="video/*" style="display:none">
+<input type="file" id="briefFileAudio" accept="audio/*" style="display:none">
 
 <!-- modal ficha de cliente -->
 <div class="modal" id="modalCliente">
@@ -2562,6 +2566,48 @@ document.getElementById('fileAudio').addEventListener('change', e=>{
   if(f.size > 3*1024*1024){ toast('Audio muy pesado, límite 3 MB'); return; }
   archivoADataURL(f).then(data=> agregarBloque('audio', data));
 });
+
+/* ---- adjuntos del brief: entradas de archivo ---- */
+(function(){
+  const pedActual = ()=> pedidos.find(x=> x.id === briefAdjPed);
+  const iF = document.getElementById('briefFileFoto');
+  if(iF) iF.addEventListener('change', async e=>{
+    const archivos = Array.from(e.target.files); e.target.value = '';
+    const p = pedActual();
+    if(!archivos.length || !p) return;
+    toast(archivos.length > 1 ? 'Procesando ' + archivos.length + ' fotos…' : 'Procesando foto…');
+    let ok = 0, mal = 0;
+    for(const f of archivos){
+      try{
+        const data = await comprimirImagen(f, 1200, .72);
+        if(await agregarBriefAdj(p, 'imagen', data)) ok++; else mal++;
+      }catch(err){ mal++; }
+    }
+    if(ok) toast(ok > 1 ? ok + ' fotos agregadas ✓' : 'Foto agregada ✓');
+    if(mal) toast('⚠️ ' + mal + ' foto(s) no entraron. Si son HEIC del iPhone, sacalas en JPEG.');
+  });
+  const iV = document.getElementById('briefFileVideo');
+  if(iV) iV.addEventListener('change', async e=>{
+    const f = e.target.files[0]; e.target.value = '';
+    const p = pedActual();
+    if(!f || !p) return;
+    if(f.size > 3.5*1024*1024){
+      toast('Video muy pesado (' + (f.size/1024/1024).toFixed(1) + ' MB, límite 3.5). Grabalo más corto.');
+      return;
+    }
+    const data = await archivoADataURL(f);
+    if(await agregarBriefAdj(p, 'video', data)) toast('Video agregado ✓');
+  });
+  const iA = document.getElementById('briefFileAudio');
+  if(iA) iA.addEventListener('change', async e=>{
+    const f = e.target.files[0]; e.target.value = '';
+    const p = pedActual();
+    if(!f || !p) return;
+    if(f.size > 3*1024*1024){ toast('Audio muy pesado, límite 3 MB'); return; }
+    const data = await archivoADataURL(f);
+    if(await agregarBriefAdj(p, 'audio', data)) toast('Audio agregado ✓');
+  });
+})();
 
 function archivoADataURL(f){
   return new Promise((res,rej)=>{
@@ -6564,6 +6610,50 @@ function hayDictado(){
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 }
 
+/* ---- puntuación del dictado ----
+   El navegador entrega el texto crudo y sin signos. Acá se hacen tres cosas:
+   1) los comandos que decís en voz alta ("punto", "coma", "punto y aparte"…) se
+      convierten en el signo correspondiente;
+   2) si hacés una pausa larga, se cierra la frase con un punto;
+   3) se pone mayúscula al arrancar y después de . ! ? o de un renglón nuevo. */
+const CMD_DICTADO = [
+  [/\s*\b(punto y aparte|punto aparte)\b\s*/gi, '.\n'],
+  [/\s*\b(punto y coma)\b\s*/gi, '; '],
+  [/\s*\b(dos puntos)\b\s*/gi, ': '],
+  [/\s*\b(punto y seguido|punto seguido|punto final|punto)\b\s*/gi, '. '],
+  [/\s*\b(coma)\b\s*/gi, ', '],
+  [/\s*\b(abre pregunta|abrir pregunta|signo de apertura de pregunta)\b\s*/gi, ' ¿'],
+  [/\s*\b(signo de pregunta|cierra pregunta|cerrar pregunta|interrogaci[oó]n)\b\s*/gi, '? '],
+  [/\s*\b(abre exclamaci[oó]n|abrir exclamaci[oó]n)\b\s*/gi, ' ¡'],
+  [/\s*\b(signo de exclamaci[oó]n|cierra exclamaci[oó]n|cerrar exclamaci[oó]n)\b\s*/gi, '! '],
+  [/\s*\b(abre par[eé]ntesis|abrir par[eé]ntesis)\b\s*/gi, ' ('],
+  [/\s*\b(cierra par[eé]ntesis|cerrar par[eé]ntesis)\b\s*/gi, ') '],
+  [/\s*\b(nueva l[ií]nea|salto de l[ií]nea|rengl[oó]n nuevo|nuevo rengl[oó]n|punto y raya)\b\s*/gi, '\n'],
+  [/\s*\b(gui[oó]n medio|raya|gui[oó]n)\b\s*/gi, ' - '],
+  [/\s*\b(barra)\b\s*/gi, '/'],
+];
+function comandosDictado(t){
+  let s = ' ' + t + ' ';
+  for(const [re, rep] of CMD_DICTADO) s = s.replace(re, rep);
+  return s;
+}
+function espaciosDictado(t){
+  return t
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')          // el signo va pegado a la palabra
+    .replace(/([,.;:!?])\s*\1+/g, '$1')       // no repetir el mismo signo
+    .replace(/([.,;:!?])(?=[^\s.,;:!?)"\n])/g, '$1 ')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/([¿¡(]) +/g, '$1')
+    .replace(/^ +/, '');
+}
+function mayusculasDictado(t){
+  return t.replace(/(^|[.!?¿¡]\s+|\n\s*)([a-záéíóúñü])/g, (m, ini, letra)=> ini + letra.toUpperCase());
+}
+function puntuarDictado(t){ return mayusculasDictado(espaciosDictado(comandosDictado(t))); }
+/* la puntuación automática se puede apagar desde el botón de al lado del micrófono */
+function dictadoPuntua(){ return localStorage.getItem('dict-punt') !== '0'; }
+
 /* Dictado sobre cualquier campo de texto. Devuelve el botón listo para colgar. */
 function botonDictar(campo, alTerminar){
   const b = document.createElement('button');
@@ -6591,13 +6681,24 @@ function botonDictar(campo, alTerminar){
     rec.interimResults = true;
     const base = campo.value ? campo.value.replace(/\s+$/,'') + ' ' : '';
     let firme = '';
+    let ultFin = 0;
     rec.onresult = (ev)=>{
+      const puntua = dictadoPuntua();
       let provisorio = '';
       for(let i = ev.resultIndex; i < ev.results.length; i++){
         const t = ev.results[i][0].transcript;
-        if(ev.results[i].isFinal) firme += t + ' '; else provisorio += t;
+        if(ev.results[i].isFinal){
+          // pausa larga = fin de frase, salvo que ya venga un signo
+          if(puntua && ultFin && (Date.now() - ultFin) > 1800){
+            const previo = comandosDictado(firme).replace(/\s+$/,'');
+            if(previo && !/[.,;:!?¿¡("'\n-]$/.test(previo)) firme += ' punto ';
+          }
+          firme += t + ' ';
+          ultFin = Date.now();
+        } else provisorio += t;
       }
-      campo.value = base + firme + provisorio;
+      const crudo = firme + provisorio;
+      campo.value = base + (puntua ? puntuarDictado(crudo) : crudo);
       campo.scrollTop = campo.scrollHeight;
     };
     rec.onerror = (ev)=>{
@@ -6611,9 +6712,145 @@ function botonDictar(campo, alTerminar){
     };
     rec.start();
     pintar(true);
-    toast('Hablá tranquilo… tocá parar cuando termines');
+    toast(dictadoPuntua() ? 'Hablá tranquilo… decí "punto", "coma" o "punto y aparte"'
+                          : 'Hablá tranquilo… tocá parar cuando termines');
   };
   return b;
+}
+
+/* ============ ADJUNTOS DE LO QUE PIDIÓ EL CLIENTE ============
+   Fotos, videos y audios del pedido: la foto del lugar, el audio de WhatsApp,
+   el video de la vidriera. Se guardan aparte del pedido (son pesados), con la
+   misma cañería que las notas: window.storage + copia en Dropbox. */
+let briefAdj = [];        // adjuntos del pedido abierto
+let briefAdjPed = null;   // id del pedido al que pertenecen
+let timerBriefDbx = null;
+
+async function cargarBriefAdj(p){
+  briefAdjPed = p.id;
+  briefAdj = [];
+  try{
+    const r = await window.storage.get('brief:' + p.id);
+    if(r && r.value) briefAdj = JSON.parse(r.value) || [];
+  }catch(e){ briefAdj = []; }
+  if(briefAdjPed === p.id) renderBriefAdj(p);
+  // fusionar con la copia de la nube, para verlos también desde el otro dispositivo
+  dbxBajarBloques('brief-' + p.id).then(remotos=>{
+    if(briefAdjPed !== p.id || !remotos) return;
+    const fusion = fusionarBloques(briefAdj, remotos);
+    if(JSON.stringify(fusion) !== JSON.stringify(briefAdj)){
+      briefAdj = fusion;
+      renderBriefAdj(p);
+      guardarBriefAdj(p, false);
+    }else if(briefAdj.length){
+      dbxSubirBloques('brief-' + p.id, JSON.stringify(briefAdj));
+    }
+  });
+}
+
+async function guardarBriefAdj(p, subir){
+  const json = JSON.stringify(briefAdj);
+  const mb = json.length/1024/1024;
+  if(mb > LIMITE_BLOQUES_MB){
+    toast('⚠️ Los adjuntos superan los ' + LIMITE_BLOQUES_MB + ' MB. Quitá alguno pesado.');
+    return false;
+  }
+  try{
+    await window.storage.set('brief:' + p.id, json);
+  }catch(e){
+    toast('⚠️ No se pudo guardar el adjunto');
+    return false;
+  }
+  // el contador sí viaja en datos.json, para que se vea el 📎 sin abrir el pedido
+  const n = briefAdj.filter(b=> !b.borrado).length;
+  if(p.adjBrief !== n){ p.adjBrief = n || null; guardarDatos(); renderPedidos(); }
+  if(subir !== false){
+    clearTimeout(timerBriefDbx);
+    const id = p.id, jsonSubida = json;
+    timerBriefDbx = setTimeout(()=> dbxSubirBloques('brief-' + id, jsonSubida), 3000);
+  }
+  return true;
+}
+
+async function agregarBriefAdj(p, tipo, contenido){
+  briefAdj.push({id: uid(), tipo, contenido, t: Date.now(), mod: Date.now(),
+    ord: (briefAdj.length ? Math.max(...briefAdj.map(b=> b.ord||b.t||0)) : 0) + 1000,
+    quien: usuarioActual || null});
+  const ok = await guardarBriefAdj(p);
+  if(!ok) briefAdj.pop();     // no entró: se descarta para no romper lo guardado
+  renderBriefAdj(p);
+  return ok;
+}
+
+function renderBriefAdj(p){
+  const cont = document.getElementById('briefAdjuntos');
+  if(!cont) return;
+  cont.innerHTML = '';
+  const vivos = briefAdj.filter(b=> !b.borrado);
+  if(!vivos.length) return;
+  cont.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px';
+  for(const b of vivos){
+    const caja = document.createElement('div');
+    caja.style.cssText = 'position:relative;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;padding:4px';
+    if(b.tipo === 'imagen'){
+      const im = document.createElement('img');
+      im.src = b.contenido;
+      im.style.cssText = 'width:74px;height:74px;object-fit:cover;border-radius:7px;display:block';
+      im.onclick = ()=> abrirVisorFoto(b.contenido);
+      caja.appendChild(im);
+    }else if(b.tipo === 'video'){
+      const v = document.createElement('video');
+      v.src = b.contenido; v.controls = true; v.playsInline = true;
+      v.style.cssText = 'width:150px;border-radius:7px;display:block';
+      caja.appendChild(v);
+    }else{
+      const a = document.createElement('audio');
+      a.src = b.contenido; a.controls = true;
+      a.style.cssText = 'width:210px;max-width:60vw;display:block';
+      caja.appendChild(a);
+    }
+    const x = document.createElement('button');
+    x.textContent = '✕';
+    x.title = 'Quitar este adjunto';
+    x.style.cssText = 'position:absolute;top:-7px;right:-7px;width:24px;height:24px;border-radius:50%;border:none;background:#ff7a7a;color:#1a0a0a;font-size:.7rem;font-weight:800;line-height:1;padding:0';
+    x.onclick = ()=> dosToques(x, '¿Sacar?', async ()=>{
+      b.borrado = true; b.mod = Date.now(); b.contenido = '';
+      await guardarBriefAdj(p);
+      renderBriefAdj(p);
+    });
+    caja.appendChild(x);
+    cont.appendChild(caja);
+  }
+}
+
+/* grabar un audio ahí mismo, sin salir del pedido */
+async function grabarAudioBrief(p, boton){
+  if(boton.dataset.grabando === '1'){ if(boton._rec) boton._rec.stop(); return; }
+  if(!navigator.mediaDevices || !window.MediaRecorder){
+    document.getElementById('briefFileAudio').click(); return;
+  }
+  let stream;
+  try{ stream = await navigator.mediaDevices.getUserMedia({audio:true}); }
+  catch(e){ document.getElementById('briefFileAudio').click(); return; }
+  const rec = new MediaRecorder(stream);
+  const trozos = [];
+  const texto = boton.textContent;
+  rec.ondataavailable = ev=> trozos.push(ev.data);
+  rec.onstop = async ()=>{
+    stream.getTracks().forEach(t=> t.stop());
+    boton.dataset.grabando = '0'; boton._rec = null;
+    boton.textContent = texto; boton.style.background = 'var(--panel2)'; boton.style.color = 'var(--texto2)';
+    const blob = new Blob(trozos, {type: rec.mimeType || 'audio/webm'});
+    if(blob.size > 3*1024*1024){ toast('El audio quedó muy largo, probá uno más corto'); return; }
+    const data = await archivoADataURL(blob);
+    if(await agregarBriefAdj(p, 'audio', data)) toast('Audio guardado ✓');
+  };
+  rec.start();
+  boton.dataset.grabando = '1'; boton._rec = rec;
+  boton.textContent = '⏹ Parar';
+  boton.style.background = '#ff7a7a'; boton.style.color = '#1a0a0a';
+  toast('Grabando… tocá ⏹ para terminar');
+  setTimeout(()=>{ if(rec.state === 'recording') rec.stop(); }, 120000);
 }
 
 /* el resumen también sirve para pasárselo a Gastón por el chat del trabajo */
@@ -6641,6 +6878,23 @@ function renderBrief(p){
   ta.style.cssText = 'width:100%;margin:0;padding:10px;font-size:13.5px;line-height:1.45;' +
     'background:var(--fondo);border:1px solid var(--borde);border-radius:10px;color:var(--texto);resize:vertical';
   ta.addEventListener('input', ()=>{ p.brief = ta.value.trim() || null; sincronizarPedido(); });
+  // pegar una captura o una foto directo en el campo
+  ta.addEventListener('paste', async (e)=>{
+    const items = (e.clipboardData || {}).items || [];
+    for(const it of items){
+      if(it.type && it.type.startsWith('image/')){
+        e.preventDefault();
+        const f = it.getAsFile();
+        if(!f) continue;
+        toast('Procesando imagen pegada…');
+        try{
+          const data = await comprimirImagen(f, 1200, .72);
+          if(await agregarBriefAdj(p, 'imagen', data)) toast('Foto agregada ✓');
+        }catch(err){ toast('No se pudo leer la imagen'); }
+        return;
+      }
+    }
+  });
   cont.appendChild(ta);
 
   const fila = document.createElement('div');
@@ -6659,6 +6913,46 @@ function renderBrief(p){
     toast(ok ? 'Copiado ✓' : 'No se pudo copiar');
   };
   fila.appendChild(bCop);
+
+  /* puntuación automática del dictado: se puede apagar si molesta */
+  if(hayDictado()){
+    const bPun = document.createElement('button');
+    const pintarPun = ()=>{
+      const on = dictadoPuntua();
+      bPun.textContent = on ? '· , auto' : '· , manual';
+      bPun.title = on
+        ? 'El dictado pone los signos solo (y entiende "punto", "coma", "punto y aparte"). Tocá para apagarlo.'
+        : 'El dictado escribe tal cual lo que decís. Tocá para que ponga los signos.';
+      bPun.style.cssText = 'border-radius:9px;padding:9px 11px;font-size:.72rem;font-weight:700;background:var(--panel2);border:1px dashed ' +
+        (on ? 'var(--ambar);color:var(--ambar)' : 'var(--borde);color:var(--texto2)');
+    };
+    pintarPun();
+    bPun.onclick = ()=>{
+      localStorage.setItem('dict-punt', dictadoPuntua() ? '0' : '1');
+      pintarPun();
+      toast(dictadoPuntua() ? 'Puntuación automática activada' : 'Puntuación automática apagada');
+    };
+    fila.appendChild(bPun);
+  }
+
+  /* adjuntos: foto, video y audio de lo que mandó el cliente */
+  const bAdj = (texto, titulo, accion)=>{
+    const b = document.createElement('button');
+    b.textContent = texto;
+    b.title = titulo;
+    b.style.cssText = 'border-radius:9px;padding:9px 12px;font-size:.74rem;font-weight:700;' +
+      'background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)';
+    b.onclick = ()=> accion(b);
+    return b;
+  };
+  fila.appendChild(bAdj('📷 Foto', 'Foto del lugar, del cartel viejo, del boceto…',
+    ()=> document.getElementById('briefFileFoto').click()));
+  fila.appendChild(bAdj('🎥 Video', 'Video corto (hasta 3,5 MB)',
+    ()=> document.getElementById('briefFileVideo').click()));
+  fila.appendChild(bAdj('🎤 Audio', 'Grabar acá, o subir el audio de WhatsApp',
+    (b)=> grabarAudioBrief(p, b)));
+  fila.appendChild(bAdj('🎵', 'Subir un audio que ya tenés (el de WhatsApp)',
+    ()=> document.getElementById('briefFileAudio').click()));
 
   /* los tres datos que después vas a querer buscar */
   const dato = (clave, etiqueta, ancho)=>{
@@ -6682,6 +6976,12 @@ function renderBrief(p){
 
   cont.appendChild(fila);
   cont.appendChild(fila2);
+
+  const tira = document.createElement('div');
+  tira.id = 'briefAdjuntos';
+  cont.appendChild(tira);
+  if(briefAdjPed === p.id) renderBriefAdj(p);   // ya estaban cargados
+  else cargarBriefAdj(p);
 }
 
 /* ============ VERSIONES DE PRESUPUESTO ============
