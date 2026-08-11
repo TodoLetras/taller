@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v137</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v138</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -372,6 +372,8 @@
     <div id="pedBrief"></div>
     <label>Tareas del trabajo</label>
     <div class="cats-pick" id="pedTarea"></div>
+    <label>Pasos del trabajo</label>
+    <div id="pedPasos"></div>
     <label>Ítems</label>
     <div id="pedItems"></div>
     <div class="cats-pick" id="pedAgregarItem" style="margin-top:6px"></div>
@@ -2730,6 +2732,198 @@ modalCats.addEventListener('click', e=>{ if(e.target===modalCats) modalCats.clas
 
 /* ---------- calendario ---------- */
 
+/* ================= PASOS DEL TRABAJO =================
+   Un paso es un pendiente con tres cosas más: cuánto tarda, de quién depende
+   para poder arrancar, y qué prioridad tiene. Con eso la app calcula sola
+   para cuándo hay que tener listo cada uno, contando hacia atrás desde la
+   fecha de entrega y salteando sábados y domingos. */
+
+const PRIOS = [
+  ['alta',   '🔴 Primero de todo', '#ff7a7a'],
+  ['normal', '⚪ Normal',          '#9aa1b0'],
+  ['baja',   '🔵 Cuando se pueda', '#5ab8ff']
+];
+function prioDe(x){ return x.prio || 'normal'; }
+function prioPeso(x){ const p = prioDe(x); return p==='alta' ? 0 : (p==='baja' ? 2 : 1); }
+
+/* Plazos en días hábiles. Se pueden editar desde la ficha del proveedor más
+   adelante; por ahora son los que me pasaste. */
+const PLAZOS = {
+  herrero:      {dias: 1,   finde: false, texto: 'herrero'},
+  zincado:      {dias: 1,   finde: false, texto: 'zincado'},
+  alberto:      {dias: 1,   finde: false, texto: 'Alberto (trae la chapa)'},
+  chapas:       {dias: 1,   finde: false, texto: 'chapas (hay que ir o pagar Uber)'},
+  impresion:    {dias: 2,   finde: false, texto: 'impresión'},
+  papeleraTraen:{dias: 2,   finde: false, texto: 'papelera (traen ellos)'},
+  papeleraVoy:  {dias: 0,   finde: false, texto: 'papelera (voy yo)'},
+  calandra:     {dias: 3,   finde: false, texto: 'calandra'},
+  evelyn:       {dias: 0.5, finde: true,  texto: 'Evelyn (trabaja sábados y domingos)'}
+};
+
+/* ---- días hábiles ---- */
+function isoADate(iso){ const [a,m,d] = iso.split('-').map(Number); return new Date(a, m-1, d); }
+function dateAIso(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function esFinde(iso){ const g = isoADate(iso).getDay(); return g === 0 || g === 6; }
+/* corre la fecha hasta caer en un día que se trabaja */
+function acomodarHabil(iso, haciaAtras, finde){
+  if(finde) return iso;
+  let d = isoADate(iso);
+  while(d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + (haciaAtras ? -1 : 1));
+  return dateAIso(d);
+}
+/* resta n días de trabajo. Medio día no mueve la fecha, ocupa la misma jornada. */
+function restarHabiles(iso, n, finde){
+  let d = isoADate(iso);
+  let quedan = Math.floor(n || 0);
+  while(quedan > 0){
+    d.setDate(d.getDate() - 1);
+    if(finde || (d.getDay() !== 0 && d.getDay() !== 6)) quedan--;
+  }
+  return acomodarHabil(dateAIso(d), true, finde);
+}
+function sumarHabiles(iso, n, finde){
+  let d = isoADate(iso);
+  let quedan = Math.floor(n || 0);
+  while(quedan > 0){
+    d.setDate(d.getDate() + 1);
+    if(finde || (d.getDay() !== 0 && d.getDay() !== 6)) quedan--;
+  }
+  return acomodarHabil(dateAIso(d), false, finde);
+}
+
+/* ---- la cadena ---- */
+/* un paso se ve cuando todos los que lo destapan están tildados */
+function pasoDestapado(x, p){
+  const dep = x.dep || [];
+  if(!dep.length) return true;
+  const lista = (p && p.pendientes) || [];
+  return dep.every(id=>{
+    const previo = lista.find(y=> y.id === id);
+    return !previo || previo.hecho;   // si el previo ya no existe, no traba
+  });
+}
+/* los pasos que salen de éste */
+function pasosSiguientes(x, p){
+  return ((p && p.pendientes) || []).filter(y=> (y.dep||[]).includes(x.id));
+}
+
+/* ---- cálculo hacia atrás desde la entrega ----
+   Cada paso tiene que estar LISTO antes de que arranque el que lo sigue.
+   El que no tiene a nadie atrás, tiene que estar listo para la entrega. */
+function recalcularPasos(p){
+  const lista = (p.pendientes || []).filter(x=> x.auto !== false);
+  const entrega = (p.fechas || {}).comprometida;
+  if(!entrega || !lista.length) return;
+  const porId = new Map(lista.map(x=> [x.id, x]));
+  const memo = new Map();
+
+  const listoPara = (x, visitados)=>{
+    if(memo.has(x.id)) return memo.get(x.id);
+    if(visitados.has(x.id)) return entrega;      // corta cadenas circulares
+    visitados.add(x.id);
+    const sigs = lista.filter(y=> (y.dep||[]).includes(x.id));
+    let f = entrega;
+    for(const s of sigs){
+      const arranca = restarHabiles(listoPara(s, visitados), s.dur || 0, s.finde);
+      if(arranca < f) f = arranca;
+    }
+    memo.set(x.id, f);
+    return f;
+  };
+
+  for(const x of lista){
+    if(x.fechaFija) continue;                    // la tocaste a mano, no se pisa
+    const listo = listoPara(x, new Set());
+    x.limite  = acomodarHabil(listo, true, x.finde);
+    x.arranca = restarHabiles(x.limite, x.dur || 0, x.finde);
+  }
+  // avisar si la cuenta ya arranca en el pasado
+  const inicios = lista.map(x=> x.arranca).filter(Boolean).sort();
+  p.pasosArranque = inicios[0] || null;
+}
+function recalcularTodosLosPasos(){
+  for(const p of pedidos) if(p.pendientes && p.pendientes.length) recalcularPasos(p);
+}
+
+/* ---- plantillas ----
+   `clave` sirve para que un paso diga de cuál depende. Al aplicarla se
+   convierten en ids reales. */
+const PLANTILLAS = [
+  {
+    id: 'flybanner',
+    nombre: '🚩 Fly banner',
+    detalle: 'Tres ramas en paralelo que se juntan en el armado',
+    pasos: [
+      {clave:'datos',   texto:'Confirmar medida, modelo y arte',        tipo:'datos',    quien:'cliente', dur:0, prio:'alta'},
+      {clave:'disenar', texto:'Diseñar el arte de la tela',             tipo:'disenar',  quien:'yo',      dur:1, dep:['datos']},
+      // rama 1 · la tela
+      {clave:'imprimir',texto:'Imprimir la tela',                       tipo:'pedir',    quien:'proveedor', dur:PLAZOS.impresion.dias, dep:['disenar']},
+      {clave:'costura', texto:'Llevar a Evelyn para la costura',        tipo:'llevar',   quien:'proveedor', dur:PLAZOS.evelyn.dias, finde:true, dep:['imprimir']},
+      // rama 2 · la estructura
+      {clave:'herrero', texto:'Pedir la estructura al herrero',         tipo:'pedir',    quien:'proveedor', dur:PLAZOS.herrero.dias, dep:['datos']},
+      {clave:'zincado', texto:'Mandar la estructura al zincado',        tipo:'llevar',   quien:'proveedor', dur:PLAZOS.zincado.dias, dep:['herrero']},
+      // rama 3 · los accesorios
+      {clave:'comprar', texto:'Comprar base, regatones y pitones',      tipo:'comprar',  quien:'yo',      dur:1, dep:['datos']},
+      // se juntan
+      {clave:'armado',  texto:'Armar el fly banner',                    tipo:'producir', quien:'yo',      dur:1, dep:['costura','zincado','comprar']},
+      {clave:'entregar',texto:'Entregar',                               tipo:'entregar', quien:'yo',      dur:0, dep:['armado']},
+      {clave:'cobrar',  texto:'Cobrar',                                 tipo:'cobrar',   quien:'cliente', dur:0, dep:['entregar'], prio:'baja'}
+    ]
+  },
+  {
+    id: 'offsetFolletos',
+    nombre: '📄 Folletos offset',
+    detalle: 'El papel se pide primero de todo',
+    pasos: [
+      {clave:'datos',   texto:'Confirmar cantidad, papel y medida',     tipo:'datos',    quien:'cliente', dur:0, prio:'alta'},
+      {clave:'papel',   texto:'Pedir el papel a la papelera',           tipo:'comprar',  quien:'proveedor', dur:PLAZOS.papeleraTraen.dias, dep:['datos'], prio:'alta'},
+      {clave:'disenar', texto:'Diseñar y armar la posada',              tipo:'disenar',  quien:'yo',      dur:1, dep:['datos']},
+      {clave:'imprimir',texto:'Mandar a imprimir',                      tipo:'pedir',    quien:'proveedor', dur:PLAZOS.alberto.dias, dep:['papel','disenar']},
+      {clave:'termina', texto:'Terminación (corte, plegado)',           tipo:'producir', quien:'yo',      dur:1, dep:['imprimir']},
+      {clave:'entregar',texto:'Entregar',                               tipo:'entregar', quien:'yo',      dur:0, dep:['termina']},
+      {clave:'cobrar',  texto:'Cobrar',                                 tipo:'cobrar',   quien:'cliente', dur:0, dep:['entregar'], prio:'baja'}
+    ]
+  },
+  {
+    id: 'digital',
+    nombre: '🖨 Impresión digital',
+    detalle: 'Corta: diseño, impresión y entrega',
+    pasos: [
+      {clave:'datos',   texto:'Confirmar medida y archivo',             tipo:'datos',    quien:'cliente', dur:0, prio:'alta'},
+      {clave:'disenar', texto:'Preparar el archivo',                    tipo:'disenar',  quien:'yo',      dur:1, dep:['datos']},
+      {clave:'imprimir',texto:'Imprimir',                               tipo:'pedir',    quien:'proveedor', dur:PLAZOS.impresion.dias, dep:['disenar']},
+      {clave:'entregar',texto:'Entregar',                               tipo:'entregar', quien:'yo',      dur:0, dep:['imprimir']},
+      {clave:'cobrar',  texto:'Cobrar',                                 tipo:'cobrar',   quien:'cliente', dur:0, dep:['entregar'], prio:'baja'}
+    ]
+  }
+];
+
+function aplicarPlantilla(p, idPlantilla){
+  const pl = PLANTILLAS.find(x=> x.id === idPlantilla);
+  if(!pl) return;
+  const ids = {};
+  for(const s of pl.pasos) ids[s.clave] = uid();
+  const nuevos = pl.pasos.map(s=> ({
+    id: ids[s.clave],
+    texto: s.texto,
+    tipo: s.tipo,
+    quien: s.quien || 'yo',
+    prio: s.prio || 'normal',
+    dur: s.dur === undefined ? 1 : s.dur,
+    finde: !!s.finde,
+    dep: (s.dep || []).map(c=> ids[c]).filter(Boolean),
+    hecho: false,
+    creado: Date.now(),
+    plantilla: pl.id
+  }));
+  p.pendientes = (p.pendientes || []).concat(nuevos);
+  recalcularPasos(p);
+  registrar('cargó los pasos de "' + pl.nombre + '" en ' + (p.nombre || 'un trabajo'));
+  guardarDatos();
+}
+
 /* ================= AGENDA ================= */
 const AG_GRUPOS = [
   ['datos',        'Faltan datos',       '#5ab8ff'],
@@ -2742,6 +2936,7 @@ const AG_GRUPOS = [
   ['comprar',      'Para comprar',       '#ffd166'],
   ['pedir',        'Pedir a proveedor',  '#ffd166'],
   ['entregar',     'Para entregar',      '#5ab8ff'],
+  ['llevar',       'Llevar a un tercero','#c58cff'],
   ['instalar',     'Para instalar',      '#ff7a7a'],
   ['administrar',  'Sin clasificar',     '#9aa1b0']
 ];
@@ -2759,7 +2954,7 @@ function agTodos(){
   const out = [];
   for(const p of pedidos){
     if(p.archivada || p.estado==='anulado') continue;
-    for(const x of (p.pendientes||[])) if(!x.hecho) out.push({x, p});
+    for(const x of (p.pendientes||[])) if(!x.hecho && pasoDestapado(x, p)) out.push({x, p});
   }
   for(const x of (pendientesSueltos||[])) if(!x.hecho) out.push({x, p:null});
   return out;
@@ -2838,6 +3033,19 @@ function agFila(x, p, atrasado){
     const q = document.createElement('span'); q.textContent = '· espera ' + x.quien;
     meta.appendChild(q);
   }
+  if(prioDe(x) !== 'normal'){
+    const pr = PRIOS.find(z=> z[0] === prioDe(x));
+    const s3 = document.createElement('span');
+    s3.textContent = '· ' + pr[1];
+    s3.style.color = pr[2];
+    meta.appendChild(s3);
+  }
+  if(x.arranca && x.arranca !== x.limite){
+    const a2 = document.createElement('span');
+    a2.textContent = '· arrancar ' + x.arranca.slice(8,10) + '/' + x.arranca.slice(5,7);
+    if(x.arranca <= hoyISO()) a2.style.color = 'var(--ambar)';
+    meta.appendChild(a2);
+  }
   cuerpo.appendChild(meta);
 
   const sel = document.createElement('select');
@@ -2853,6 +3061,163 @@ function agFila(x, p, atrasado){
   return f;
 }
 
+/* ---- los pasos dentro del pedido ---- */
+function renderPedidoPasos(p){
+  const cont = document.getElementById('pedPasos');
+  if(!cont) return;
+  cont.innerHTML = '';
+
+  /* fecha de entrega: es la que manda, todo se cuenta hacia atrás desde acá */
+  const cajaF = document.createElement('div');
+  cajaF.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
+  const lbl = document.createElement('span');
+  lbl.textContent = '📅 Entrega';
+  lbl.style.cssText = 'font-size:.74rem;font-weight:700;color:var(--texto2)';
+  const inF = document.createElement('input');
+  inF.type = 'date';
+  inF.value = (p.fechas || {}).comprometida || '';
+  inF.style.cssText = 'margin:0;padding:8px 10px;font-size:12.5px;background:var(--fondo);' +
+    'border:1px dashed var(--ambar);border-radius:9px;color:var(--texto)';
+  inF.onchange = ()=>{
+    p.fechas = p.fechas || {};
+    p.fechas.comprometida = inF.value || null;
+    recalcularPasos(p);
+    guardarDatos(); renderPedidoPasos(p); renderPedidos();
+  };
+  cajaF.appendChild(lbl); cajaF.appendChild(inF);
+  if((p.fechas||{}).comprometida && esFinde(p.fechas.comprometida)){
+    const av = document.createElement('span');
+    av.textContent = '⚠️ cae fin de semana';
+    av.style.cssText = 'font-size:.68rem;color:var(--ambar)';
+    cajaF.appendChild(av);
+  }
+  cont.appendChild(cajaF);
+
+  const pasos = p.pendientes || [];
+
+  /* si todavía no hay pasos, ofrecer las plantillas */
+  if(!pasos.length){
+    const cajaP = document.createElement('div');
+    cajaP.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+    for(const pl of PLANTILLAS){
+      const b = document.createElement('button');
+      b.textContent = pl.nombre;
+      b.title = pl.detalle;
+      b.style.cssText = 'flex:1 1 30%;min-width:120px;border-radius:11px;padding:11px 9px;font-size:.74rem;' +
+        'font-weight:700;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)';
+      b.onclick = ()=>{
+        if(!(p.fechas||{}).comprometida){ toast('Primero poné la fecha de entrega'); return; }
+        aplicarPlantilla(p, pl.id);
+        renderPedidoPasos(p); renderPedidos();
+        toast('Pasos cargados ✓');
+      };
+      cajaP.appendChild(b);
+    }
+    cont.appendChild(cajaP);
+    const ay = document.createElement('div');
+    ay.textContent = 'Elegí una secuencia y se cargan todos los pasos. Vas a ver solo el que toca; al tildarlo aparece el siguiente.';
+    ay.style.cssText = 'font-size:.68rem;color:var(--texto2);margin-top:6px;line-height:1.4';
+    cont.appendChild(ay);
+    return;
+  }
+
+  const hoy = hoyISO();
+  const pendientes = pasos.filter(x=> !x.hecho);
+  const alaVista = pendientes.filter(x=> pasoDestapado(x, p));
+  const dormidos = pendientes.filter(x=> !pasoDestapado(x, p));
+  const hechos = pasos.filter(x=> x.hecho);
+
+  alaVista.sort((a,b)=>{
+    const dp = prioPeso(a) - prioPeso(b);
+    if(dp) return dp;
+    return (a.arranca || a.limite || '9999').localeCompare(b.arranca || b.limite || '9999');
+  });
+
+  for(const x of alaVista) cont.appendChild(filaPaso(x, p, hoy));
+
+  if(dormidos.length){
+    const d = document.createElement('div');
+    d.textContent = '⋯ ' + dormidos.length + (dormidos.length === 1 ? ' paso más adelante' : ' pasos más adelante');
+    d.title = dormidos.map(z=> z.texto).join('\n');
+    d.style.cssText = 'font-size:.7rem;color:var(--texto2);padding:8px 4px;cursor:default';
+    cont.appendChild(d);
+  }
+  if(hechos.length){
+    const h = document.createElement('div');
+    h.textContent = '✓ ' + hechos.length + ' hecho' + (hechos.length === 1 ? '' : 's');
+    h.style.cssText = 'font-size:.7rem;color:#4cd27d;padding:6px 4px';
+    cont.appendChild(h);
+  }
+}
+
+function filaPaso(x, p, hoy){
+  const f = document.createElement('div');
+  const atrasado = x.limite && x.limite < hoy;
+  const pr = PRIOS.find(z=> z[0] === prioDe(x));
+  f.style.cssText = 'display:flex;gap:8px;align-items:flex-start;background:var(--panel2);' +
+    'border:1px solid ' + (atrasado ? '#ff7a7a' : 'var(--borde)') + ';border-left:4px solid ' + pr[2] +
+    ';border-radius:10px;padding:9px 10px;margin-bottom:6px';
+
+  const tilde = document.createElement('button');
+  tilde.textContent = '✓';
+  tilde.title = 'Marcar hecho y destapar el que sigue';
+  tilde.style.cssText = 'width:30px;height:30px;flex:0 0 auto;border-radius:8px;border:1px solid var(--borde);' +
+    'background:var(--fondo);color:var(--texto2);font-weight:800';
+  tilde.onclick = ()=>{
+    x.hecho = true; x.hechoFecha = hoyISO();
+    const sigs = pasosSiguientes(x, p).filter(y=> !y.hecho && pasoDestapado(y, p));
+    registrar('tildó el paso "' + (x.texto||'').slice(0,40) + '"');
+    guardarDatos(); renderPedidoPasos(p); renderPedidos(); if(vista==='agenda') renderAgenda();
+    toast(sigs.length ? 'Ahora toca: ' + sigs[0].texto : 'Paso listo ✓');
+  };
+
+  const cuerpo = document.createElement('div');
+  cuerpo.style.cssText = 'flex:1;min-width:0';
+  const tx = document.createElement('div');
+  tx.textContent = x.texto;
+  tx.style.cssText = 'font-size:.8rem;font-weight:600;color:var(--texto);line-height:1.3';
+  cuerpo.appendChild(tx);
+
+  const meta = document.createElement('div');
+  meta.style.cssText = 'font-size:.68rem;color:var(--texto2);margin-top:3px;display:flex;gap:7px;flex-wrap:wrap';
+  const dm = (iso)=> iso ? iso.slice(8,10) + '/' + iso.slice(5,7) : '';
+  if(x.limite){
+    const l = document.createElement('span');
+    l.textContent = 'listo el ' + dm(x.limite);
+    if(atrasado) l.style.color = '#ff7a7a';
+    meta.appendChild(l);
+  }
+  if(x.arranca && x.arranca !== x.limite){
+    const a = document.createElement('span');
+    a.textContent = 'arrancar ' + dm(x.arranca);
+    if(x.arranca <= hoy) a.style.color = 'var(--ambar)';
+    meta.appendChild(a);
+  }
+  if(x.quien && x.quien !== 'yo'){
+    const q = document.createElement('span');
+    q.textContent = 'espera ' + x.quien;
+    meta.appendChild(q);
+  }
+  if(x.dur) meta.appendChild(Object.assign(document.createElement('span'),
+    {textContent: x.dur === 0.5 ? 'medio día' : x.dur + (x.dur === 1 ? ' día' : ' días')}));
+  cuerpo.appendChild(meta);
+
+  /* prioridad: se cicla tocando el puntito */
+  const bp = document.createElement('button');
+  bp.textContent = pr[1].slice(0, 2);
+  bp.title = 'Prioridad: ' + pr[1] + ' (tocá para cambiar)';
+  bp.style.cssText = 'flex:0 0 auto;background:none;border:none;font-size:.9rem;padding:2px 4px';
+  bp.onclick = ()=>{
+    const i = PRIOS.findIndex(z=> z[0] === prioDe(x));
+    x.prio = PRIOS[(i + 1) % PRIOS.length][0];
+    guardarDatos(); renderPedidoPasos(p); if(vista==='agenda') renderAgenda();
+  };
+
+  f.appendChild(tilde); f.appendChild(cuerpo); f.appendChild(bp);
+  return f;
+}
+
+/* ---- la agenda ---- */
 function renderAgenda(){
   const cont = document.getElementById('vistaAgenda');
   cont.innerHTML = '';
@@ -2911,7 +3276,14 @@ function renderAgenda(){
     cab.onclick = ()=>{ agCerrados[clave] = !agCerrados[clave]; renderAgenda(); };
     g.appendChild(cab);
     if(!agCerrados[clave]){
-      items.sort((a,b)=> (agDias(b.x,b.p)||0) - (agDias(a.x,a.p)||0));
+      items.sort((a,b)=>{
+        const dp = prioPeso(a.x) - prioPeso(b.x);
+        if(dp) return dp;
+        const fa = a.x.arranca || a.x.limite || '9999';
+        const fb = b.x.arranca || b.x.limite || '9999';
+        if(fa !== fb) return fa.localeCompare(fb);
+        return (agDias(b.x,b.p)||0) - (agDias(a.x,a.p)||0);
+      });
       for(const o of items) g.appendChild(agFila(o.x, o.p, false));
     }
     cont.appendChild(g);
@@ -4166,6 +4538,7 @@ function abrirPedido(id){
     abrirDetalle(t.id);
   };
   renderPedidoItems(p);
+  renderPedidoPasos(p);
   renderPedidoEstados(p);
   renderEtapaEtiquetas(p);
   refrescarDescuentoUI(p);
