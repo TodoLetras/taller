@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v135</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v137</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -5831,11 +5831,12 @@ const CART_CATS = [
 
 /* Cómo se compra cada insumo, en una línea legible */
 function insumoFormato(x){
-  if(x.tiraM)    return 'tira de ' + x.tiraM + ' m';
+  const esp = x.espesor ? ' · ' + x.espesor + ' mm' : '';
+  if(x.tiraM)    return 'tira de ' + x.tiraM + ' m' + esp;
   if(x.aMedida)  return 'chapa de ' + (x.anchoNom || x.anchoUtil) + ' m · cubre ' +
                         x.anchoUtil + ' m (el resto es solape) · largo a medida (' +
-                        x.largoMin + ' a ' + x.largoMax + ' m)';
-  if(x.hojaW)    return 'hoja de ' + Math.round(x.hojaW*100) + '×' + Math.round(x.hojaH*100) + ' cm';
+                        x.largoMin + ' a ' + x.largoMax + ' m)' + esp;
+  if(x.hojaW)    return 'hoja de ' + Math.round(x.hojaW*100) + '×' + Math.round(x.hojaH*100) + ' cm' + esp;
   if(x.ancho)    return 'rollo de ' + Math.round(x.ancho*100) + ' cm';
   return 'por unidad';
 }
@@ -11838,7 +11839,82 @@ function reponerAlucos(){
   if(sumo) guardarDatos();
 }
 reponerAlucos();
-setTimeout(reponerAlucos, 4000);   /* por si los datos de la nube llegan más tarde */
+setTimeout(reponerAlucos, 4000);
+
+/* ===== Precios de Acerco, tomados del sitio el 10/08/2026 =====
+   Las chapas en hoja se pagan POR HOJA. Las trapezoidales y acanaladas
+   se pagan POR METRO LINEAL. Los tubos, POR TIRA de 6 m. */
+function cargarAcerco0826(){
+  if(!Array.isArray(insumos) || cartCfg.acerco0826) return;
+  const hoy = hoyISO();
+  const set = (nombre, datos)=>{
+    let x = insumos.find(y=> y.nombre === nombre);
+    if(!x){ x = {id: uid(), nombre, precioAnt: null}; insumos.push(x); }
+    if(x.precio && x.precio !== datos.precio) x.precioAnt = x.precio;
+    Object.assign(x, datos, {fecha: hoy});
+  };
+  const hoja = (nombre, w, h, esp, precio)=> set(nombre, {cat:'chapa', prov:'Acerco',
+    unidad:'m2', hojaW:w, hojaH:h, espesor:esp, precio,
+    aMedida:false, anchoUtil:undefined, anchoNom:undefined});
+  const rollo = (nombre, anchoNom, anchoUtil, esp, precio, prov)=> set(nombre, {cat:'chapa',
+    prov: prov||'Acerco', unidad:'m2', aMedida:true, anchoNom, anchoUtil, espesor:esp,
+    largoMin:1, largoMax:13, precio, hojaW:undefined, hojaH:undefined});
+  const tubo = (nombre, esp, precio)=> set(nombre, {cat:'cano', prov:'Acerco',
+    unidad:'m', tiraM:6, espesor:esp, precio});
+
+  /* galvanizada lisa · 1,22 × 2,44 */
+  hoja('Chapa galvanizada lisa C-27 · 122×244', 1.22, 2.44, 0.40, 31496.73);
+  hoja('Chapa galvanizada lisa C-25 · 122×244', 1.22, 2.44, 0.50, 37116.62);
+  hoja('Chapa galvanizada lisa C-22 · 122×244', 1.22, 2.44, 0.70, 50047.52);
+  hoja('Chapa galvanizada lisa C-20 · 122×244', 1.22, 2.44, 0.90, 64035.85);
+  hoja('Chapa galvanizada lisa C-18 · 122×244', 1.22, 2.44, 1.20, 83865.85);
+  /* galvanizada lisa · 1 × 2 */
+  hoja('Chapa galvanizada lisa C-22 · 100×200', 1.00, 2.00, 0.70, 34973.97);
+  hoja('Chapa galvanizada lisa C-20 · 100×200', 1.00, 2.00, 0.90, 44079.82);
+  hoja('Chapa galvanizada lisa C-18 · 100×200', 1.00, 2.00, 1.20, 57858.40);
+  /* galvanizada lisa · 1,22 × 3 */
+  hoja('Chapa galvanizada lisa C-25 · 122×300', 1.22, 3.00, 0.50, 45693.37);
+  hoja('Chapa galvanizada lisa C-22 · 122×300', 1.22, 3.00, 0.70, 61532.41);
+  /* prepintada lisa */
+  hoja('Chapa prepintada lisa C-25 verde · 122×244', 1.22, 2.44, 0.50, 53953.12);
+  /* de rollo, por metro lineal */
+  rollo('Chapa Cincalum trapezoidal T-1010 C-25', 1.10, 1.00, 0.50, 14750.19);
+  rollo('Chapa prepintada trapezoidal T-1010 C-25 negra', 1.10, 1.00, 0.50, 21374.19);
+  rollo('Chapa prepintada acanalada C-25 verde', 1.09, 1.00, 0.50, 21176.34);
+  /* tubos rectangulares */
+  tubo('Tubo rectangular 20×30×1,2', 1.20, 17392.91);
+  tubo('Tubo rectangular 30×40×0,9', 0.90, 18111.66);
+  tubo('Tubo rectangular 40×50×1,2', 1.20, 31365.12);
+
+  /* los viejos sin precio y mal definidos se van */
+  insumos = insumos.filter(x=> !(x.cat==='chapa' && !x.precio &&
+    /^Chapa galvanizada lisa C-\d+$/.test(x.nombre||'')));
+
+  /* ===== segunda tanda ===== */
+  /* tubos cuadrados de Acerco · barra de 6 m */
+  const cuad = (lado, esp, precio)=> set('Caño cuadrado ' + lado + '×' + lado + '×' +
+    String(esp).replace('.', ',') + ' · Acerco', {cat:'cano', prov:'Acerco', unidad:'m',
+    tiraM:6, espesor:esp, precio});
+  cuad(15, 1.2, 10062.04);
+  cuad(20, 0.9, 10244.98);
+  cuad(20, 1.2, 13799.58);
+  cuad(25, 1.2, 17060.75);
+  cuad(30, 1.2, 20533.30);
+  cuad(35, 1.2, 24700.35);
+  cuad(40, 1.2, 28082.30);
+  cuad(50, 1.2, 35480.33);
+
+  /* más chapas */
+  hoja('Chapa prepintada lisa C-25 negra · 122×300', 1.22, 3.00, 0.50, 66594.36);
+  rollo('Chapa prepintada acanalada C-25 negra', 1.09, 1.00, 0.50, 21374.19);
+  rollo('Chapa Cincalum acanalada C-22', 1.10, 1.00, 0.76, 21116.11);
+
+  cartCfg.acerco0826 = true;
+  registrar('cargó 28 precios de Acerco (10/08/2026)');
+  guardarDatos();
+}
+cargarAcerco0826();
+setTimeout(cargarAcerco0826, 4000);   /* por si los datos de la nube llegan más tarde */
 
 /* Los herreros con los que trabajamos, para que el bastidor vaya a su cuenta */
 function reponerHerreros(){
