@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v137</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v136</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1148,6 +1148,33 @@ const UV_SEMILLA = {
   instM2: 15000,   /* instalación por m² cuando el material no trae la suya */
   mats: []
 };
+/* ---- proveedor de un ítem UV ----
+   Los ítems nuevos guardan `prov` al crearse. Los viejos no lo tienen, así que se
+   deduce del nombre buscando el material más específico que coincida en uv.mats.
+   Si no se encuentra nada, se asume LMK (es el proveedor por defecto). */
+function provItemUV(it){
+  if(it && it.prov) return it.prov;
+  const n = normalizarTexto((it && it.nombre) || '');
+  let mejor = null, largo = 0;
+  for(const m of ((typeof uv === 'object' && uv && uv.mats) || [])){
+    const nm = normalizarTexto(m.nombre || '');
+    if(nm && n.includes(nm) && nm.length > largo){ mejor = m; largo = nm.length; }
+  }
+  return mejor ? (mejor.prov || 'LMK') : 'LMK';
+}
+/* El laminado es un servicio que sólo ofrece LMK: no se muestra en los
+   materiales de Grafismos (tintas alternativas de Soldado Ruiz). */
+function esUVdeLMK(it){ return !/grafismo|soldado/i.test(provItemUV(it) || ''); }
+/* costo por m² del laminado elegido en el ítem ('eco' | 'veh' | nada) */
+function lamCostoM2(it){
+  if(!it || !it.lam) return 0;
+  if(it.lam === 'veh') return (typeof uv === 'object' && uv && uv.lamVehCosto) || 13800;
+  return (typeof uv === 'object' && uv && uv.lamEcoCosto) || 7200;
+}
+function lamNombre(it){
+  if(!it || !it.lam) return '';
+  return it.lam === 'veh' ? 'laminado vehicular' : 'laminado';
+}
 function tipoInstalacion(nombre){
   const n = normalizarTexto(nombre);
   if(n.startsWith('lona')) return 'tensado';
@@ -1519,6 +1546,9 @@ function migrarSoldadoRuis(){
   if(typeof uv === 'object' && uv){
     if(uv.costuraCosto === undefined) uv.costuraCosto = 2000;
     if(uv.varillaCosto === undefined) uv.varillaCosto = 500;
+    // laminado: sólo lo hace LMK (lista 01/08/2026, costo por m² sin IVA)
+    if(uv.lamEcoCosto === undefined) uv.lamEcoCosto = 7200;
+    if(uv.lamVehCosto === undefined) uv.lamVehCosto = 13800;
   }
   // Lista LMK 01/08/2026 · columna Mimaki UV-LED Premium (sin IVA, salido de máquina).
   // Actualiza UNA sola vez los costos de los materiales propios (no toca los de Grafismos).
@@ -3731,7 +3761,8 @@ function presuConMedidas(p){ return !!(p && p.presuMedidas); }
 function medidasItem(it){
   if(!it.uv) return '';
   return ' · ' + (it.base||0) + '×' + (it.altura||0) + ' cm' +
-    (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '');
+    (it.costuraM>0 ? ' · vulcanizado' : '') + (it.varillaM>0 ? ' · varilla 6mm' : '') +
+    (it.lam ? ' · ' + lamNombre(it) : '');
 }
 function textoItem(it){
   if(it.titulo) return '— ' + (it.nombre||'') + ' —';
@@ -3771,6 +3802,7 @@ function subtotalFormula(i){
     let s = m2 * (i.cant||0) * (i.precio||0);
     if(i.costuraM > 0) s += i.costuraM * (uv.costuraCosto||2000) * uv.multSin * (i.cant||0);
     if(i.varillaM > 0) s += i.varillaM * (uv.varillaCosto||500) * uv.multSin * (i.cant||0);
+    if(i.lam) s += m2 * (i.cant||0) * lamCostoM2(i) * uv.multSin;
     return s;
   }
   return (i.cant||0)*(i.precio||0);
@@ -3814,7 +3846,7 @@ function costoItem(i){
   if(i.uv && i.costoM2){
     const anchoTotal = (i.base||0) + 2*(i.demAncho||0);
     const altoTotal  = (i.altura||0) + 2*(i.demAlto||0);
-    return (anchoTotal/100)*(altoTotal/100)*(i.cant||0)*i.costoM2;
+    return (anchoTotal/100)*(altoTotal/100)*(i.cant||0)*(i.costoM2 + lamCostoM2(i));
   }
   if(i.costoU) return (i.cant||0)*i.costoU;
   return null; // costo desconocido (ítems del catálogo o cargados antes)
@@ -4213,8 +4245,8 @@ function panelMaterialUV(p, idx, filaDom){
   const ops = [];
   for(const m of uv.mats){
     const inst = tipoInstalacion(m.nombre);
-    ops.push({nombre:'🖨 '+m.nombre+' impreso · sin instalación', precio:Math.round(uvPrecioSin(m)), costo:m.costo});
-    ops.push({nombre:'🖨 '+m.nombre+' '+inst,                     precio:Math.round(uvPrecioCon(m)), costo:m.costo});
+    ops.push({nombre:'🖨 '+m.nombre+' impreso · sin instalación', precio:Math.round(uvPrecioSin(m)), costo:m.costo, prov:m.prov||'LMK'});
+    ops.push({nombre:'🖨 '+m.nombre+' '+inst,                     precio:Math.round(uvPrecioCon(m)), costo:m.costo, prov:m.prov||'LMK'});
   }
   ops.forEach((o,i)=>{
     const e = document.createElement('option');
@@ -4253,6 +4285,9 @@ function panelMaterialUV(p, idx, filaDom){
       x.nombre = o.nombre;
       x.precio = o.precio;      // precio por m² del material nuevo
       x.costoM2 = o.costo;      // costo real, para el margen
+      x.prov = o.prov;          // proveedor del material (define si se ofrece laminado)
+      // el laminado es sólo de LMK: si el material nuevo es de otro, se cae solo
+      if(!esUVdeLMK(x)) x.lam = null;
       // se conservan medidas, demasía, vulcanizado, varilla y el nombre de cada pieza
     }
     registrar('cambió el material de ' + objetivo.length + ' ítem(s) de "' +
@@ -4353,6 +4388,7 @@ function renderPedidoItems(p){
           '<input class="costuraM" type="text" inputmode="decimal" step="0.1" min="0" title="metros lineales de vulcanizado" style="width:64px"><span class="lblCostura" style="display:none">m ·</span>' +
           '<button class="togVarilla"></button>' +
           '<input class="varillaM" type="text" inputmode="decimal" step="0.1" min="0" title="metros lineales de varilla" style="width:64px"><span class="lblVarilla" style="display:none">m</span>' +
+          '<button class="togLam" title="Laminado (sólo LMK). Tocá para pasar de económico a vehicular y a sin laminado."></button>' +
           '<button class="uvCostoBtn" title="Costo real del trabajo (lo que te cobra el proveedor). Tocá para corregirlo."></button>' +
         '</div>' +
         '<div class="pi-medidas"><span class="pi-impresion"></span>' +
@@ -4393,6 +4429,7 @@ function renderPedidoItems(p){
       const perimIt = ()=> Math.round(2*((it.base||0)+(it.altura||0))/100*10)/10;
       const tCo = d.querySelector('.togCostura'), iCo = d.querySelector('.costuraM'), lCo = d.querySelector('.lblCostura');
       const tVa = d.querySelector('.togVarilla'), iVa = d.querySelector('.varillaM'), lVa = d.querySelector('.lblVarilla');
+      const tLam = d.querySelector('.togLam');
       const pintarExtras = ()=>{
         const vCost = Math.round((uv.costuraCosto||2000) * uv.multSin);
         const vVar  = Math.round((uv.varillaCosto||500) * uv.multSin);
@@ -4406,11 +4443,31 @@ function renderPedidoItems(p){
         iVa.style.display = it.varillaM>0 ? '' : 'none';
         lVa.style.display = it.varillaM>0 ? '' : 'none';
         if(it.varillaM>0) iVa.value = it.varillaM;
+        // laminado: sólo aparece si el material es de LMK
+        if(tLam){
+          if(!esUVdeLMK(it)){
+            tLam.style.display = 'none';
+            if(it.lam) it.lam = null;
+          }else{
+            tLam.style.display = '';
+            const vEco = Math.round((uv.lamEcoCosto||7200) * uv.multSin);
+            const vVeh = Math.round((uv.lamVehCosto||13800) * uv.multSin);
+            tLam.textContent = it.lam === 'veh' ? '☑ 🛡 Laminado vehicular ' + plata(vVeh) + '/m²'
+                             : it.lam === 'eco' ? '☑ 🛡 Laminado ' + plata(vEco) + '/m²'
+                             : '☐ 🛡 Laminado';
+            tLam.style.cssText = 'background:none;border:1px dashed ' + (it.lam?'#4cd27d':'var(--borde)') + ';border-radius:8px;padding:5px 8px;font-size:.68rem;font-weight:700;color:' + (it.lam?'#4cd27d':'var(--texto2)') + ';white-space:nowrap';
+          }
+        }
       };
       tCo.onclick = ()=>{ it.costuraM = it.costuraM>0 ? null : perimIt(); pintarExtras(); refrescar(); renderPedidos(); };
       tVa.onclick = ()=>{ it.varillaM = it.varillaM>0 ? null : perimIt(); pintarExtras(); refrescar(); renderPedidos(); };
       iCo.addEventListener('change', ()=>{ const v = parseFloat(iCo.value)||0; it.costuraM = v>0 ? v : null; pintarExtras(); refrescar(); renderPedidos(); });
       iVa.addEventListener('change', ()=>{ const v = parseFloat(iVa.value)||0; it.varillaM = v>0 ? v : null; pintarExtras(); refrescar(); renderPedidos(); });
+      // el laminado cicla: sin laminado → económico → vehicular → sin laminado
+      if(tLam) tLam.onclick = ()=>{
+        it.lam = it.lam === 'eco' ? 'veh' : (it.lam === 'veh' ? null : 'eco');
+        pintarExtras(); refrescar(); renderPedidos();
+      };
       pintarExtras();
       // costo real del trabajo (editable, para cuando el proveedor pasa otro precio)
       const bCosto = d.querySelector('.uvCostoBtn');
@@ -4434,7 +4491,8 @@ function renderPedidoItems(p){
             const hT = (it.altura||0) + 2*(it.demAlto||0);
             const m2tot = (aT/100)*(hT/100)*(it.cant||1);
             if(m2tot > 0){
-              it.costoM2 = nuevo/m2tot;
+              // el laminado se vuelve a sumar en costoItem, así que acá se descuenta
+              it.costoM2 = Math.max(0, nuevo/m2tot - lamCostoM2(it));
               it.uvCostoAjustado = true;
               registrar('corrigió el costo real de "' + (it.nombre||'ítem UV') + '" a ' + plata(nuevo));
             }
@@ -5831,12 +5889,11 @@ const CART_CATS = [
 
 /* Cómo se compra cada insumo, en una línea legible */
 function insumoFormato(x){
-  const esp = x.espesor ? ' · ' + x.espesor + ' mm' : '';
-  if(x.tiraM)    return 'tira de ' + x.tiraM + ' m' + esp;
+  if(x.tiraM)    return 'tira de ' + x.tiraM + ' m';
   if(x.aMedida)  return 'chapa de ' + (x.anchoNom || x.anchoUtil) + ' m · cubre ' +
                         x.anchoUtil + ' m (el resto es solape) · largo a medida (' +
-                        x.largoMin + ' a ' + x.largoMax + ' m)' + esp;
-  if(x.hojaW)    return 'hoja de ' + Math.round(x.hojaW*100) + '×' + Math.round(x.hojaH*100) + ' cm' + esp;
+                        x.largoMin + ' a ' + x.largoMax + ' m)';
+  if(x.hojaW)    return 'hoja de ' + Math.round(x.hojaW*100) + '×' + Math.round(x.hojaH*100) + ' cm';
   if(x.ancho)    return 'rollo de ' + Math.round(x.ancho*100) + ' cm';
   return 'por unidad';
 }
@@ -7029,7 +7086,7 @@ function renderBuscadorItems(p){
           p.items.push({prod:null, uv:true, nombre:nom.replace(' · m²',''),
             base:100, altura:100, cant:1,
             demAncho: esLona ? 2 : 0, demAlto: esLona ? 2 : 0,
-            precio, costoM2: m.costo});
+            precio, costoM2: m.costo, prov: m.prov || 'LMK'});
           renderPedidoItems(p); guardarDatos(); renderPedidos();
         };
         sug.appendChild(b);
@@ -11839,82 +11896,7 @@ function reponerAlucos(){
   if(sumo) guardarDatos();
 }
 reponerAlucos();
-setTimeout(reponerAlucos, 4000);
-
-/* ===== Precios de Acerco, tomados del sitio el 10/08/2026 =====
-   Las chapas en hoja se pagan POR HOJA. Las trapezoidales y acanaladas
-   se pagan POR METRO LINEAL. Los tubos, POR TIRA de 6 m. */
-function cargarAcerco0826(){
-  if(!Array.isArray(insumos) || cartCfg.acerco0826) return;
-  const hoy = hoyISO();
-  const set = (nombre, datos)=>{
-    let x = insumos.find(y=> y.nombre === nombre);
-    if(!x){ x = {id: uid(), nombre, precioAnt: null}; insumos.push(x); }
-    if(x.precio && x.precio !== datos.precio) x.precioAnt = x.precio;
-    Object.assign(x, datos, {fecha: hoy});
-  };
-  const hoja = (nombre, w, h, esp, precio)=> set(nombre, {cat:'chapa', prov:'Acerco',
-    unidad:'m2', hojaW:w, hojaH:h, espesor:esp, precio,
-    aMedida:false, anchoUtil:undefined, anchoNom:undefined});
-  const rollo = (nombre, anchoNom, anchoUtil, esp, precio, prov)=> set(nombre, {cat:'chapa',
-    prov: prov||'Acerco', unidad:'m2', aMedida:true, anchoNom, anchoUtil, espesor:esp,
-    largoMin:1, largoMax:13, precio, hojaW:undefined, hojaH:undefined});
-  const tubo = (nombre, esp, precio)=> set(nombre, {cat:'cano', prov:'Acerco',
-    unidad:'m', tiraM:6, espesor:esp, precio});
-
-  /* galvanizada lisa · 1,22 × 2,44 */
-  hoja('Chapa galvanizada lisa C-27 · 122×244', 1.22, 2.44, 0.40, 31496.73);
-  hoja('Chapa galvanizada lisa C-25 · 122×244', 1.22, 2.44, 0.50, 37116.62);
-  hoja('Chapa galvanizada lisa C-22 · 122×244', 1.22, 2.44, 0.70, 50047.52);
-  hoja('Chapa galvanizada lisa C-20 · 122×244', 1.22, 2.44, 0.90, 64035.85);
-  hoja('Chapa galvanizada lisa C-18 · 122×244', 1.22, 2.44, 1.20, 83865.85);
-  /* galvanizada lisa · 1 × 2 */
-  hoja('Chapa galvanizada lisa C-22 · 100×200', 1.00, 2.00, 0.70, 34973.97);
-  hoja('Chapa galvanizada lisa C-20 · 100×200', 1.00, 2.00, 0.90, 44079.82);
-  hoja('Chapa galvanizada lisa C-18 · 100×200', 1.00, 2.00, 1.20, 57858.40);
-  /* galvanizada lisa · 1,22 × 3 */
-  hoja('Chapa galvanizada lisa C-25 · 122×300', 1.22, 3.00, 0.50, 45693.37);
-  hoja('Chapa galvanizada lisa C-22 · 122×300', 1.22, 3.00, 0.70, 61532.41);
-  /* prepintada lisa */
-  hoja('Chapa prepintada lisa C-25 verde · 122×244', 1.22, 2.44, 0.50, 53953.12);
-  /* de rollo, por metro lineal */
-  rollo('Chapa Cincalum trapezoidal T-1010 C-25', 1.10, 1.00, 0.50, 14750.19);
-  rollo('Chapa prepintada trapezoidal T-1010 C-25 negra', 1.10, 1.00, 0.50, 21374.19);
-  rollo('Chapa prepintada acanalada C-25 verde', 1.09, 1.00, 0.50, 21176.34);
-  /* tubos rectangulares */
-  tubo('Tubo rectangular 20×30×1,2', 1.20, 17392.91);
-  tubo('Tubo rectangular 30×40×0,9', 0.90, 18111.66);
-  tubo('Tubo rectangular 40×50×1,2', 1.20, 31365.12);
-
-  /* los viejos sin precio y mal definidos se van */
-  insumos = insumos.filter(x=> !(x.cat==='chapa' && !x.precio &&
-    /^Chapa galvanizada lisa C-\d+$/.test(x.nombre||'')));
-
-  /* ===== segunda tanda ===== */
-  /* tubos cuadrados de Acerco · barra de 6 m */
-  const cuad = (lado, esp, precio)=> set('Caño cuadrado ' + lado + '×' + lado + '×' +
-    String(esp).replace('.', ',') + ' · Acerco', {cat:'cano', prov:'Acerco', unidad:'m',
-    tiraM:6, espesor:esp, precio});
-  cuad(15, 1.2, 10062.04);
-  cuad(20, 0.9, 10244.98);
-  cuad(20, 1.2, 13799.58);
-  cuad(25, 1.2, 17060.75);
-  cuad(30, 1.2, 20533.30);
-  cuad(35, 1.2, 24700.35);
-  cuad(40, 1.2, 28082.30);
-  cuad(50, 1.2, 35480.33);
-
-  /* más chapas */
-  hoja('Chapa prepintada lisa C-25 negra · 122×300', 1.22, 3.00, 0.50, 66594.36);
-  rollo('Chapa prepintada acanalada C-25 negra', 1.09, 1.00, 0.50, 21374.19);
-  rollo('Chapa Cincalum acanalada C-22', 1.10, 1.00, 0.76, 21116.11);
-
-  cartCfg.acerco0826 = true;
-  registrar('cargó 28 precios de Acerco (10/08/2026)');
-  guardarDatos();
-}
-cargarAcerco0826();
-setTimeout(cargarAcerco0826, 4000);   /* por si los datos de la nube llegan más tarde */
+setTimeout(reponerAlucos, 4000);   /* por si los datos de la nube llegan más tarde */
 
 /* Los herreros con los que trabajamos, para que el bastidor vaya a su cuenta */
 function reponerHerreros(){
