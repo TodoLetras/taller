@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v140</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v143</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1037,7 +1037,85 @@ function insumosSemilla(){
   ];
 }
 
-/* Config general de cartelería: los porcentajes y valores que se pueden tocar */
+/* ---- Lista Acerco 08/2026 · corre UNA sola vez ----
+   OJO: en el catálogo ya había 6 insumos de Acerco que están en esta lista.
+   A esos se les ACTUALIZA el precio; NO se vuelven a crear, porque duplicarlos
+   rompería la cuenta corriente del proveedor. Los nombres viejos no se tocan:
+   los ítems de cartelería guardados en pedidos buscan el material POR NOMBRE. */
+function cargarAcerco0826(){
+  if(!cartCfg || cartCfg.acerco0826) return;
+  const hoy = new Date().toISOString().slice(0,10);
+
+  // 1) los que YA existen: sólo se actualiza precio y espesor
+  const actualizar = [
+    ['Chapa galvanizada lisa C-25',              37116.62, 0.50],
+    ['Chapa galvanizada lisa C-22',              50047.52, 0.70],
+    ['Chapa galvanizada lisa C-20',              64035.85, 0.90],
+    ['Chapa galvanizada lisa C-18',              83865.85, 1.20],
+    ['Chapa Cincalum acanalada C-22',            21116.11, 0.76],
+    ['Chapa Cincalum trapezoidal T-1010 C-25',   14750.19, 0.50],
+  ];
+  let tocados = 0;
+  for(const [nombre, precio, espesor] of actualizar){
+    const x = insumos.find(i=> i.prov === 'Acerco' && i.nombre === nombre);
+    if(!x) continue;                       // si no está, se crea abajo como nuevo
+    if(x.precio !== precio){ x.precioAnt = x.precio || null; x.precio = precio; x.fecha = hoy; }
+    x.espesor = espesor;
+    tocados++;
+  }
+
+  // 2) los nuevos. Se saltea cualquiera que ya exista con ese nombre exacto.
+  const I = (o)=> Object.assign({id: uid(), precioAnt:null, fecha:hoy, prov:'Acerco'}, o);
+  const hoja = (nombre, esp, W, H, precio)=>
+    I({cat:'chapa', nombre, unidad:'m2', espesor:esp, hojaW:W, hojaH:H, precio});
+  const rollo = (nombre, esp, precio, anchoNom)=>
+    I({cat:'chapa', nombre, unidad:'m2', espesor:esp, precio,
+       anchoUtil:1.00, anchoNom:(anchoNom || 1.10), largoMin:1, largoMax:13, aMedida:true});
+  const cano = (nombre, esp, precio)=>
+    I({cat:'cano', nombre, unidad:'m', tiraM:6, espesor:esp, precio});
+
+  const nuevos = [
+    /* --- chapa galvanizada lisa, hoja 1,22 × 2,44 --- */
+    hoja('Chapa galvanizada lisa C-27 · hoja 122×244', 0.40, 1.22, 2.44, 31496.73),
+    /* --- chapa galvanizada lisa, hoja 1,00 × 2,00 --- */
+    hoja('Chapa galvanizada lisa C-22 · hoja 100×200', 0.70, 1.00, 2.00, 34973.97),
+    hoja('Chapa galvanizada lisa C-20 · hoja 100×200', 0.90, 1.00, 2.00, 44079.82),
+    hoja('Chapa galvanizada lisa C-18 · hoja 100×200', 1.20, 1.00, 2.00, 57858.40),
+    /* --- chapa galvanizada lisa, hoja 1,22 × 3,00 --- */
+    hoja('Chapa galvanizada lisa C-25 · hoja 122×300', 0.50, 1.22, 3.00, 45693.37),
+    hoja('Chapa galvanizada lisa C-22 · hoja 122×300', 0.70, 1.22, 3.00, 61532.41),
+    /* --- prepintada lisa --- */
+    hoja('Chapa prepintada lisa C-25 verde · hoja 122×244', 0.50, 1.22, 2.44, 53953.12),
+    hoja('Chapa prepintada lisa C-25 negra · hoja 122×300', 0.50, 1.22, 3.00, 66594.36),
+    /* --- de rollo, por metro lineal --- */
+    rollo('Chapa prepintada trapezoidal T-1010 C-25 negra', 0.50, 21374.19),
+    rollo('Chapa prepintada acanalada C-25 negra',          0.50, 21374.19),
+    rollo('Chapa prepintada acanalada C-25 verde',          0.50, 21176.34, 1.09),
+    /* --- caños cuadrados · van aparte de los de MAS, para poder comparar --- */
+    cano('Caño estructural 15×15×1,2 · Acerco', 1.2, 10062.04),
+    cano('Caño estructural 20×20×0,9 · Acerco', 0.9, 10244.98),
+    cano('Caño estructural 20×20×1,2 · Acerco', 1.2, 13799.58),
+    cano('Caño estructural 25×25×1,2 · Acerco', 1.2, 17060.75),
+    cano('Caño estructural 30×30×1,2 · Acerco', 1.2, 20533.30),
+    cano('Caño estructural 35×35×1,2 · Acerco', 1.2, 24700.35),
+    cano('Caño estructural 40×40×1,2 · Acerco', 1.2, 28082.30),
+    cano('Caño estructural 50×50×1,2 · Acerco', 1.2, 35480.33),
+    /* --- caños rectangulares --- */
+    cano('Caño estructural 20×30×1,2 · Acerco', 1.2, 17392.91),
+    cano('Caño estructural 30×40×0,9 · Acerco', 0.9, 18111.66),
+    cano('Caño estructural 40×50×1,2 · Acerco', 1.2, 31365.12),
+  ];
+  let agregados = 0;
+  for(const n of nuevos){
+    if(insumos.find(i=> i.nombre === n.nombre)) continue;   // ya estaba: no se duplica
+    insumos.push(n);
+    agregados++;
+  }
+
+  cartCfg.acerco0826 = true;
+  registrar('cargó la lista de Acerco 08/2026: ' + agregados + ' insumos nuevos, ' + tocados + ' actualizados');
+}
+
 let cartCfg = {
   herrero: 50,        // % sobre el valor del caño (incluye pintura)
   zingueria: 50,      // % sobre el valor de la chapa (plegados y corte)
@@ -1066,12 +1144,19 @@ const AD_SEMILLA = {
   recargoParcial: 15,     // % sobre el papel utilizado si el paquete queda abierto
   escala: [[1,100],[2,95],[3,90],[4,85],[5,80],[6,75]],  // paquetes → % de margen
   maquinas: {
-    gto:    {nombre:'GTO',    W:50, H:34, ctp:6900,
-      tarifas:{ hasta170:{post:{1:11000,2:25800,4:47000}, millar:{1:10000,2:12400,4:18000}},
-                mas180:  {post:{1:11000,2:26000,4:47000}, millar:{1:14000,2:18000,4:26000}} }},
-    komori: {nombre:'Komori', W:64, H:47, ctp:10500,
-      tarifas:{ hasta170:{post:{1:14000,2:32700,4:52600}, millar:{1:12700,2:15800,4:23400}},
-                mas180:  {post:{1:14000,2:32700,4:52600}, millar:{1:16900,2:21500,4:31600}} }}
+    gto:    {nombre:'GTO',    W:50, H:34, ctp:7800,
+      tarifas:{ hasta170:{post:{1:12400,2:29000,4:50900}, millar:{1:11000,2:14000,4:20300}},
+                mas180:  {post:{1:12400,2:29000,4:50900}, millar:{1:15900,2:20300,4:28900}},
+                opp:     {post:{1:27800,2:39100,4:60200}, millar:{1:20300,2:27800,4:39100}},
+                sobreOf: {post:{1:20300,2:31700,4:54800}, millar:{1:18400,2:19300,4:31700}},
+                sobreBo: {post:{1:22600,2:34100,4:54800}, millar:{1:22600,2:24700,4:34100}},
+                pant170: {post:{1:20600,2:31700,4:0},     millar:{1:14000,2:17300,4:0}},
+                pant200: {post:{1:22600,2:31700,4:0},     millar:{1:20200,2:20200,4:0}} }},
+    komori: {nombre:'Komori', W:64, H:46, ctp:11800,
+      tarifas:{ hasta170:{post:{1:15900,2:36800,4:59000}, millar:{1:14200,2:17900,4:26300}},
+                mas180:  {post:{1:15900,2:36800,4:59000}, millar:{1:19000,2:24200,4:35700}},
+                pant170: {post:{1:31500,2:42300,4:0},     millar:{1:16300,2:21000,4:0}},
+                pant200: {post:{1:31500,2:42300,4:0},     millar:{1:22100,2:28400,4:0}} }}
   }
 };
 function SEMILLA_RECETAS(){
@@ -1559,6 +1644,38 @@ function migrarSoldadoRuis(){
       adCfg.vc.cortes = [{hasta: 60, precio: 6000}, {hasta: 120, precio: 8000}, {hasta: 999, precio: 10000}];
       adCfg.vc.precios0826 = true;
     }
+  }
+  /* Lista AD agosto 2026 = lista de mayo +5%, redondeada a centenas.
+     Incluye los tramos que faltaban: OPP, sobre oficio, sobre bolsa y Pantone.
+     (La migración de mayo quedó reemplazada por ésta: el flag es nuevo.) */
+  if(typeof adCfg === 'object' && adCfg && adCfg.maquinas && !adCfg.tarifas0826){
+    const g = adCfg.maquinas.gto, k = adCfg.maquinas.komori;
+    if(g){
+      g.ctp = 7800;
+      g.tarifas = {
+        hasta170:{post:{1:12400,2:29000,4:50900}, millar:{1:11000,2:14000,4:20300}},
+        mas180:  {post:{1:12400,2:29000,4:50900}, millar:{1:15900,2:20300,4:28900}},
+        opp:     {post:{1:27800,2:39100,4:60200}, millar:{1:20300,2:27800,4:39100}},
+        sobreOf: {post:{1:20300,2:31700,4:54800}, millar:{1:18400,2:19300,4:31700}},
+        sobreBo: {post:{1:22600,2:34100,4:54800}, millar:{1:22600,2:24700,4:34100}},
+        pant170: {post:{1:20600,2:31700,4:0},     millar:{1:14000,2:17300,4:0}},
+        pant200: {post:{1:22600,2:31700,4:0},     millar:{1:20200,2:20200,4:0}}
+      };
+    }
+    if(k){
+      k.ctp = 11800; k.H = 46;         // la lista dice MO 64 × 46 cm
+      k.tarifas = {
+        hasta170:{post:{1:15900,2:36800,4:59000}, millar:{1:14200,2:17900,4:26300}},
+        mas180:  {post:{1:15900,2:36800,4:59000}, millar:{1:19000,2:24200,4:35700}},
+        pant170: {post:{1:31500,2:42300,4:0},     millar:{1:16300,2:21000,4:0}},
+        pant200: {post:{1:31500,2:42300,4:0},     millar:{1:22100,2:28400,4:0}}
+      };
+    }
+    adCfg.tarifas0826 = true;
+  }
+  // lista de Acerco 08/2026 (actualiza los que ya estaban, agrega los que faltan)
+  if(typeof cartCfg === 'object' && cartCfg && Array.isArray(insumos) && insumos.length){
+    cargarAcerco0826();
   }
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
   if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
@@ -10991,9 +11108,50 @@ function adEsAutoadhesivo(papel){
   if(papel.autoadh === false) return false;
   return /autoadh/i.test(papel.nombre || '');
 }
+/* El OPP autoadhesivo tiene tarifa propia, MUY por encima del autoadhesivo común
+   (postura de $26.800 contra $11.800 en 1 color). Si cae en el tramo equivocado,
+   el presupuesto sale menos de la mitad de lo que cuesta. */
+function adEsOpp(papel){
+  if(!papel) return false;
+  if(papel.opp === true) return true;
+  if(papel.opp === false) return false;
+  return /\bopp\b/i.test(papel.nombre || '');
+}
+function adEsPantone(papel){
+  if(!papel) return false;
+  if(papel.pantone === true) return true;
+  if(papel.pantone === false) return false;
+  return /pantone/i.test(papel.nombre || '');
+}
+/* los sobres tienen dos tarifas distintas: oficio y bolsa */
+function adTipoSobre(papel){
+  if(!papel) return null;
+  if(papel.sobre) return papel.sobre;              // 'oficio' | 'bolsa'
+  const n = normalizarTexto(papel.nombre || '');
+  if(!/sobre/.test(n)) return null;
+  return /bolsa/.test(n) ? 'bolsa' : 'oficio';
+}
+/* Trabajos que AD hace sólo en GTO: OPP y sobres (no figuran en la lista de MO).
+   El Pantone sí tiene tarifa en las dos máquinas. Si el trabajo es grande,
+   conviene consultarle igual. */
+function adSoloGto(papel){
+  return adEsOpp(papel) || !!adTipoSobre(papel);
+}
 function adTarifa(maq, gramaje, papel){
-  if(adEsAutoadhesivo(papel)) return maq.tarifas.mas180;
-  return gramaje <= 170 ? maq.tarifas.hasta170 : maq.tarifas.mas180;
+  const t = maq.tarifas;
+  const sobre = adTipoSobre(papel);
+  if(sobre){
+    const ts = t[sobre === 'bolsa' ? 'sobreBo' : 'sobreOf'];
+    if(ts) return ts;
+  }
+  if(adEsOpp(papel) && t.opp) return t.opp;
+  if(adEsPantone(papel)){
+    const grueso = adEsAutoadhesivo(papel) || gramaje > 170;
+    const tp = t[grueso ? 'pant200' : 'pant170'];
+    if(tp) return tp;
+  }
+  if(adEsAutoadhesivo(papel)) return t.mas180;
+  return gramaje <= 170 ? t.hasta170 : t.mas180;
 }
 // calcula una opción: modo {tipo:'paquetes', n} o {tipo:'cantidad', q}
 function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
@@ -11235,6 +11393,9 @@ function dibujarEsquemaAd(op){
 }
 function adMejorOpcion(papel, cf, cd, pzW, pzH, modo, orig, plastOver){
   const a = adCalcular('gto', papel, cf, cd, pzW, pzH, modo, orig, plastOver);
+  /* OPP, sobres y Pantone: AD los hace en GTO. En Komori no tienen tarifa de lista,
+     así que no se propone sola; si el trabajo es grande, hay que consultarle. */
+  if(adSoloGto(papel) && a) return a;
   const b = adCalcular('komori', papel, cf, cd, pzW, pzH, modo, orig, plastOver);
   if(a && b) return a.venta <= b.venta ? a : b;
   return a || b;
