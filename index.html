@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v143</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v144</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1672,10 +1672,6 @@ function migrarSoldadoRuis(){
       };
     }
     adCfg.tarifas0826 = true;
-  }
-  // lista de Acerco 08/2026 (actualiza los que ya estaban, agrega los que faltan)
-  if(typeof cartCfg === 'object' && cartCfg && Array.isArray(insumos) && insumos.length){
-    cargarAcerco0826();
   }
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
   if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
@@ -12846,6 +12842,20 @@ function reponerAlucos(){
 }
 reponerAlucos();
 setTimeout(reponerAlucos, 4000);   /* por si los datos de la nube llegan más tarde */
+
+/* La lista de Acerco: igual que los alucos, tiene que correr DESPUÉS de que
+   llegan los insumos de Dropbox. Si corre antes, no encuentra nada que
+   actualizar y los precios de la nube pisarían lo cargado. */
+function correrAcerco(){
+  if(!Array.isArray(insumos) || !insumos.length) return;   // todavía no llegaron
+  if(!cartCfg || cartCfg.acerco0826) return;
+  cargarAcerco0826();
+  guardarDatos();
+  if(typeof renderInsumos === 'function') renderInsumos();
+}
+correrAcerco();
+setTimeout(correrAcerco, 4000);
+setTimeout(correrAcerco, 12000);   /* conexión lenta */
 
 /* Los herreros con los que trabajamos, para que el bastidor vaya a su cuenta */
 function reponerHerreros(){
