@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v144</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v145</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1827,7 +1827,10 @@ function aplicarPrefVisuales(){
     toast(claro ? 'Tema oscuro' : 'Tema claro');
   };
 })();
-function iniciar(){ migrarClientes(); migrarSoldadoRuis(); asegurarOrden(); renderFiltros(); render(); renderCalendario(); renderClientes(); }
+function iniciar(){ migrarClientes(); migrarSoldadoRuis(); asegurarOrden(); renderFiltros(); render(); renderCalendario(); renderClientes();
+  /* después de aplicar datos (locales o de la nube): si falta Acerco, se carga */
+  if(typeof correrAcerco === 'function') correrAcerco();
+}
 function migrarClientes(){
   let cambio = false;
   for(const t of tareas){
@@ -12843,19 +12846,29 @@ function reponerAlucos(){
 reponerAlucos();
 setTimeout(reponerAlucos, 4000);   /* por si los datos de la nube llegan más tarde */
 
-/* La lista de Acerco: igual que los alucos, tiene que correr DESPUÉS de que
-   llegan los insumos de Dropbox. Si corre antes, no encuentra nada que
-   actualizar y los precios de la nube pisarían lo cargado. */
+/* La lista de Acerco. OJO con el orden de arranque: cargar() es asíncrona y no
+   se espera, así que abajo se siembra `insumos` con el catálogo por defecto y
+   un rato después cargar() lo reemplaza por el de localStorage. Por eso NO
+   alcanza con mirar el flag: si la carga corre sobre la semilla temporal, el
+   flag queda prendido pero los insumos se pierden en el reemplazo.
+   Se comprueba entonces que los insumos estén DE VERDAD. */
+const ACERCO_TESTIGO = 'Caño estructural 50×50×1,2 · Acerco';
+function acercoCargado(){
+  return Array.isArray(insumos) && insumos.some(x=> x.nombre === ACERCO_TESTIGO);
+}
 function correrAcerco(){
-  if(!Array.isArray(insumos) || !insumos.length) return;   // todavía no llegaron
-  if(!cartCfg || cartCfg.acerco0826) return;
+  if(!Array.isArray(insumos) || !insumos.length) return;   // todavía no hay catálogo
+  if(!cartCfg) return;
+  if(acercoCargado()) return;                              // ya están: nada que hacer
+  cartCfg.acerco0826 = false;                              // pudo quedar prendido en falso
   cargarAcerco0826();
   guardarDatos();
   if(typeof renderInsumos === 'function') renderInsumos();
 }
 correrAcerco();
-setTimeout(correrAcerco, 4000);
-setTimeout(correrAcerco, 12000);   /* conexión lenta */
+setTimeout(correrAcerco, 1500);
+setTimeout(correrAcerco, 5000);
+setTimeout(correrAcerco, 15000);   /* por si la nube llega tarde */
 
 /* Los herreros con los que trabajamos, para que el bastidor vaya a su cuenta */
 function reponerHerreros(){
