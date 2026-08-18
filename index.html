@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v146</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v147</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -604,7 +604,7 @@
 </div>
 
 <div class="modal" id="modalCorte">
-  <div class="modal-caja">
+  <div class="hoja">
     <h2>✂️ Calculadora de corte</h2>
     <div style="display:flex;gap:6px;margin-bottom:10px">
       <button id="corteTabPliego" class="corte-tab">📄 Pliego</button>
@@ -612,15 +612,15 @@
     </div>
 
     <label>Material</label>
-    <select id="corteMat" style="margin-bottom:8px"></select>
+    <select id="corteMat" style="width:100%;margin:0 0 10px;padding:10px;background:var(--panel2);border:1px solid var(--borde);border-radius:10px;color:var(--texto)"></select>
 
     <div id="corteCampoPliego">
       <label>Medida del pliego (ancho × alto en cm)</label>
       <div style="display:flex;gap:8px;align-items:center">
-        <input id="cortePlW" type="text" inputmode="decimal" placeholder="ancho" style="flex:1;margin:0">
-        <span style="color:var(--texto2)">×</span>
-        <input id="cortePlH" type="text" inputmode="decimal" placeholder="alto" style="flex:1;margin:0">
-        <span style="font-size:.72rem;color:var(--texto2)">cm</span>
+        <input id="cortePlW" type="text" inputmode="decimal" placeholder="ancho" style="flex:1;min-width:0;margin:0">
+        <span style="color:var(--texto2);flex:0 0 auto">×</span>
+        <input id="cortePlH" type="text" inputmode="decimal" placeholder="alto" style="flex:1;min-width:0;margin:0">
+        <span style="font-size:.72rem;color:var(--texto2);flex:0 0 auto">cm</span>
       </div>
       <label style="margin-top:8px">Costo del pliego entero</label>
       <input id="cortePlCosto" type="text" inputmode="decimal" placeholder="$ por pliego">
@@ -637,28 +637,28 @@
 
     <label style="margin-top:8px">Pieza final (ancho × alto en cm) × cantidad</label>
     <div style="display:flex;gap:8px;align-items:center">
-      <input id="cortePzW" type="text" inputmode="decimal" placeholder="ancho" style="flex:1;margin:0">
-      <span style="color:var(--texto2)">×</span>
-      <input id="cortePzH" type="text" inputmode="decimal" placeholder="alto" style="flex:1;margin:0">
-      <span style="color:var(--texto2)">×</span>
-      <input id="cortePzC" type="text" inputmode="numeric" placeholder="cant" style="width:80px;margin:0">
+      <input id="cortePzW" type="text" inputmode="decimal" placeholder="ancho" style="flex:1;min-width:0;margin:0">
+      <span style="color:var(--texto2);flex:0 0 auto">×</span>
+      <input id="cortePzH" type="text" inputmode="decimal" placeholder="alto" style="flex:1;min-width:0;margin:0">
+      <span style="color:var(--texto2);flex:0 0 auto">×</span>
+      <input id="cortePzC" type="text" inputmode="numeric" placeholder="cant" style="flex:0 0 72px;width:72px;margin:0">
     </div>
 
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
-      <span style="font-size:.72rem;color:var(--texto2)">Calle</span>
-      <input id="corteCalle" type="text" inputmode="decimal" placeholder="0" style="width:70px;margin:0;padding:8px">
-      <span style="font-size:.72rem;color:var(--texto2)">mm</span>
+      <span style="font-size:.72rem;color:var(--texto2);flex:0 0 auto">Calle</span>
+      <input id="corteCalle" type="text" inputmode="decimal" placeholder="0" style="flex:0 0 62px;width:62px;margin:0;padding:8px">
+      <span style="font-size:.72rem;color:var(--texto2);flex:0 0 auto">mm</span>
       <button id="corteRotar" style="border-radius:9px;padding:9px 12px;font-size:.72rem;font-weight:700"></button>
-      <span style="font-size:.72rem;color:var(--texto2);margin-left:auto">Ganancia</span>
-      <input id="corteMargen" type="text" inputmode="decimal" placeholder="100" style="width:70px;margin:0;padding:8px">
-      <span style="font-size:.72rem;color:var(--texto2)">%</span>
+      <span style="font-size:.72rem;color:var(--texto2);margin-left:auto;flex:0 0 auto">Ganancia</span>
+      <input id="corteMargen" type="text" inputmode="decimal" placeholder="100" style="flex:0 0 62px;width:62px;margin:0;padding:8px">
+      <span style="font-size:.72rem;color:var(--texto2);flex:0 0 auto">%</span>
     </div>
 
     <div id="corteResultado" style="margin-top:12px"></div>
     <div id="corteDibujo" style="margin-top:8px"></div>
 
     <label style="margin-top:10px">Texto para el cliente (editable)</label>
-    <textarea id="corteTexto" rows="3" style="width:100%"></textarea>
+    <textarea id="corteTexto" rows="3"></textarea>
 
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button id="corteCerrar" style="flex:1;border-radius:11px;padding:12px;font-weight:700;background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)">Cerrar</button>
