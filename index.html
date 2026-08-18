@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v148</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v149</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -633,6 +633,7 @@
       <input id="corteRoCosto" type="text" inputmode="decimal" placeholder="$ por ml">
       <label>Mínimo de venta (m)</label>
       <input id="corteRoMin" type="text" inputmode="decimal" placeholder="0.5">
+      <button id="corteRedondeo" style="width:100%;border-radius:9px;padding:10px;font-size:.72rem;font-weight:700;margin-bottom:4px"></button>
     </div>
 
     <label style="margin-top:8px">Pieza final (ancho × alto en cm) × cantidad</label>
@@ -1245,9 +1246,12 @@ function posarRollo(pw, ph, anchoRollo, cant, calle, rotar){
   return B.largoCm < A.largoCm ? B : A;
 }
 
-/* metros lineales redondeados a 0,5 m para arriba, respetando el mínimo */
-function mlRedondeado(largoCm, minimoM){
-  const m = Math.ceil((largoCm/100) * 2 - 1e-9) / 2;
+/* metros lineales. Si `redondear` está prendido va a 0,5 m para arriba;
+   si no, se cobran los metros exactos que salen. En los dos casos se
+   respeta el mínimo de venta del proveedor. */
+function mlRedondeado(largoCm, minimoM, redondear){
+  const exacto = largoCm / 100;
+  const m = (redondear === false) ? exacto : Math.ceil(exacto * 2 - 1e-9) / 2;
   return Math.max(m, minimoM || 0);
 }
 
@@ -1255,6 +1259,7 @@ let corteCfg = {
   margen: 100,          // % de ganancia SOBRE EL COSTO
   calle: 0,             // mm entre piezas
   rotar: true,
+  redondear: true,      // metros a 0,5 para arriba
   materiales: [
     {nombre:'DTF UV',         tipo:'rollo',  ancho:60,       costo:0, min:0.5},
     {nombre:'Polifán 10 mm',  tipo:'pliego', W:100, H:200,   costo:0},
@@ -12223,6 +12228,7 @@ function abrirCorte(p){
   document.getElementById('corteCalle').value  = b.calle !== undefined ? b.calle : corteCfg.calle;
   document.getElementById('corteMargen').value = b.margen !== undefined ? b.margen : corteCfg.margen;
   corteCfg.rotar = b.rotar !== undefined ? b.rotar : true;
+  if(b.redondear !== undefined) corteCfg.redondear = b.redondear;
   document.getElementById('cortePzW').value = b.pzW || '';
   document.getElementById('cortePzH').value = b.pzH || '';
   document.getElementById('cortePzC').value = b.pzC || '';
@@ -12276,6 +12282,14 @@ function cortePintarTabs(){
   r.textContent = corteCfg.rotar ? '🔄 Puede girar' : '🔒 No girar';
   r.style.cssText = 'border-radius:9px;padding:9px 12px;font-size:.72rem;font-weight:700;background:var(--panel2);border:1px dashed ' +
     (corteCfg.rotar ? '#4cd27d;color:#4cd27d' : 'var(--texto2);color:var(--texto2)');
+  const q = document.getElementById('corteRedondeo');
+  q.textContent = corteCfg.redondear ? '📏 Redondear a 0,5 m' : '📏 Metros exactos';
+  q.title = corteCfg.redondear
+    ? 'El proveedor cobra por medio metro. Tocá para cobrar los metros justos.'
+    : 'Se cobran los metros exactos que salen. Tocá para redondear a 0,5 m para arriba.';
+  q.style.cssText = 'width:100%;border-radius:9px;padding:10px;font-size:.72rem;font-weight:700;margin-bottom:4px;' +
+    'background:var(--panel2);border:1px dashed ' +
+    (corteCfg.redondear ? 'var(--ambar);color:var(--ambar)' : 'var(--texto2);color:var(--texto2)');
 }
 
 function corteCalcular(){
@@ -12332,15 +12346,16 @@ function corteCalcular(){
             'El lado más chico de la pieza tiene que ser ' + ancho + ' cm o menos' + (rotar ? '' : ' (probá permitiendo girar)') + '.');
       return;
     }
-    const ml = mlRedondeado(r.largoCm, min);
+    const ml = mlRedondeado(r.largoCm, min, corteCfg.redondear);
     const costo = ml * costoMl;
     const venta = costo * (1 + margen/100);
     const salen = r.porFila * r.filas;
     corteUlt = {tipo:'rollo', r, ml, salen, cant, costo, venta, pzW, pzH, ancho, calle, margen};
     corteMostrar([
       ['Entran a lo ancho', r.porFila + ' por fila · ' + r.filas + ' fila' + (r.filas===1?'':'s')],
-      ['Metros necesarios', ml.toFixed(1).replace('.',',') + ' ml' +
-        (Math.abs(ml - r.largoCm/100) > 0.001 ? '  (calculado ' + (r.largoCm/100).toFixed(2).replace('.',',') + ', redondeado a 0,5)' : '')],
+      ['Metros necesarios', ml.toFixed(2).replace('.',',').replace(/,?0+$/,'') + ' ml' +
+        (Math.abs(ml - r.largoCm/100) > 0.001
+          ? '  (salen ' + (r.largoCm/100).toFixed(2).replace('.',',') + ')' : '')],
       ['Salen en total', salen + (salen > cant ? '  · sobran ' + (salen-cant) : '')],
       ['Costo', plata(costo)],
       ['Venta', plata(venta)],
@@ -12426,13 +12441,14 @@ function corteArmarTexto(){
   let t = (mat ? mat + ' · ' : '') + 'Piezas de ' + c.pzW + '×' + c.pzH + ' cm';
   t += ' · ' + c.salen + ' unidades';
   if(c.tipo === 'pliego') t += ' (' + c.pliegos + ' pliego' + (c.pliegos===1?'':'s') + ' de ' + c.W + '×' + c.H + ' cm)';
-  else t += ' (' + c.ml.toFixed(1).replace('.',',') + ' m de rollo de ' + c.ancho + ' cm)';
+  else t += ' (' + c.ml.toFixed(2).replace('.',',').replace(/,?0+$/,'') + ' m de rollo de ' + c.ancho + ' cm)';
   document.getElementById('corteTexto').value = t;
 }
 
 document.getElementById('corteTabPliego').onclick = ()=>{ corteTab='pliego'; corteLlenarMats(); cortePintarTabs(); corteCalcular(); };
 document.getElementById('corteTabRollo').onclick  = ()=>{ corteTab='rollo';  corteLlenarMats(); cortePintarTabs(); corteCalcular(); };
 document.getElementById('corteRotar').onclick = ()=>{ corteCfg.rotar = !corteCfg.rotar; cortePintarTabs(); corteCalcular(); };
+document.getElementById('corteRedondeo').onclick = ()=>{ corteCfg.redondear = !corteCfg.redondear; cortePintarTabs(); corteCalcular(); };
 document.getElementById('corteTexto').addEventListener('input', ()=>{ corteTextoTocado = true; });
 for(const id of ['cortePlW','cortePlH','cortePlCosto','corteRoAncho','corteRoCosto','corteRoMin',
                  'cortePzW','cortePzH','cortePzC','corteCalle','corteMargen'])
@@ -12459,6 +12475,7 @@ document.getElementById('corteAgregar').onclick = ()=>{
   p.corteBorrador = {
     tab: corteTab, calle: document.getElementById('corteCalle').value,
     margen: document.getElementById('corteMargen').value, rotar: corteCfg.rotar,
+    redondear: corteCfg.redondear,
     pzW: document.getElementById('cortePzW').value, pzH: document.getElementById('cortePzH').value,
     pzC: document.getElementById('cortePzC').value,
     plW: document.getElementById('cortePlW').value, plH: document.getElementById('cortePlH').value,
