@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v147</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v148</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -12346,8 +12346,34 @@ function corteCalcular(){
       ['Venta', plata(venta)],
       ['Por pieza', plata(venta / salen)],
     ], r.rot);
+    corteDibujarRollo(r, ancho, cant, calle);
   }
   corteArmarTexto();
+}
+
+/* dibujito del rollo: se muestran las primeras filas, no las 200 */
+function corteDibujarRollo(r, ancho, cant, calle){
+  const cont = document.getElementById('corteDibujo');
+  const c = Math.max(0, calle || 0);
+  const filasVer = Math.min(r.filas, 6);
+  const largoVer = filasVer*r.b + (filasVer-1)*c;
+  const esc = Math.min(260/ancho, 200/Math.max(1,largoVer));
+  const svg = ['<svg viewBox="0 0 ' + (ancho*esc) + ' ' + (largoVer*esc) + '" style="width:100%;max-width:' + (ancho*esc) + 'px;border:1px solid var(--borde);border-radius:8px;background:var(--panel2)">'];
+  let puestas = 0;
+  for(let j=0;j<filasVer;j++) for(let i=0;i<r.porFila;i++){
+    if(r.filas <= 6 && puestas >= cant) break;      // la última fila puede ir incompleta
+    svg.push('<rect x="' + (i*(r.a+c)*esc) + '" y="' + (j*(r.b+c)*esc) + '" width="' + (r.a*esc) +
+             '" height="' + (r.b*esc) + '" fill="#e0a458" opacity=".75" stroke="var(--borde)" stroke-width=".5"/>');
+    puestas++;
+  }
+  svg.push('</svg>');
+  cont.innerHTML = svg.join('');
+  const pie = document.createElement('div');
+  pie.textContent = 'Rollo de ' + ancho + ' cm' +
+    (r.filas > 6 ? ' · se muestran las primeras 6 filas de ' + r.filas : '') +
+    (r.rot ? ' · pieza girada' : '');
+  pie.style.cssText = 'font-size:.66rem;color:var(--texto2);margin-top:4px';
+  cont.appendChild(pie);
 }
 
 function corteMostrar(filas, girada){
