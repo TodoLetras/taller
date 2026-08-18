@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v145</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v146</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -385,6 +385,7 @@
       <button id="btnCorpPed" style="flex:1;min-width:44%;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar)">🔤 Corpóreas</button>
       <button id="btnViniloCorte" style="flex:1;min-width:44%;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #35b8a0;color:#35b8a0">🪟 Vinilo corte</button>
       <button id="btnCarteleria" style="flex:1;min-width:44%;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #b48ead;color:#b48ead">🏗 Cartelería</button>
+      <button id="btnCorte" style="flex:1;min-width:44%;border-radius:12px;padding:12px;font-weight:700;font-size:.78rem;background:var(--panel2);border:1px dashed #e0a458;color:#e0a458">✂️ Calculadora de corte</button>
     </div>
     <div class="ped-total" id="pedTotal"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
@@ -598,6 +599,70 @@
     </details>
     <div class="acciones">
       <button id="cartCerrar" class="btn-secundario">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalCorte">
+  <div class="modal-caja">
+    <h2>✂️ Calculadora de corte</h2>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button id="corteTabPliego" class="corte-tab">📄 Pliego</button>
+      <button id="corteTabRollo"  class="corte-tab">🧻 Rollo</button>
+    </div>
+
+    <label>Material</label>
+    <select id="corteMat" style="margin-bottom:8px"></select>
+
+    <div id="corteCampoPliego">
+      <label>Medida del pliego (ancho × alto en cm)</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="cortePlW" type="text" inputmode="decimal" placeholder="ancho" style="flex:1;margin:0">
+        <span style="color:var(--texto2)">×</span>
+        <input id="cortePlH" type="text" inputmode="decimal" placeholder="alto" style="flex:1;margin:0">
+        <span style="font-size:.72rem;color:var(--texto2)">cm</span>
+      </div>
+      <label style="margin-top:8px">Costo del pliego entero</label>
+      <input id="cortePlCosto" type="text" inputmode="decimal" placeholder="$ por pliego">
+    </div>
+
+    <div id="corteCampoRollo" style="display:none">
+      <label>Ancho del rollo (cm)</label>
+      <input id="corteRoAncho" type="text" inputmode="decimal" placeholder="ancho útil en cm">
+      <label>Costo por metro lineal</label>
+      <input id="corteRoCosto" type="text" inputmode="decimal" placeholder="$ por ml">
+      <label>Mínimo de venta (m)</label>
+      <input id="corteRoMin" type="text" inputmode="decimal" placeholder="0.5">
+    </div>
+
+    <label style="margin-top:8px">Pieza final (ancho × alto en cm) × cantidad</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="cortePzW" type="text" inputmode="decimal" placeholder="ancho" style="flex:1;margin:0">
+      <span style="color:var(--texto2)">×</span>
+      <input id="cortePzH" type="text" inputmode="decimal" placeholder="alto" style="flex:1;margin:0">
+      <span style="color:var(--texto2)">×</span>
+      <input id="cortePzC" type="text" inputmode="numeric" placeholder="cant" style="width:80px;margin:0">
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span style="font-size:.72rem;color:var(--texto2)">Calle</span>
+      <input id="corteCalle" type="text" inputmode="decimal" placeholder="0" style="width:70px;margin:0;padding:8px">
+      <span style="font-size:.72rem;color:var(--texto2)">mm</span>
+      <button id="corteRotar" style="border-radius:9px;padding:9px 12px;font-size:.72rem;font-weight:700"></button>
+      <span style="font-size:.72rem;color:var(--texto2);margin-left:auto">Ganancia</span>
+      <input id="corteMargen" type="text" inputmode="decimal" placeholder="100" style="width:70px;margin:0;padding:8px">
+      <span style="font-size:.72rem;color:var(--texto2)">%</span>
+    </div>
+
+    <div id="corteResultado" style="margin-top:12px"></div>
+    <div id="corteDibujo" style="margin-top:8px"></div>
+
+    <label style="margin-top:10px">Texto para el cliente (editable)</label>
+    <textarea id="corteTexto" rows="3" style="width:100%"></textarea>
+
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button id="corteCerrar" style="flex:1;border-radius:11px;padding:12px;font-weight:700;background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)">Cerrar</button>
+      <button id="corteAgregar" style="flex:2;border-radius:11px;padding:12px;font-weight:800;background:var(--ambar);border:none;color:#1a1200">+ Agregar al pedido</button>
     </div>
   </div>
 </div>
@@ -1116,6 +1181,88 @@ function cargarAcerco0826(){
   registrar('cargó la lista de Acerco 08/2026: ' + agregados + ' insumos nuevos, ' + tocados + ' actualizados');
 }
 
+/* ================= CALCULADORA DE CORTE (pliego y rollo) =================
+   Para los trabajos que no entran en los módulos de siempre: se carga la medida
+   del material, la de la pieza y el costo, y sale cuántas piezas salen y cuánto
+   material hace falta. Sirve para DTF UV, polifán, o lo que venga.
+   Todas las medidas van en cm; la calle, en mm. */
+
+/* Cuántas piezas de `a` entran en `L` dejando `c` de calle entre ellas.
+   Con n piezas hay n-1 calles: n*a + (n-1)*c <= L  →  n <= (L+c)/(a+c) */
+function cabenEn(L, a, c){
+  if(a <= 0) return 0;
+  return Math.max(0, Math.floor((L + c) / (a + c) + 1e-9));
+}
+
+/* Posado en un pliego. Prueba las dos orientaciones y además el CORTE MIXTO:
+   llena el grueso del pliego en una orientación y aprovecha la franja que
+   sobra con la otra. En un 70×100 con piezas de 21×30 la cuenta simple da 9
+   y así da 11. Devuelve el detalle, para poder dibujarlo. */
+function posarPliego(pw, ph, W, H, calle, rotar){
+  const c = Math.max(0, calle || 0);
+  function intento(a, b, rot){
+    const cols = cabenEn(W, a, c), fils = cabenEn(H, b, c);
+    if(cols < 1 || fils < 1) return null;
+    const usadoX = cols*a + (cols-1)*c;
+    const usadoY = fils*b + (fils-1)*c;
+    let extra = null, nExtra = 0;
+    if(rotar && Math.abs(a-b) > 1e-9){
+      const sobraX = W - usadoX - c;
+      const dCols = sobraX > 0 ? cabenEn(sobraX, b, c) : 0;
+      const der = dCols * cabenEn(H, a, c);
+      const sobraY = H - usadoY - c;
+      const aFils = sobraY > 0 ? cabenEn(sobraY, a, c) : 0;
+      const arr = cabenEn(W, b, c) * aFils;
+      if(der >= arr && der > 0)
+        { nExtra = der; extra = {cols:dCols, fils:cabenEn(H,a,c), a:b, b:a, x:usadoX+c, y:0}; }
+      else if(arr > 0)
+        { nExtra = arr; extra = {cols:cabenEn(W,b,c), fils:aFils, a:b, b:a, x:0, y:usadoY+c}; }
+    }
+    return {n: cols*fils + nExtra, base: cols*fils, nExtra, rot, a, b, cols, fils, extra, usadoX, usadoY};
+  }
+  const A = intento(pw, ph, false);
+  const B = rotar ? intento(ph, pw, true) : null;
+  if(!A) return B;
+  if(!B) return A;
+  return B.n > A.n ? B : A;
+}
+
+/* Posado en rollo: la pieza va a lo ancho y el rollo da el largo. Se elige la
+   orientación que gaste MENOS metros, que no siempre es la que mete más
+   piezas por fila. */
+function posarRollo(pw, ph, anchoRollo, cant, calle, rotar){
+  const c = Math.max(0, calle || 0);
+  function intento(a, b, rot){
+    const porFila = cabenEn(anchoRollo, a, c);
+    if(porFila < 1) return null;
+    const filas = Math.ceil(cant / porFila);
+    return {porFila, filas, largoCm: filas*b + (filas-1)*c, rot, a, b};
+  }
+  const A = intento(pw, ph, false);
+  const B = rotar ? intento(ph, pw, true) : null;
+  if(!A) return B;
+  if(!B) return A;
+  return B.largoCm < A.largoCm ? B : A;
+}
+
+/* metros lineales redondeados a 0,5 m para arriba, respetando el mínimo */
+function mlRedondeado(largoCm, minimoM){
+  const m = Math.ceil((largoCm/100) * 2 - 1e-9) / 2;
+  return Math.max(m, minimoM || 0);
+}
+
+let corteCfg = {
+  margen: 100,          // % de ganancia SOBRE EL COSTO
+  calle: 0,             // mm entre piezas
+  rotar: true,
+  materiales: [
+    {nombre:'DTF UV',         tipo:'rollo',  ancho:60,       costo:0, min:0.5},
+    {nombre:'Polifán 10 mm',  tipo:'pliego', W:100, H:200,   costo:0},
+    {nombre:'Polifán 20 mm',  tipo:'pliego', W:100, H:200,   costo:0},
+    {nombre:'Vinilo impreso', tipo:'rollo',  ancho:137,      costo:0, min:1},
+  ]
+};
+
 let cartCfg = {
   herrero: 50,        // % sobre el valor del caño (incluye pintura)
   zingueria: 50,      // % sobre el valor de la chapa (plegados y corte)
@@ -1389,6 +1536,7 @@ async function cargar(){
       pendientesSueltos = d.pendientesSueltos || [];
       insumos = (d.insumos && d.insumos.length) ? d.insumos : insumosSemilla();
       if(d.cartCfg) Object.assign(cartCfg, d.cartCfg);
+      if(d.corteCfg) Object.assign(corteCfg, d.corteCfg);
       tareasViejas = d.tareasViejas || [];
       tareasDescartadas = d.tareasDescartadas || [];
       migracion = d.migracion || null;
@@ -1559,7 +1707,7 @@ async function cargar(){
 async function guardarDatos(){
   try{
     ultimoCambioLocal = new Date().toISOString();
-    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, pendientesSueltos, tareasViejas, tareasDescartadas, migracion, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles, insumos, cartCfg, ultimoGuardado: ultimoCambioLocal});
+    const datos = JSON.stringify({cats, tareas, clientes, proveedores, productos, pedidos, pendientesSueltos, tareasViejas, tareasDescartadas, migracion, uv, offset, movimientos, gastosFijos, historial, mo, esquemas, cajaInicial, ajusteSocios, od, lotes, recetas, compras, adCfg, adPapeles, insumos, cartCfg, corteCfg, ultimoGuardado: ultimoCambioLocal});
     dbxProgramarSubida();
     await window.storage.set(CLAVE, datos);
     // verificar releyendo: si no coincide, el guardado no persiste de verdad
@@ -9061,6 +9209,7 @@ function aplicarDatosRemotos(d){
   pendientesSueltos = d.pendientesSueltos || pendientesSueltos;
   insumos = (d.insumos && d.insumos.length) ? d.insumos : insumosSemilla();
   if(d.cartCfg) Object.assign(cartCfg, d.cartCfg);
+  if(d.corteCfg) Object.assign(corteCfg, d.corteCfg);
   tareasViejas = d.tareasViejas || tareasViejas;
   tareasDescartadas = d.tareasDescartadas || tareasDescartadas;
   migracion = d.migracion || migracion;
@@ -12063,6 +12212,245 @@ function vcRenderConfig(){
   fila('× plotear (sin instalar)', adCfg.vc, 'multSin', 76);
   fila('× ploteado (instalado)', adCfg.vc, 'multCon', 76);
 }
+/* ---------- calculadora de corte ---------- */
+let cortePedido = null, corteTab = 'pliego', corteUlt = null, corteTextoTocado = false;
+
+function abrirCorte(p){
+  cortePedido = p;
+  corteTextoTocado = false;
+  const b = p.corteBorrador || {};
+  corteTab = b.tab || 'pliego';
+  document.getElementById('corteCalle').value  = b.calle !== undefined ? b.calle : corteCfg.calle;
+  document.getElementById('corteMargen').value = b.margen !== undefined ? b.margen : corteCfg.margen;
+  corteCfg.rotar = b.rotar !== undefined ? b.rotar : true;
+  document.getElementById('cortePzW').value = b.pzW || '';
+  document.getElementById('cortePzH').value = b.pzH || '';
+  document.getElementById('cortePzC').value = b.pzC || '';
+  document.getElementById('cortePlW').value = b.plW || '';
+  document.getElementById('cortePlH').value = b.plH || '';
+  document.getElementById('cortePlCosto').value = b.plCosto || '';
+  document.getElementById('corteRoAncho').value = b.roAncho || '';
+  document.getElementById('corteRoCosto').value = b.roCosto || '';
+  document.getElementById('corteRoMin').value = b.roMin || '';
+  corteLlenarMats();
+  cortePintarTabs();
+  corteCalcular();
+  document.getElementById('modalCorte').classList.add('abierto');
+}
+
+function corteLlenarMats(){
+  const sel = document.getElementById('corteMat');
+  sel.innerHTML = '<option value="">— a mano —</option>';
+  for(const m of corteCfg.materiales){
+    if(m.tipo !== corteTab) continue;
+    const o = document.createElement('option');
+    o.value = m.nombre; o.textContent = m.nombre;
+    sel.appendChild(o);
+  }
+  sel.onchange = ()=>{
+    const m = corteCfg.materiales.find(x=> x.nombre === sel.value);
+    if(!m) return;
+    if(m.tipo === 'pliego'){
+      document.getElementById('cortePlW').value = m.W || '';
+      document.getElementById('cortePlH').value = m.H || '';
+      if(m.costo) document.getElementById('cortePlCosto').value = m.costo;
+    }else{
+      document.getElementById('corteRoAncho').value = m.ancho || '';
+      if(m.costo) document.getElementById('corteRoCosto').value = m.costo;
+      document.getElementById('corteRoMin').value = m.min || '';
+    }
+    corteCalcular();
+  };
+}
+
+function cortePintarTabs(){
+  for(const [id, t] of [['corteTabPliego','pliego'], ['corteTabRollo','rollo']]){
+    const b = document.getElementById(id);
+    const on = corteTab === t;
+    b.style.cssText = 'flex:1;border-radius:11px;padding:11px;font-weight:700;font-size:.78rem;' +
+      'background:' + (on ? 'var(--ambar);color:#1a1200;border:none' : 'var(--panel2);color:var(--texto2);border:1px dashed var(--borde)');
+  }
+  document.getElementById('corteCampoPliego').style.display = corteTab === 'pliego' ? '' : 'none';
+  document.getElementById('corteCampoRollo').style.display  = corteTab === 'rollo'  ? '' : 'none';
+  const r = document.getElementById('corteRotar');
+  r.textContent = corteCfg.rotar ? '🔄 Puede girar' : '🔒 No girar';
+  r.style.cssText = 'border-radius:9px;padding:9px 12px;font-size:.72rem;font-weight:700;background:var(--panel2);border:1px dashed ' +
+    (corteCfg.rotar ? '#4cd27d;color:#4cd27d' : 'var(--texto2);color:var(--texto2)');
+}
+
+function corteCalcular(){
+  const num = (id)=> parseFloat((document.getElementById(id).value || '').replace(',','.')) || 0;
+  const pzW = num('cortePzW'), pzH = num('cortePzH');
+  const cant = Math.max(1, parseInt(document.getElementById('cortePzC').value) || 1);
+  const calle = num('corteCalle') / 10;              // mm → cm
+  const margen = num('corteMargen') || 0;
+  const rotar = corteCfg.rotar;
+  const cont = document.getElementById('corteResultado');
+  const dib = document.getElementById('corteDibujo');
+  corteUlt = null; dib.innerHTML = '';
+
+  const aviso = (txt)=>{
+    cont.innerHTML = '';
+    const d = document.createElement('div');
+    d.textContent = txt;
+    d.style.cssText = 'background:var(--panel2);border:1px dashed var(--ambar);border-radius:10px;' +
+      'padding:10px;font-size:.74rem;color:var(--ambar);line-height:1.4';
+    cont.appendChild(d);
+  };
+  if(pzW <= 0 || pzH <= 0){ aviso('Poné la medida de la pieza.'); return; }
+
+  if(corteTab === 'pliego'){
+    const W = num('cortePlW'), H = num('cortePlH'), costoPl = num('cortePlCosto');
+    if(W <= 0 || H <= 0){ aviso('Poné la medida del pliego.'); return; }
+    const r = posarPliego(pzW, pzH, W, H, calle, rotar);
+    if(!r){
+      const maxA = Math.max(W, H), maxB = Math.min(W, H);
+      aviso('⚠️ La pieza de ' + pzW + '×' + pzH + ' cm no entra en el pliego de ' + W + '×' + H + '. ' +
+            'Lo más grande que entra es ' + maxA + '×' + maxB + ' cm' + (rotar ? '' : ' (probá permitiendo girar)') + '.');
+      return;
+    }
+    const pliegos = Math.ceil(cant / r.n);
+    const salen = pliegos * r.n;
+    const costo = pliegos * costoPl;
+    const venta = costo * (1 + margen/100);
+    corteUlt = {tipo:'pliego', r, pliegos, salen, cant, costo, venta, pzW, pzH, W, H, calle, margen};
+    corteMostrar([
+      ['Entran por pliego', r.n + ' pieza' + (r.n===1?'':'s') + (r.nExtra ? '  (' + r.base + ' + ' + r.nExtra + ' en la franja)' : '')],
+      ['Pliegos necesarios', pliegos],
+      ['Salen en total', salen + (salen > cant ? '  · sobran ' + (salen-cant) : '')],
+      ['Costo', plata(costo)],
+      ['Venta', plata(venta)],
+      ['Por pieza', plata(venta / salen)],
+    ], r.rot);
+    corteDibujar(r, W, H);
+  }else{
+    const ancho = num('corteRoAncho'), costoMl = num('corteRoCosto'), min = num('corteRoMin');
+    if(ancho <= 0){ aviso('Poné el ancho del rollo.'); return; }
+    const r = posarRollo(pzW, pzH, ancho, cant, calle, rotar);
+    if(!r){
+      aviso('⚠️ La pieza de ' + pzW + '×' + pzH + ' cm no entra en un rollo de ' + ancho + ' cm de ancho. ' +
+            'El lado más chico de la pieza tiene que ser ' + ancho + ' cm o menos' + (rotar ? '' : ' (probá permitiendo girar)') + '.');
+      return;
+    }
+    const ml = mlRedondeado(r.largoCm, min);
+    const costo = ml * costoMl;
+    const venta = costo * (1 + margen/100);
+    const salen = r.porFila * r.filas;
+    corteUlt = {tipo:'rollo', r, ml, salen, cant, costo, venta, pzW, pzH, ancho, calle, margen};
+    corteMostrar([
+      ['Entran a lo ancho', r.porFila + ' por fila · ' + r.filas + ' fila' + (r.filas===1?'':'s')],
+      ['Metros necesarios', ml.toFixed(1).replace('.',',') + ' ml' +
+        (Math.abs(ml - r.largoCm/100) > 0.001 ? '  (calculado ' + (r.largoCm/100).toFixed(2).replace('.',',') + ', redondeado a 0,5)' : '')],
+      ['Salen en total', salen + (salen > cant ? '  · sobran ' + (salen-cant) : '')],
+      ['Costo', plata(costo)],
+      ['Venta', plata(venta)],
+      ['Por pieza', plata(venta / salen)],
+    ], r.rot);
+  }
+  corteArmarTexto();
+}
+
+function corteMostrar(filas, girada){
+  const cont = document.getElementById('corteResultado');
+  cont.innerHTML = '';
+  const caja = document.createElement('div');
+  caja.style.cssText = 'background:var(--panel2);border:1px solid var(--borde);border-radius:11px;padding:10px 12px';
+  for(const [k, v] of filas){
+    const f = document.createElement('div');
+    f.style.cssText = 'display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:.76rem';
+    const a = document.createElement('span'); a.textContent = k; a.style.color = 'var(--texto2)';
+    const b = document.createElement('span'); b.textContent = v; b.style.fontWeight = '700';
+    f.appendChild(a); f.appendChild(b); caja.appendChild(f);
+  }
+  if(girada){
+    const g = document.createElement('div');
+    g.textContent = '🔄 conviene con la pieza girada';
+    g.style.cssText = 'font-size:.68rem;color:#4cd27d;margin-top:4px';
+    caja.appendChild(g);
+  }
+  cont.appendChild(caja);
+}
+
+/* dibujito del pliego, para controlar a ojo que el acomodo tenga sentido */
+function corteDibujar(r, W, H){
+  const cont = document.getElementById('corteDibujo');
+  const esc = 260 / Math.max(W, H);
+  const svg = ['<svg viewBox="0 0 ' + (W*esc) + ' ' + (H*esc) + '" style="width:100%;max-width:' + (W*esc) + 'px;border:1px solid var(--borde);border-radius:8px;background:var(--panel2)">'];
+  const rect = (x,y,w,h,col)=> '<rect x="' + (x*esc) + '" y="' + (y*esc) + '" width="' + (w*esc) + '" height="' + (h*esc) + '" fill="' + col + '" opacity=".75" stroke="var(--borde)" stroke-width=".5"/>';
+  const c = r.cols ? (r.usadoX - r.cols*r.a) / Math.max(1, r.cols-1) : 0;
+  for(let i=0;i<r.cols;i++) for(let j=0;j<r.fils;j++)
+    svg.push(rect(i*(r.a+c), j*(r.b+c), r.a, r.b, '#e0a458'));
+  if(r.extra){
+    const e = r.extra;
+    for(let i=0;i<e.cols;i++) for(let j=0;j<e.fils;j++)
+      svg.push(rect(e.x + i*(e.a+c), e.y + j*(e.b+c), e.a, e.b, '#4cd27d'));
+  }
+  svg.push('</svg>');
+  cont.innerHTML = svg.join('');
+  const pie = document.createElement('div');
+  pie.textContent = 'Pliego ' + W + '×' + H + ' cm' + (r.extra ? ' · en verde, las que salen de la franja sobrante' : '');
+  pie.style.cssText = 'font-size:.66rem;color:var(--texto2);margin-top:4px';
+  cont.appendChild(pie);
+}
+
+function corteArmarTexto(){
+  if(corteTextoTocado || !corteUlt) return;
+  const c = corteUlt;
+  const mat = document.getElementById('corteMat').value;
+  let t = (mat ? mat + ' · ' : '') + 'Piezas de ' + c.pzW + '×' + c.pzH + ' cm';
+  t += ' · ' + c.salen + ' unidades';
+  if(c.tipo === 'pliego') t += ' (' + c.pliegos + ' pliego' + (c.pliegos===1?'':'s') + ' de ' + c.W + '×' + c.H + ' cm)';
+  else t += ' (' + c.ml.toFixed(1).replace('.',',') + ' m de rollo de ' + c.ancho + ' cm)';
+  document.getElementById('corteTexto').value = t;
+}
+
+document.getElementById('corteTabPliego').onclick = ()=>{ corteTab='pliego'; corteLlenarMats(); cortePintarTabs(); corteCalcular(); };
+document.getElementById('corteTabRollo').onclick  = ()=>{ corteTab='rollo';  corteLlenarMats(); cortePintarTabs(); corteCalcular(); };
+document.getElementById('corteRotar').onclick = ()=>{ corteCfg.rotar = !corteCfg.rotar; cortePintarTabs(); corteCalcular(); };
+document.getElementById('corteTexto').addEventListener('input', ()=>{ corteTextoTocado = true; });
+for(const id of ['cortePlW','cortePlH','cortePlCosto','corteRoAncho','corteRoCosto','corteRoMin',
+                 'cortePzW','cortePzH','cortePzC','corteCalle','corteMargen'])
+  document.getElementById(id).addEventListener('input', corteCalcular);
+
+document.getElementById('corteCerrar').onclick = ()=> document.getElementById('modalCorte').classList.remove('abierto');
+document.getElementById('modalCorte').addEventListener('click', e=>{
+  if(e.target === document.getElementById('modalCorte')) document.getElementById('modalCorte').classList.remove('abierto');
+});
+document.getElementById('corteAgregar').onclick = ()=>{
+  if(!corteUlt || !cortePedido){ toast('Falta completar el cálculo'); return; }
+  const c = corteUlt;
+  const p = cortePedido;
+  p.items = p.items || [];
+  p.items.push({
+    prod: null,
+    nombre: document.getElementById('corteTexto').value.trim() || 'Corte a medida',
+    cant: 1,
+    precio: Math.round(c.venta),
+    costoReal: Math.round(c.costo),
+    corte: true
+  });
+  // se guarda el borrador para poder volver y retocar
+  p.corteBorrador = {
+    tab: corteTab, calle: document.getElementById('corteCalle').value,
+    margen: document.getElementById('corteMargen').value, rotar: corteCfg.rotar,
+    pzW: document.getElementById('cortePzW').value, pzH: document.getElementById('cortePzH').value,
+    pzC: document.getElementById('cortePzC').value,
+    plW: document.getElementById('cortePlW').value, plH: document.getElementById('cortePlH').value,
+    plCosto: document.getElementById('cortePlCosto').value,
+    roAncho: document.getElementById('corteRoAncho').value,
+    roCosto: document.getElementById('corteRoCosto').value,
+    roMin: document.getElementById('corteRoMin').value
+  };
+  guardarDatos(); renderPedidoItems(p); renderPedidos();
+  document.getElementById('modalCorte').classList.remove('abierto');
+  toast('Agregado al pedido ✓');
+};
+document.getElementById('btnCorte').onclick = ()=>{
+  if(!pedidoAbierto) return;
+  const p = pedidos.find(x=> x.id === pedidoAbierto);
+  if(p) abrirCorte(p);
+};
+
 document.getElementById('btnViniloCorte').onclick = ()=>{ if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirViniloCorte(p); } };
 let cartPedido = null;
 let cartEditando = null;   /* el ítem que estamos corrigiendo, si venimos del lápiz */
