@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v153</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v154</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -800,6 +800,18 @@
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">✂️ Corte guillotina $</label>
       <input id="adCorte" type="number" inputmode="numeric" placeholder="0 (AD no cobra ≤16 poses)" style="flex:1 1 140px;min-width:120px;margin:0">
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">🔪 Troquelado</label>
+      <select id="adTroq" style="flex:1 1 130px;min-width:110px;margin:0;padding:9px;background:var(--panel2);border:1px solid var(--borde);border-radius:9px;color:var(--texto)">
+        <option value="0">— sin troquelar —</option>
+        <option value="1">Troquelado</option>
+        <option value="2">Puntillado</option>
+        <option value="3">½ corte autoadhesivo</option>
+        <option value="4">Doblado / plegado</option>
+      </select>
+      <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">el pliego se corta en</label>
+      <input id="adTroqCortes" type="number" inputmode="numeric" min="1" value="1" title="En cuántas partes se corta cada pliego impreso antes de troquelar. Si son 700 pliegos cortados en 2, se troquelan 1.400." style="flex:0 0 64px;width:64px;margin:0">
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <label style="font-size:.74rem;color:var(--texto2);margin:0;white-space:nowrap">📑 Intercalado $</label>
@@ -1398,6 +1410,17 @@ function mlRedondeado(largoCm, minimoM, redondear){
   const m = (redondear === false) ? exacto : Math.ceil(exacto * 2 - 1e-9) / 2;
   return Math.max(m, minimoM || 0);
 }
+
+/* Terminaciones de AD que se cobran postura + millar.
+   Lista de mayo 2026 + 5% (agosto), igual que el resto de las tarifas.
+   OJO con `cortes`: los millares NO son los de impresión. Si el pliego se
+   corta en 2 antes de troquelar, 700 pliegos impresos son 1.400 a troquelar. */
+const AD_TROQUELES = {
+  1: {nombre:'Troquelado',            postura: 27300, millar: 27300},
+  2: {nombre:'Puntillado',            postura: 15800, millar: 15800},
+  3: {nombre:'½ corte autoadhesivo',  postura: 30500, millar: 30500},
+  4: {nombre:'Doblado / plegado',     postura: 10500, millar: 10500},
+};
 
 let corteCfg = {
   margen: 100,          // % de ganancia SOBRE EL COSTO
@@ -11556,6 +11579,19 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     if(v.pasadas.length > 1 && millares > 0) millarUnit = Math.round(millarCosto / millares);
     const chapasCosto = v.chapas * maq.ctp;
     const corteCosto = parseFloat((document.getElementById('adCorte')||{}).value)||0;
+    /* troquelado y afines: se cobra una postura + los millares de PLIEGOS
+       TROQUELADOS, que son los impresos por la cantidad de partes en que se
+       corta cada uno. */
+    const troqTipo = parseInt((document.getElementById('adTroq')||{}).value) || 0;
+    const troqCortes = Math.max(1, parseInt((document.getElementById('adTroqCortes')||{}).value) || 1);
+    let troqCosto = 0, troqMillares = 0, troqPliegos = 0, troqNombre = '';
+    if(troqTipo && AD_TROQUELES[troqTipo]){
+      const t = AD_TROQUELES[troqTipo];
+      troqNombre = t.nombre;
+      troqPliegos = pliegosNetos * troqCortes;
+      troqMillares = Math.ceil(troqPliegos / 1000);
+      troqCosto = t.postura + troqMillares * t.millar;
+    }
     // plastificado / barniz: por m² de pliego sobre los pliegos buenos.
     // Regla del proveedor: < 1.000 pliegos suma $12.000 de enganche; la reserva (cama) suma $25.000 de arreglo.
     let plastCosto = 0, plastNombre = '';
@@ -11582,7 +11618,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     const binderCosto = esTapa ? 0 : (modo.bind != null ? modo.bind : (parseFloat((document.getElementById('adBinder')||{}).value)||0));
     if(intercaladoCosto > 0) nota = (nota ? nota + ' · ' : '') + '📑 intercalado';
     if(binderCosto > 0) nota = (nota ? nota + ' · ' : '') + '📘 binder';
-    const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto + plastCosto + intercaladoCosto + binderCosto;
+    const costo = v.postCosto + chapasCosto + millarCosto + papelCosto + corteCosto + troqCosto + plastCosto + intercaladoCosto + binderCosto;
     // ===== DESGLOSE AUDITABLE: cada renglón con su cuenta =====
     const des = [];
     des.push('✂️ Corte de hoja: ' + papel.W + '×' + papel.H + ' cortada en ' + pliegosPorHoja + ' (' + cortePl.nc + '×' + cortePl.nf + ') → pliego máquina ' + plLargo + '×' + plCorto + ' cm' + (cortePl.refi ? ' (refilado de ' + cortePl.origW + '×' + cortePl.origH + ')' : ''));
@@ -11605,6 +11641,9 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
       des.push('🖨 Millar' + (v.libro && v.pasadas.length>1 ? (g.t===(tar.millar[v.libro.colN]||0) ? ' COLOR' : ' NEGRO') : '') + ': ' + cambios + ' cambio(s) de chapa × ' + Math.round(g._porCambio).toLocaleString('es-AR') + ' pliegos c/u (mín. 1 millar por cambio) → ' + g._mi + ' millar(es) × ' + plata(g.t) + ' = ' + plata(g._mi*g.t));
     }
     if(corteCosto > 0) des.push('✂️ Corte guillotina: ' + plata(corteCosto));
+    if(troqCosto > 0) des.push('🔪 ' + troqNombre + ': ' + pliegosNetos.toLocaleString('es-AR') + ' pliegos' +
+      (troqCortes > 1 ? ' × ' + troqCortes + ' partes = ' + troqPliegos.toLocaleString('es-AR') + ' a troquelar' : '') +
+      ' → 1 postura + ' + troqMillares + ' millar(es) = ' + plata(troqCosto));
     if(plastCosto > 0) des.push('✨ Plastificado ' + plastNombre + ': ' + pliegosNetos.toLocaleString('es-AR') + ' pliegos × ' + (Math.round((plLargo/100)*(plCorto/100)*1000)/1000) + ' m² × tarifa' + (pliegosNetos < 1000 ? ' + $12.000 enganche' : '') + (/reserva/i.test(plastNombre) ? ' + $25.000 cama' : '') + ' = ' + plata(plastCosto));
     if(intercaladoCosto > 0) des.push('📑 Intercalado: ' + plata(intercaladoCosto));
     if(binderCosto > 0) des.push('📘 Binder: ' + plata(binderCosto));
@@ -11615,7 +11654,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     const op = {maquina: maq.nombre, plW: plLargo, plH: plCorto, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes, paqDec,
       piezas, costo, margen, venta, unitario: piezas>0 ? venta/piezas : 0, nota, millares, pasadasN, pliegosNetos,
       layout: posesManual > 0 ? null : layoutDet, pinza, marg, pzW, pzH,
-      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, plastCosto, plastNombre, intercaladoCosto, binderCosto, millares, millarUnit,
+      postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, troqCosto, troqNombre, troqMillares, troqPliegos, troqCortes, plastCosto, plastNombre, intercaladoCosto, binderCosto, millares, millarUnit,
       posturas: v.posturas, chapas: v.chapas, pliegosPorHoja, papelCosto,
       desglose: des.concat(['📈 Margen: +' + margen + '% → VENTA ' + plata(venta) + (piezas>0 ? ' (' + plata(Math.round(venta/piezas*100)/100) + ' por ' + (v.libro ? 'ejemplar' : 'pieza') + ')' : '')]),
       detalle: (v.libro ? '📖 LIBRO: ' + v.libro.hojas + ' hojas (' + (v.libro.hojas*2) + ' páginas) · ' + v.juegos + ' pliegos tipo (' + v.libro.plColor + ' a ' + v.libro.colN + '/' + v.libro.colN + ' + ' + v.libro.plBN + ' a 1/1) · cantidad = ejemplares · ' : '') + (v.giro
@@ -12076,17 +12115,20 @@ function calcularAd(){
         intercalado: document.getElementById('adIntercalado').value,
         binder: document.getElementById('adBinder').value,
         recargo: document.getElementById('adRecargoChk').checked,
+        troq: document.getElementById('adTroq').value,
+        troqCortes: document.getElementById('adTroqCortes').value,
         papelId: papel.id, col: adColSel, etq: etq
       };
       const nuevoIt = {prod:null, adTr:true, nombre, nombreCli, adInput, cant:1, precio: op.venta, costoU: op.costo,
         adMeta: {papel: Math.round(op.papelCosto), millar: op.millarCosto, chapas: op.chapasCosto,
-                 postura: op.postCosto, corte: op.corteCosto||0, piezas: op.piezas, maquina: op.maquina,
+                 postura: op.postCosto, corte: op.corteCosto||0, troquel: op.troqCosto||0, piezas: op.piezas, maquina: op.maquina,
                  det: {
                    papel:   {cant: op.hojas, unit: Math.round(op.hojas>0 ? op.papelCosto/op.hojas*100 : 0)/100, u:'hojas'},
                    millar:  {cant: op.millares, unit: op.millarUnit, u:'millar(es)'},
                    chapas:  {cant: op.chapas, unit: op.chapas>0 ? Math.round(op.chapasCosto/op.chapas) : 0, u:'chapas'},
                    postura: {cant: op.posturas||1, unit: Math.round(op.postCosto/(op.posturas||1)), u:'postura(s)'},
-                   corte:   {cant: 1, unit: op.corteCosto||0, u:'corte'}
+                   corte:   {cant: 1, unit: op.corteCosto||0, u:'corte'},
+                   troquel: {cant: op.troqMillares||0, unit: op.troqCosto||0, u: op.troqNombre||'troquelado'}
                  }}};
       /* si venías editando, reemplaza al ítem viejo en su lugar */
       const iEd = adEditando ? adPedido.items.indexOf(adEditando) : -1;
@@ -12110,7 +12152,9 @@ function calcularAd(){
     };
   });
 }
-for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg','adOriginales','adHojasColor','adIntercalado','adBinder']) document.getElementById(id).addEventListener('input', calcularAd);
+for(const id of ['adW','adH','adCant','adPoses','adCorte','adPinza','adMarg','adOriginales','adHojasColor','adIntercalado','adBinder','adTroqCortes']) document.getElementById(id).addEventListener('input', calcularAd);
+document.getElementById('adTroq').addEventListener('change', calcularAd);
+document.getElementById('adTroqCortes').addEventListener('change', calcularAd);
 document.getElementById('adRecargoChk').addEventListener('change', calcularAd);
 document.getElementById('adPapAgregar').onclick = ()=>{
   const n = document.getElementById('adPapNombre').value.trim();
@@ -12912,6 +12956,7 @@ function editarOffsetAD(p, it){
   set('adPoses', b.poses); set('adCorte', b.corte); set('adPinza', b.pinza); set('adMarg', b.marg);
   set('adOriginales', b.originales); set('adHojasColor', b.hojasColor);
   set('adIntercalado', b.intercalado); set('adBinder', b.binder);
+  set('adTroq', b.troq); set('adTroqCortes', b.troqCortes);
   const rc = document.getElementById('adRecargoChk');
   if(rc) rc.checked = !!b.recargo;
   calcularAd();
