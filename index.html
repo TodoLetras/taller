@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v149</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v150</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -609,6 +609,7 @@
     <div style="display:flex;gap:6px;margin-bottom:10px">
       <button id="corteTabPliego" class="corte-tab">📄 Pliego</button>
       <button id="corteTabRollo"  class="corte-tab">🧻 Rollo</button>
+      <button id="corteTabVarias" class="corte-tab">📐 Varias</button>
     </div>
 
     <label>Material</label>
@@ -636,6 +637,13 @@
       <button id="corteRedondeo" style="width:100%;border-radius:9px;padding:10px;font-size:.72rem;font-weight:700;margin-bottom:4px"></button>
     </div>
 
+    <div id="corteCampoVarias" style="display:none">
+      <label>Medidas del pedido (ancho × alto en cm × cantidad)</label>
+      <div id="corteFilas"></div>
+      <button id="corteMasFila" style="width:100%;border-radius:10px;padding:10px;font-size:.74rem;font-weight:700;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar);margin-bottom:6px">+ Agregar medida</button>
+    </div>
+
+    <div id="corteCampoUna">
     <label style="margin-top:8px">Pieza final (ancho × alto en cm) × cantidad</label>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="cortePzW" type="text" inputmode="decimal" placeholder="ancho" style="flex:1;min-width:0;margin:0">
@@ -643,6 +651,7 @@
       <input id="cortePzH" type="text" inputmode="decimal" placeholder="alto" style="flex:1;min-width:0;margin:0">
       <span style="color:var(--texto2);flex:0 0 auto">×</span>
       <input id="cortePzC" type="text" inputmode="numeric" placeholder="cant" style="flex:0 0 72px;width:72px;margin:0">
+    </div>
     </div>
 
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
@@ -1228,9 +1237,81 @@ function posarPliego(pw, ph, W, H, calle, rotar){
   return B.n > A.n ? B : A;
 }
 
-/* Posado en rollo: la pieza va a lo ancho y el rollo da el largo. Se elige la
-   orientación que gaste MENOS metros, que no siempre es la que mete más
-   piezas por fila. */
+/* Acomodo de VARIAS medidas en un pliego, por franjas horizontales.
+   Va por franjas porque se corta con guillotina: el corte pasa de lado a lado,
+   así que no se pueden hacer encastres caprichosos aunque entren.
+   OJO: es una heurística, no el óptimo garantizado. Con muchas medidas
+   distintas puede haber un acomodo mejor; por eso conviene mirar el dibujo. */
+function posarVarias(piezas, W, H, calle, rotar){
+  const c = Math.max(0, calle || 0);
+  // se expanden las cantidades en unidades sueltas
+  const sueltas = [];
+  for(let k = 0; k < piezas.length; k++){
+    const p = piezas[k];
+    if(!(p.w > 0) || !(p.h > 0) || !(p.cant > 0)) continue;
+    for(let i = 0; i < p.cant; i++) sueltas.push({w:p.w, h:p.h, idx:k});
+    if(sueltas.length > 3000) return {error:'demasiadas'};   // no colgar la app
+  }
+  if(!sueltas.length) return null;
+
+  // ¿alguna no entra ni girada?
+  for(const s of sueltas){
+    const entra = (s.w <= W && s.h <= H) || (rotar && s.h <= W && s.w <= H);
+    if(!entra) return {error:'noEntra', pieza:s};
+  }
+
+  // de más alta a más baja: es lo que hace que las franjas queden parejas
+  const orden = (a,b)=> Math.max(b.w,b.h) - Math.max(a.w,a.h) || (b.w*b.h) - (a.w*a.h);
+  let quedan = sueltas.slice().sort(orden);
+  const pliegos = [];
+
+  while(quedan.length && pliegos.length < 200){
+    const pl = {franjas: []};
+    let y = 0;
+    while(y < H && quedan.length){
+      const libreY = H - y;
+      // la primera pieza de la franja define su altura
+      let elegida = -1, ori = null;
+      for(let i = 0; i < quedan.length; i++){
+        const p = quedan[i];
+        if(p.h <= libreY && p.w <= W){ elegida = i; ori = {a:p.w, b:p.h, rot:false}; break; }
+        if(rotar && p.w <= libreY && p.h <= W){ elegida = i; ori = {a:p.h, b:p.w, rot:true}; break; }
+      }
+      if(elegida < 0) break;                     // no entra nada más en este pliego
+      const alto = ori.b;
+      const franja = {y, alto, items: []};
+      let x = 0;
+      // se mete la que definió la franja y después todo lo que quepa al lado.
+      // OJO: no se puede usar `i === elegida` para saber si es la primera,
+      // porque después de cada splice los índices se corren y el i nuevo
+      // puede coincidir por casualidad, aplicándole a otra pieza esta orientación.
+      let i = elegida, primera = true;
+      while(i >= 0){
+        const p = quedan[i], o = primera ? ori : p._ori;
+        primera = false;
+        franja.items.push({x, y, a:o.a, b:o.b, idx:p.idx, rot:o.rot});
+        x += o.a + c;
+        quedan.splice(i, 1);
+        i = -1;
+        for(let j = 0; j < quedan.length; j++){
+          const q = quedan[j], libreX = W - x;
+          if(q.h <= alto && q.w <= libreX){ q._ori = {a:q.w, b:q.h, rot:false}; i = j; break; }
+          if(rotar && q.w <= alto && q.h <= libreX){ q._ori = {a:q.h, b:q.w, rot:true}; i = j; break; }
+        }
+      }
+      pl.franjas.push(franja);
+      y += alto + c;
+    }
+    if(!pl.franjas.length) break;                // no entró nada: se corta para no ciclar
+    pliegos.push(pl);
+  }
+
+  const puestas = pliegos.reduce((s,p)=> s + p.franjas.reduce((t,f)=> t + f.items.length, 0), 0);
+  const porTipo = piezas.map(()=> 0);
+  for(const p of pliegos) for(const f of p.franjas) for(const it of f.items) porTipo[it.idx]++;
+  return {pliegos, puestas, porTipo, sinUbicar: sueltas.length - puestas};
+}
+
 function posarRollo(pw, ph, anchoRollo, cant, calle, rotar){
   const c = Math.max(0, calle || 0);
   function intento(a, b, rot){
@@ -12229,6 +12310,8 @@ function abrirCorte(p){
   document.getElementById('corteMargen').value = b.margen !== undefined ? b.margen : corteCfg.margen;
   corteCfg.rotar = b.rotar !== undefined ? b.rotar : true;
   if(b.redondear !== undefined) corteCfg.redondear = b.redondear;
+  corteFilas = (b.filas && b.filas.length) ? JSON.parse(JSON.stringify(b.filas)) : [{w:'',h:'',cant:''}];
+  corteRenderFilas();
   document.getElementById('cortePzW').value = b.pzW || '';
   document.getElementById('cortePzH').value = b.pzH || '';
   document.getElementById('cortePzC').value = b.pzC || '';
@@ -12248,7 +12331,7 @@ function corteLlenarMats(){
   const sel = document.getElementById('corteMat');
   sel.innerHTML = '<option value="">— a mano —</option>';
   for(const m of corteCfg.materiales){
-    if(m.tipo !== corteTab) continue;
+    if(m.tipo !== (corteTab === 'varias' ? 'pliego' : corteTab)) continue;
     const o = document.createElement('option');
     o.value = m.nombre; o.textContent = m.nombre;
     sel.appendChild(o);
@@ -12270,14 +12353,16 @@ function corteLlenarMats(){
 }
 
 function cortePintarTabs(){
-  for(const [id, t] of [['corteTabPliego','pliego'], ['corteTabRollo','rollo']]){
+  for(const [id, t] of [['corteTabPliego','pliego'], ['corteTabRollo','rollo'], ['corteTabVarias','varias']]){
     const b = document.getElementById(id);
     const on = corteTab === t;
     b.style.cssText = 'flex:1;border-radius:11px;padding:11px;font-weight:700;font-size:.78rem;' +
       'background:' + (on ? 'var(--ambar);color:#1a1200;border:none' : 'var(--panel2);color:var(--texto2);border:1px dashed var(--borde)');
   }
-  document.getElementById('corteCampoPliego').style.display = corteTab === 'pliego' ? '' : 'none';
+  document.getElementById('corteCampoPliego').style.display = (corteTab === 'pliego' || corteTab === 'varias') ? '' : 'none';
   document.getElementById('corteCampoRollo').style.display  = corteTab === 'rollo'  ? '' : 'none';
+  document.getElementById('corteCampoVarias').style.display = corteTab === 'varias' ? '' : 'none';
+  document.getElementById('corteCampoUna').style.display    = corteTab === 'varias' ? 'none' : '';
   const r = document.getElementById('corteRotar');
   r.textContent = corteCfg.rotar ? '🔄 Puede girar' : '🔒 No girar';
   r.style.cssText = 'border-radius:9px;padding:9px 12px;font-size:.72rem;font-weight:700;background:var(--panel2);border:1px dashed ' +
@@ -12290,6 +12375,114 @@ function cortePintarTabs(){
   q.style.cssText = 'width:100%;border-radius:9px;padding:10px;font-size:.72rem;font-weight:700;margin-bottom:4px;' +
     'background:var(--panel2);border:1px dashed ' +
     (corteCfg.redondear ? 'var(--ambar);color:var(--ambar)' : 'var(--texto2);color:var(--texto2)');
+}
+
+/* ---- filas de medidas (pestaña Varias) ---- */
+let corteFilas = [];
+
+function corteAgregarFila(){
+  corteFilas.push({w:'', h:'', cant:''});
+}
+function corteRenderFilas(){
+  const cont = document.getElementById('corteFilas');
+  if(!cont) return;
+  cont.innerHTML = '';
+  corteFilas.forEach((f, i)=>{
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
+    const mk = (val, ph, ancho, campo)=>{
+      const el = document.createElement('input');
+      el.type = 'text'; el.inputMode = 'decimal'; el.placeholder = ph; el.value = val || '';
+      el.style.cssText = ancho + ';min-width:0;margin:0';
+      el.addEventListener('input', ()=>{ corteFilas[i][campo] = el.value; corteCalcular(); });
+      return el;
+    };
+    fila.appendChild(mk(f.w, 'ancho', 'flex:1', 'w'));
+    const x1 = document.createElement('span'); x1.textContent = '×';
+    x1.style.cssText = 'color:var(--texto2);flex:0 0 auto'; fila.appendChild(x1);
+    fila.appendChild(mk(f.h, 'alto', 'flex:1', 'h'));
+    const x2 = document.createElement('span'); x2.textContent = '×';
+    x2.style.cssText = 'color:var(--texto2);flex:0 0 auto'; fila.appendChild(x2);
+    fila.appendChild(mk(f.cant, 'cant', 'flex:0 0 64px;width:64px', 'cant'));
+    const bo = document.createElement('button');
+    bo.textContent = '✕';
+    bo.style.cssText = 'flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:1px solid var(--borde);background:var(--panel2);color:var(--texto2);padding:0';
+    bo.onclick = ()=>{ corteFilas.splice(i,1); if(!corteFilas.length) corteAgregarFila(); corteRenderFilas(); corteCalcular(); };
+    fila.appendChild(bo);
+    cont.appendChild(fila);
+  });
+}
+document.getElementById('corteMasFila').onclick = ()=>{ corteAgregarFila(); corteRenderFilas(); };
+
+function corteCalcularVarias(W, H, costoPl, calle, margen, rotar, aviso){
+  const num = (v)=> parseFloat(String(v||'').replace(',','.')) || 0;
+  const piezas = corteFilas
+    .map(f=> ({w:num(f.w), h:num(f.h), cant: Math.max(0, parseInt(f.cant)||0)}))
+    .filter(p=> p.w > 0 && p.h > 0 && p.cant > 0);
+  if(!piezas.length){ aviso('Cargá al menos una medida con su cantidad.'); return; }
+
+  const r = posarVarias(piezas, W, H, calle, rotar);
+  if(!r){ aviso('Cargá al menos una medida con su cantidad.'); return; }
+  if(r.error === 'demasiadas'){ aviso('⚠️ Son demasiadas piezas para acomodar (más de 3000).'); return; }
+  if(r.error === 'noEntra'){
+    const p = r.pieza;
+    aviso('⚠️ La pieza de ' + p.w + '×' + p.h + ' cm no entra en el pliego de ' + W + '×' + H +
+          (rotar ? '.' : ' (probá permitiendo girar).'));
+    return;
+  }
+  const costo = r.pliegos.length * costoPl;
+  const venta = costo * (1 + margen/100);
+  const total = piezas.reduce((s,p)=> s + p.cant, 0);
+  corteUlt = {tipo:'varias', r, piezas, pliegos: r.pliegos.length, salen: r.puestas,
+              cant: total, costo, venta, W, H, calle, margen};
+  const filas = [
+    ['Piezas del pedido', total + ' en ' + piezas.length + ' medida' + (piezas.length===1?'':'s')],
+    ['Pliegos necesarios', r.pliegos.length],
+    ['Costo', plata(costo)],
+    ['Venta', plata(venta)],
+  ];
+  if(r.sinUbicar) filas.splice(2, 0, ['⚠️ No entraron', r.sinUbicar + ' pieza(s)']);
+  corteMostrar(filas, false);
+  corteDibujarVarias(r, W, H, piezas);
+  corteArmarTexto();
+}
+
+/* un dibujo por pliego, con un color por medida */
+function corteDibujarVarias(r, W, H, piezas){
+  const cont = document.getElementById('corteDibujo');
+  cont.innerHTML = '';
+  const cols = ['#e0a458','#4cd27d','#5ab8ff','#b48ead','#ff7a7a','#35b8a0','#d4b483','#9aa1b0'];
+  const esc = 250 / Math.max(W, H);
+  r.pliegos.forEach((pl, i)=>{
+    const svg = ['<svg viewBox="0 0 ' + (W*esc) + ' ' + (H*esc) + '" style="width:100%;max-width:' + (W*esc) + 'px;border:1px solid var(--borde);border-radius:8px;background:var(--panel2);margin-bottom:4px">'];
+    for(const f of pl.franjas) for(const it of f.items)
+      svg.push('<rect x="' + (it.x*esc) + '" y="' + (it.y*esc) + '" width="' + (it.a*esc) +
+               '" height="' + (it.b*esc) + '" fill="' + cols[it.idx % cols.length] +
+               '" opacity=".8" stroke="var(--borde)" stroke-width=".5"/>');
+    svg.push('</svg>');
+    const caja = document.createElement('div');
+    caja.innerHTML = svg.join('');
+    const pie = document.createElement('div');
+    const n = pl.franjas.reduce((s,f)=> s + f.items.length, 0);
+    pie.textContent = 'Pliego ' + (i+1) + ' de ' + r.pliegos.length + ' · ' + n + ' piezas';
+    pie.style.cssText = 'font-size:.66rem;color:var(--texto2);margin-bottom:8px';
+    caja.appendChild(pie);
+    cont.appendChild(caja);
+  });
+  // referencia de colores
+  const ref = document.createElement('div');
+  ref.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;font-size:.66rem;color:var(--texto2);margin-top:2px';
+  piezas.forEach((p, i)=>{
+    const s = document.createElement('span');
+    s.innerHTML = '<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:' +
+      cols[i % cols.length] + ';margin-right:4px"></span>' + p.w + '×' + p.h + ' (' + p.cant + ')';
+    ref.appendChild(s);
+  });
+  cont.appendChild(ref);
+  const nota = document.createElement('div');
+  nota.textContent = 'Acomodo por franjas, para cortar con guillotina. Mirá el dibujo: si ves un hueco obvio, puede haber un acomodo mejor.';
+  nota.style.cssText = 'font-size:.64rem;color:var(--texto2);margin-top:6px;line-height:1.4;font-style:italic';
+  cont.appendChild(nota);
 }
 
 function corteCalcular(){
@@ -12311,6 +12504,12 @@ function corteCalcular(){
       'padding:10px;font-size:.74rem;color:var(--ambar);line-height:1.4';
     cont.appendChild(d);
   };
+  if(corteTab === 'varias'){
+    const W = num('cortePlW'), H = num('cortePlH'), costoPl = num('cortePlCosto');
+    if(W <= 0 || H <= 0){ aviso('Poné la medida del pliego.'); return; }
+    corteCalcularVarias(W, H, costoPl, calle, margen, rotar, aviso);
+    return;
+  }
   if(pzW <= 0 || pzH <= 0){ aviso('Poné la medida de la pieza.'); return; }
 
   if(corteTab === 'pliego'){
@@ -12438,7 +12637,14 @@ function corteArmarTexto(){
   if(corteTextoTocado || !corteUlt) return;
   const c = corteUlt;
   const mat = document.getElementById('corteMat').value;
-  let t = (mat ? mat + ' · ' : '') + 'Piezas de ' + c.pzW + '×' + c.pzH + ' cm';
+  let t;
+  if(c.tipo === 'varias'){
+    t = (mat ? mat + ' · ' : '') + c.piezas.map(p=> p.cant + ' de ' + p.w + '×' + p.h + ' cm').join(' · ');
+    t += ' (' + c.pliegos + ' pliego' + (c.pliegos===1?'':'s') + ' de ' + c.W + '×' + c.H + ' cm)';
+    document.getElementById('corteTexto').value = t;
+    return;
+  }
+  t = (mat ? mat + ' · ' : '') + 'Piezas de ' + c.pzW + '×' + c.pzH + ' cm';
   t += ' · ' + c.salen + ' unidades';
   if(c.tipo === 'pliego') t += ' (' + c.pliegos + ' pliego' + (c.pliegos===1?'':'s') + ' de ' + c.W + '×' + c.H + ' cm)';
   else t += ' (' + c.ml.toFixed(2).replace('.',',').replace(/,?0+$/,'') + ' m de rollo de ' + c.ancho + ' cm)';
@@ -12447,6 +12653,7 @@ function corteArmarTexto(){
 
 document.getElementById('corteTabPliego').onclick = ()=>{ corteTab='pliego'; corteLlenarMats(); cortePintarTabs(); corteCalcular(); };
 document.getElementById('corteTabRollo').onclick  = ()=>{ corteTab='rollo';  corteLlenarMats(); cortePintarTabs(); corteCalcular(); };
+document.getElementById('corteTabVarias').onclick = ()=>{ corteTab='varias'; corteLlenarMats(); cortePintarTabs(); if(!corteFilas.length) corteAgregarFila(); corteRenderFilas(); corteCalcular(); };
 document.getElementById('corteRotar').onclick = ()=>{ corteCfg.rotar = !corteCfg.rotar; cortePintarTabs(); corteCalcular(); };
 document.getElementById('corteRedondeo').onclick = ()=>{ corteCfg.redondear = !corteCfg.redondear; cortePintarTabs(); corteCalcular(); };
 document.getElementById('corteTexto').addEventListener('input', ()=>{ corteTextoTocado = true; });
@@ -12476,6 +12683,7 @@ document.getElementById('corteAgregar').onclick = ()=>{
     tab: corteTab, calle: document.getElementById('corteCalle').value,
     margen: document.getElementById('corteMargen').value, rotar: corteCfg.rotar,
     redondear: corteCfg.redondear,
+    filas: JSON.parse(JSON.stringify(corteFilas)),
     pzW: document.getElementById('cortePzW').value, pzH: document.getElementById('cortePzH').value,
     pzC: document.getElementById('cortePzC').value,
     plW: document.getElementById('cortePlW').value, plH: document.getElementById('cortePlH').value,
