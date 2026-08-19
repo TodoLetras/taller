@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v152</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v153</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1269,7 +1269,7 @@ function posarVarias(piezas, W, H, calle, rotar){
        false → la que deja la franja más ALTA
      Ninguna gana siempre, así que abajo se prueban las dos (y con distintos
      órdenes) y se usa la que menos pliegos gaste. */
-  function empaquetar(lista, bajita){
+  function empaquetar(lista, bajita, angosta){
     let quedan = lista.slice();
     const pliegos = [];
     // elige orientación para arrancar una franja de alto libre `libreY`
@@ -1281,14 +1281,34 @@ function posarVarias(piezas, W, H, calle, rotar){
       ops.sort((x,y)=> bajita ? (x.b - y.b) : (y.b - x.b));
       return ops[0];
     };
-    // dentro de una franja de alto `alto` y ancho libre `libreX`: la más angosta
-    const oriDentro = (p, alto, libreX)=>{
+    /* Orientación para meter una pieza en un hueco de `alto` × `libreX`.
+       `angosta` decide si se prefiere la más angosta (entran más columnas)
+       o la más ancha (deja columnas más aprovechables para apilar). */
+    const oriHueco = (p, alto, libreX)=>{
       const ops = [];
-      if(p.h <= alto && p.w <= libreX) ops.push({a:p.w, b:p.h, rot:false});
-      if(rotar && p.w <= alto && p.h <= libreX) ops.push({a:p.h, b:p.w, rot:true});
+      if(p.h <= alto + 1e-9 && p.w <= libreX + 1e-9) ops.push({a:p.w, b:p.h, rot:false});
+      if(rotar && p.w <= alto + 1e-9 && p.h <= libreX + 1e-9) ops.push({a:p.h, b:p.w, rot:true});
       if(!ops.length) return null;
-      ops.sort((x,y)=> x.a - y.a);
+      ops.sort((x,y)=> angosta ? (x.a - y.a) : (y.a - x.a));
       return ops[0];
+    };
+    /* Rellena hacia abajo la columna que dejó una pieza: mismo ancho, lo que
+       sobró de alto. Sigue siendo cortable con guillotina: se corta la franja,
+       después la columna, y después el corte horizontal dentro de la columna. */
+    const apilar = (franja, x, yDesde, ancho, altoLibre)=>{
+      let y2 = yDesde, libre = altoLibre;
+      while(libre > 0){
+        let j = -1, o = null;
+        for(let k = 0; k < quedan.length; k++){
+          const cand = oriHueco(quedan[k], libre, ancho);
+          if(cand){ j = k; o = cand; break; }
+        }
+        if(j < 0) break;
+        franja.items.push({x, y:y2, a:o.a, b:o.b, idx:quedan[j].idx, rot:o.rot});
+        quedan.splice(j, 1);
+        y2 += o.b + c;
+        libre -= o.b + c;
+      }
     };
 
     while(quedan.length && pliegos.length < 200){
@@ -1314,11 +1334,13 @@ function posarVarias(piezas, W, H, calle, rotar){
           const p = quedan[i], o = primera ? ori : p._ori;
           primera = false;
           franja.items.push({x, y, a:o.a, b:o.b, idx:p.idx, rot:o.rot});
-          x += o.a + c;
           quedan.splice(i, 1);
+          // lo que quedó libre debajo, en la misma columna
+          if(alto - o.b > 0) apilar(franja, x, y + o.b + c, o.a, alto - o.b - c);
+          x += o.a + c;
           i = -1;
           for(let j = 0; j < quedan.length; j++){
-            const o2 = oriDentro(quedan[j], alto, W - x);
+            const o2 = oriHueco(quedan[j], alto, W - x);
             if(o2){ quedan[j]._ori = o2; i = j; break; }
           }
         }
@@ -1337,13 +1359,14 @@ function posarVarias(piezas, W, H, calle, rotar){
   const porMayor = sueltas.slice().sort(orden);
   let mejor = null;
   for(const lista of [porMayor, porAlto, porArea])
-    for(const bajita of [true, false]){
-      const r = empaquetar(lista, bajita);
-      const mejorQue = !mejor ||
-        r.puestas > mejor.puestas ||
-        (r.puestas === mejor.puestas && r.pliegos.length < mejor.pliegos.length);
-      if(mejorQue) mejor = r;
-    }
+    for(const bajita of [true, false])
+      for(const angosta of [true, false]){
+        const r = empaquetar(lista, bajita, angosta);
+        const mejorQue = !mejor ||
+          r.puestas > mejor.puestas ||
+          (r.puestas === mejor.puestas && r.pliegos.length < mejor.pliegos.length);
+        if(mejorQue) mejor = r;
+      }
 
   const pliegos = mejor.pliegos;
   const puestas = mejor.puestas;
