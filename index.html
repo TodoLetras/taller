@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v151</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v152</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -4675,7 +4675,9 @@ modalCliente.addEventListener('click', e=>{ if(e.target===modalCliente) modalCli
 
 /* ---------- pedidos ---------- */
 /* En el presupuesto manda el nombre que puso Marcos; el material queda de respaldo. */
-function nombreItem(it){ return it.detalle || it.nombre; }
+/* Lo que ve el CLIENTE. `nombreCli` lo pone el offset AD: saca el proveedor
+   (AD) y la máquina, que son datos internos y no van al presupuesto. */
+function nombreItem(it){ return it.detalle || it.nombreCli || it.nombre; }
 /* ¿este pedido muestra las medidas en el presupuesto? por defecto no */
 function presuConMedidas(p){ return !!(p && p.presuMedidas); }
 /* medidas en texto, para cuando sí se muestran */
@@ -5435,11 +5437,14 @@ function renderPedidoItems(p){
         '<input class="cant" type="text" inputmode="decimal">' +
         '<input class="precio" type="number" inputmode="numeric" min="0">' +
         (it.adTr && it.adMeta ? '<button class="adReal" title="Cargar lo cobrado real por AD y la papelera">🧾</button>' : (it.costoU !== undefined && !it.mo ? '<button class="costoReal" title="Costo real del trabajo (lo que te cobra el proveedor). Tocá para corregirlo si te cobró distinto al presupuesto.">🧾</button>' : '')) +
+        (it.adTr && it.adInput ? '<button class="adEditar" title="Volver al presupuestador con estos datos para corregirlo">✏️</button>' : '') +
         '<button class="mover-item" title="Mover este ítem">⇅</button>' +
         '<button class="dup-item" title="Duplicar este ítem">⧉</button>' +
         '<button class="copiar-item">📋</button>' +
         '<button class="quitar-item">✕</button>';
       d.querySelector('.pi-nombre').textContent = it.nombre;
+      const bEd = d.querySelector('.adEditar');
+      if(bEd) bEd.onclick = (ev)=>{ ev.stopPropagation(); editarOffsetAD(p, it); };
       const inCant = d.querySelector('.cant');
       const inPrecio = d.querySelector('.precio');
       inCant.value = it.cant;
@@ -12035,7 +12040,22 @@ function calcularAd(){
       const desc = document.getElementById('adDesc').value.trim();
       const nombre = (desc ? desc + ' · ' : '') + 'Offset AD · ' + pzW + '×' + pzH + 'cm · ' + adColSel + ' · ' + papel.nombre +
         ' · ' + op.piezas.toLocaleString('es-AR') + ' u (' + op.maquina + (op.giro?', giro':'') + ')';
-      adPedido.items.push({prod:null, adTr:true, nombre, cant:1, precio: op.venta, costoU: op.costo,
+      /* para el cliente: sin "Offset AD" ni el nombre de la máquina */
+      const nombreCli = (desc ? desc + ' · ' : '') + pzW + '×' + pzH + 'cm · ' + adColSel + ' · ' + papel.nombre +
+        ' · ' + op.piezas.toLocaleString('es-AR') + ' u';
+      /* lo que se cargó, para poder reabrir y corregir sin empezar de cero */
+      const adInput = {
+        desc, W: document.getElementById('adW').value, H: document.getElementById('adH').value,
+        cant: document.getElementById('adCant').value, poses: document.getElementById('adPoses').value,
+        corte: document.getElementById('adCorte').value, pinza: document.getElementById('adPinza').value,
+        marg: document.getElementById('adMarg').value, originales: document.getElementById('adOriginales').value,
+        hojasColor: document.getElementById('adHojasColor').value,
+        intercalado: document.getElementById('adIntercalado').value,
+        binder: document.getElementById('adBinder').value,
+        recargo: document.getElementById('adRecargoChk').checked,
+        papelId: papel.id, col: adColSel, etq: etq
+      };
+      const nuevoIt = {prod:null, adTr:true, nombre, nombreCli, adInput, cant:1, precio: op.venta, costoU: op.costo,
         adMeta: {papel: Math.round(op.papelCosto), millar: op.millarCosto, chapas: op.chapasCosto,
                  postura: op.postCosto, corte: op.corteCosto||0, piezas: op.piezas, maquina: op.maquina,
                  det: {
@@ -12044,15 +12064,26 @@ function calcularAd(){
                    chapas:  {cant: op.chapas, unit: op.chapas>0 ? Math.round(op.chapasCosto/op.chapas) : 0, u:'chapas'},
                    postura: {cant: op.posturas||1, unit: Math.round(op.postCosto/(op.posturas||1)), u:'postura(s)'},
                    corte:   {cant: 1, unit: op.corteCosto||0, u:'corte'}
-                 }}});
-      registrar('cargó offset AD en el pedido de ' + nombreClienteId(adPedido.cliente) + ' (' + plata(op.venta) + ')');
+                 }}};
+      /* si venías editando, reemplaza al ítem viejo en su lugar */
+      const iEd = adEditando ? adPedido.items.indexOf(adEditando) : -1;
+      if(iEd >= 0){
+        // se conservan los datos del pedido que no dependen del cálculo
+        nuevoIt.conf = adEditando.conf;
+        nuevoIt.detalle = adEditando.detalle;
+        adPedido.items[iEd] = nuevoIt;
+        adEditando = null;
+      }else{
+        adPedido.items.push(nuevoIt);
+      }
+      registrar((iEd>=0 ? 'corrigió' : 'cargó') + ' offset AD en el pedido de ' + nombreClienteId(adPedido.cliente) + ' (' + plata(op.venta) + ')');
       guardarDatos(); renderPedidos();
       /* NO cerramos: así podés cambiar el papel y agregar otra variante
          al mismo pedido sin recargar todos los datos de nuevo. */
       const n = adPedido.items.length;
       renderPedidoItems(adPedido);
       adRefrescarCargados();
-      toast('Agregado ✓ · ' + n + (n===1 ? ' ítem en el pedido' : ' ítems en el pedido'));
+      toast(iEd>=0 ? 'Corregido ✓' : ('Agregado ✓ · ' + n + (n===1 ? ' ítem en el pedido' : ' ítems en el pedido')));
     };
   });
 }
@@ -12837,10 +12868,40 @@ document.getElementById('vcBlancoMl').addEventListener('input', ()=>{ if(typeof 
 document.getElementById('vcExtraCant').addEventListener('input', ()=>{ if(typeof vcCalcular === 'function') vcCalcular(); });
 document.getElementById('vcExtra$').addEventListener('input', ()=>{ if(typeof vcCalcular === 'function') vcCalcular(); });
 for(const id of ['vcMultSin','vcMultCon','vcDesHoras','vcDesHora$']) document.getElementById(id).addEventListener('input', vcCalcular);
+/* Reabre el offset AD con lo que se había cargado, para corregir sin
+   empezar de cero. El ítem viejo se saca recién cuando agregás el nuevo. */
+let adEditando = null;
+function editarOffsetAD(p, it){
+  if(!it || !it.adInput){ toast('Este ítem es anterior: no guardó los datos del cálculo'); return; }
+  const b = it.adInput;
+  adPedido = p;
+  adEditando = it;
+  modalPedido.classList.remove('abierto');
+  /* el color se elige con botones, así que se fija ANTES de repintar */
+  if(b.col) adColSel = b.col;
+  renderAd();
+  if(b.papelId){
+    const selP = document.getElementById('adPapel');
+    if(selP && adPapeles.some(x=> x.id === b.papelId)) selP.value = b.papelId;
+  }
+  const set = (id, v)=>{ const e = document.getElementById(id); if(e && v !== undefined) e.value = v; };
+  set('adDesc', b.desc); set('adW', b.W); set('adH', b.H); set('adCant', b.cant);
+  set('adPoses', b.poses); set('adCorte', b.corte); set('adPinza', b.pinza); set('adMarg', b.marg);
+  set('adOriginales', b.originales); set('adHojasColor', b.hojasColor);
+  set('adIntercalado', b.intercalado); set('adBinder', b.binder);
+  const rc = document.getElementById('adRecargoChk');
+  if(rc) rc.checked = !!b.recargo;
+  calcularAd();
+  modalAd.classList.add('abierto');
+  adRefrescarCargados();
+  toast('Editando: elegí la opción y reemplaza al ítem anterior');
+}
+
 document.getElementById('btnAdOff').onclick = ()=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
   if(!p) return;
   adPedido = p;
+  adEditando = null;
   modalPedido.classList.remove('abierto');
   renderAd();
   modalAd.classList.add('abierto');
