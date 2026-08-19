@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v150</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v151</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1262,51 +1262,91 @@ function posarVarias(piezas, W, H, calle, rotar){
 
   // de más alta a más baja: es lo que hace que las franjas queden parejas
   const orden = (a,b)=> Math.max(b.w,b.h) - Math.max(a.w,a.h) || (b.w*b.h) - (a.w*a.h);
-  let quedan = sueltas.slice().sort(orden);
-  const pliegos = [];
 
-  while(quedan.length && pliegos.length < 200){
-    const pl = {franjas: []};
-    let y = 0;
-    while(y < H && quedan.length){
-      const libreY = H - y;
-      // la primera pieza de la franja define su altura
-      let elegida = -1, ori = null;
-      for(let i = 0; i < quedan.length; i++){
-        const p = quedan[i];
-        if(p.h <= libreY && p.w <= W){ elegida = i; ori = {a:p.w, b:p.h, rot:false}; break; }
-        if(rotar && p.w <= libreY && p.h <= W){ elegida = i; ori = {a:p.h, b:p.w, rot:true}; break; }
-      }
-      if(elegida < 0) break;                     // no entra nada más en este pliego
-      const alto = ori.b;
-      const franja = {y, alto, items: []};
-      let x = 0;
-      // se mete la que definió la franja y después todo lo que quepa al lado.
-      // OJO: no se puede usar `i === elegida` para saber si es la primera,
-      // porque después de cada splice los índices se corren y el i nuevo
-      // puede coincidir por casualidad, aplicándole a otra pieza esta orientación.
-      let i = elegida, primera = true;
-      while(i >= 0){
-        const p = quedan[i], o = primera ? ori : p._ori;
-        primera = false;
-        franja.items.push({x, y, a:o.a, b:o.b, idx:p.idx, rot:o.rot});
-        x += o.a + c;
-        quedan.splice(i, 1);
-        i = -1;
-        for(let j = 0; j < quedan.length; j++){
-          const q = quedan[j], libreX = W - x;
-          if(q.h <= alto && q.w <= libreX){ q._ori = {a:q.w, b:q.h, rot:false}; i = j; break; }
-          if(rotar && q.w <= alto && q.h <= libreX){ q._ori = {a:q.h, b:q.w, rot:true}; i = j; break; }
+  /* Una pasada de acomodo. `bajita` decide qué orientación se elige cuando la
+     pieza entra de las dos formas:
+       true  → la que deja la franja más BAJA, así entran más franjas por pliego
+       false → la que deja la franja más ALTA
+     Ninguna gana siempre, así que abajo se prueban las dos (y con distintos
+     órdenes) y se usa la que menos pliegos gaste. */
+  function empaquetar(lista, bajita){
+    let quedan = lista.slice();
+    const pliegos = [];
+    // elige orientación para arrancar una franja de alto libre `libreY`
+    const oriInicio = (p, libreY)=>{
+      const ops = [];
+      if(p.h <= libreY && p.w <= W) ops.push({a:p.w, b:p.h, rot:false});
+      if(rotar && p.w <= libreY && p.h <= W) ops.push({a:p.h, b:p.w, rot:true});
+      if(!ops.length) return null;
+      ops.sort((x,y)=> bajita ? (x.b - y.b) : (y.b - x.b));
+      return ops[0];
+    };
+    // dentro de una franja de alto `alto` y ancho libre `libreX`: la más angosta
+    const oriDentro = (p, alto, libreX)=>{
+      const ops = [];
+      if(p.h <= alto && p.w <= libreX) ops.push({a:p.w, b:p.h, rot:false});
+      if(rotar && p.w <= alto && p.h <= libreX) ops.push({a:p.h, b:p.w, rot:true});
+      if(!ops.length) return null;
+      ops.sort((x,y)=> x.a - y.a);
+      return ops[0];
+    };
+
+    while(quedan.length && pliegos.length < 200){
+      const pl = {franjas: []};
+      let y = 0;
+      while(y < H && quedan.length){
+        const libreY = H - y;
+        let elegida = -1, ori = null;
+        for(let i = 0; i < quedan.length; i++){
+          const o = oriInicio(quedan[i], libreY);
+          if(o){ elegida = i; ori = o; break; }
         }
+        if(elegida < 0) break;                   // no entra nada más en este pliego
+        const alto = ori.b;
+        const franja = {y, alto, items: []};
+        let x = 0;
+        /* OJO: no se puede usar `i === elegida` para saber si es la primera,
+           porque después de cada splice los índices se corren y el i nuevo
+           puede coincidir por casualidad, aplicándole a otra pieza esta
+           orientación. Por eso va una bandera. */
+        let i = elegida, primera = true;
+        while(i >= 0){
+          const p = quedan[i], o = primera ? ori : p._ori;
+          primera = false;
+          franja.items.push({x, y, a:o.a, b:o.b, idx:p.idx, rot:o.rot});
+          x += o.a + c;
+          quedan.splice(i, 1);
+          i = -1;
+          for(let j = 0; j < quedan.length; j++){
+            const o2 = oriDentro(quedan[j], alto, W - x);
+            if(o2){ quedan[j]._ori = o2; i = j; break; }
+          }
+        }
+        pl.franjas.push(franja);
+        y += alto + c;
       }
-      pl.franjas.push(franja);
-      y += alto + c;
+      if(!pl.franjas.length) break;              // no entró nada: se corta para no ciclar
+      pliegos.push(pl);
     }
-    if(!pl.franjas.length) break;                // no entró nada: se corta para no ciclar
-    pliegos.push(pl);
+    const puestas = pliegos.reduce((s,p)=> s + p.franjas.reduce((t,f)=> t + f.items.length, 0), 0);
+    return {pliegos, puestas};
   }
 
-  const puestas = pliegos.reduce((s,p)=> s + p.franjas.reduce((t,f)=> t + f.items.length, 0), 0);
+  const porAlto  = sueltas.slice().sort((a,b)=> Math.max(b.w,b.h) - Math.max(a.w,a.h));
+  const porArea  = sueltas.slice().sort((a,b)=> (b.w*b.h) - (a.w*a.h));
+  const porMayor = sueltas.slice().sort(orden);
+  let mejor = null;
+  for(const lista of [porMayor, porAlto, porArea])
+    for(const bajita of [true, false]){
+      const r = empaquetar(lista, bajita);
+      const mejorQue = !mejor ||
+        r.puestas > mejor.puestas ||
+        (r.puestas === mejor.puestas && r.pliegos.length < mejor.pliegos.length);
+      if(mejorQue) mejor = r;
+    }
+
+  const pliegos = mejor.pliegos;
+  const puestas = mejor.puestas;
   const porTipo = piezas.map(()=> 0);
   for(const p of pliegos) for(const f of p.franjas) for(const it of f.items) porTipo[it.idx]++;
   return {pliegos, puestas, porTipo, sinUbicar: sueltas.length - puestas};
