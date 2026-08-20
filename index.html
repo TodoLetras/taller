@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v155</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v156</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -609,6 +609,10 @@
     <div style="font-size:.7rem;color:var(--texto2);margin-bottom:8px;line-height:1.4">
       Este es el texto que va a salir en el presupuesto. Podés corregirlo acá:
       lo que escribas es lo que se imprime. El membrete y el pie se agregan solos.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button id="presuPrevTotal" style="flex:1;min-width:130px;border-radius:9px;padding:9px 11px;font-size:.72rem;font-weight:700"></button>
+      <button id="presuPrevUnit" style="flex:1;min-width:130px;border-radius:9px;padding:9px 11px;font-size:.72rem;font-weight:700"></button>
     </div>
     <div id="presuPrevLista"></div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -1610,6 +1614,13 @@ function tipoInstalacion(nombre){
 const ESTADOS_VENTA = [['presupuesto','📝 Presupuesto','#9aa1b0'],['parcial','⚠️ Confirmado parcial','#ffb020'],['confirmado','✓ Confirmado','#4cd27d']];
 const ESTADOS_COBRO = [['pendiente','💰 A cobrar','#ff7a7a'],['senado','🪙 Señado','#5ab8ff'],['cobrado','✅ Cobrado','#4cd27d']];
 const ESTADOS_FACT = [['no','Sin facturar','#9aa1b0'],['si','🧾 Facturado','#4cd27d']];
+/* El unitario suele tener centavos ($27,42 cada volante), así que no se
+   redondea a peso entero como el resto: se perdería la referencia. */
+function plataUnit(n){
+  if(!isFinite(n)) return '$0';
+  if(n >= 100) return plata(n);
+  return '$' + n.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
 function plata(n){ return '$ ' + (Math.round(n)||0).toLocaleString('es-AR'); }
 let clienteNueva = null;   // cliente elegido en el modal de nueva tarea
 let pedidoNueva = null;    // pedido al que queda atada la nueva tarea (si nace desde un pedido)
@@ -7955,14 +7966,21 @@ function lineasPresupuesto(p){
   for(const it of p.items){
     if(it.conf === false) continue;
     if(it.titulo){ out.push({titulo:true, nombre: it.nombre || ''}); continue; }
+    const sub = subtotalItem(it);
+    /* Cantidad REAL para el precio unitario. En offset AD el ítem va con
+       cant:1 y las piezas viajan en adMeta, así que el unitario se saca de ahí;
+       si no, es el subtotal dividido la cantidad del ítem. */
+    const uds = (it.adTr && it.adMeta && it.adMeta.piezas) ? it.adMeta.piezas : (it.cant || 1);
     out.push({
       nombre: nombreItem(it) + (p.presuBastidor && it.cart ? detalleBastidor(it.cart) : ''),
       tecnica: it.tecnica || '',
       medidas: conMed ? medidasItem(it) : '',
       cant: it.cant || 1,
+      uds,
+      unit: uds > 0 ? sub / uds : 0,
       unidad: it.mo ? ' h' : (it.uv ? 'u' : ''),
       abierto: !!it.abierto,
-      sub: subtotalItem(it)
+      sub
     });
   }
   return out;
@@ -11170,6 +11188,13 @@ async function generarPDFPedido(p, version){
       doc.text(parrafo, margen, y);
       doc.setFont('Fira','bold');
       doc.text(plata(it.sub), W - margen, y, {align:'right'});
+      /* valor por unidad, para que el cliente pueda comparar tiradas */
+      const verUnit = version ? version.verUnit !== false : true;
+      if(verUnit && it.uds > 1 && it.unit){
+        doc.setFont('Fira','normal'); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
+        doc.text(plataUnit(it.unit) + ' c/u', W - margen, y + 12, {align:'right'});
+        doc.setFontSize(11); doc.setTextColor(40,40,40);
+      }
       if(it.tecnica){
         const tec = doc.splitTextToSize(it.tecnica, W - margen*2 - 110);
         doc.setFont('Fira','normal'); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
@@ -11183,11 +11208,13 @@ async function generarPDFPedido(p, version){
       primero = false;
     }
 
-    // total
-    saltoSiHaceFalta(40);
-    y += 6;
-    doc.setFont('Fira','bold'); doc.setFontSize(14.5); doc.setTextColor(0,0,0);
-    doc.text('TOTAL: ' + plata(version ? version.total : totalPedido(p)), W - margen, y, {align:'right'});
+    // total (se puede sacar desde la vista previa)
+    if(!version || version.verTotal !== false){
+      saltoSiHaceFalta(40);
+      y += 6;
+      doc.setFont('Fira','bold'); doc.setFontSize(14.5); doc.setTextColor(0,0,0);
+      doc.text('TOTAL: ' + plata(version ? version.total : totalPedido(p)), W - margen, y, {align:'right'});
+    }
 
     /* Esquema para el cliente: solo el rectángulo y las medidas de afuera a afuera.
        Nada de varillas ni caños: eso va en el plano del herrero. */
@@ -11361,10 +11388,27 @@ async function generarPDFPedido(p, version){
    lo que se imprime; el membrete y el pie los pone el PDF. Los precios y las
    cantidades no se tocan desde acá: eso se cambia en el pedido. */
 let presuPrevLineas = null, presuPrevPedido = null;
+let presuVerTotal = true, presuVerUnit = true;
+
+function presuPintarBotones(){
+  const bt = document.getElementById('presuPrevTotal');
+  bt.textContent = presuVerTotal ? '☑ Mostrar el total' : '☐ Sin total';
+  bt.title = presuVerTotal ? 'El PDF cierra con el TOTAL. Tocá para sacarlo.'
+                           : 'El PDF sale sin total, sólo los renglones. Tocá para ponerlo.';
+  bt.style.cssText = 'flex:1;min-width:130px;border-radius:9px;padding:9px 11px;font-size:.72rem;font-weight:700;' +
+    'background:var(--panel2);border:1px dashed ' + (presuVerTotal ? 'var(--ambar);color:var(--ambar)' : 'var(--texto2);color:var(--texto2)');
+  const bu = document.getElementById('presuPrevUnit');
+  bu.textContent = presuVerUnit ? '☑ Precio unitario' : '☐ Sin unitario';
+  bu.title = presuVerUnit ? 'Cada renglón muestra el valor por unidad. Tocá para sacarlo.'
+                          : 'No se muestra el valor por unidad. Tocá para ponerlo.';
+  bu.style.cssText = 'flex:1;min-width:130px;border-radius:9px;padding:9px 11px;font-size:.72rem;font-weight:700;' +
+    'background:var(--panel2);border:1px dashed ' + (presuVerUnit ? 'var(--ambar);color:var(--ambar)' : 'var(--texto2);color:var(--texto2)');
+}
 
 function abrirPresuPrev(p){
   presuPrevPedido = p;
   presuPrevLineas = lineasPresupuesto(p).map(l=> ({...l}));
+  presuPintarBotones();
   renderPresuPrev();
   document.getElementById('modalPresuPrev').classList.add('abierto');
 }
@@ -11388,8 +11432,9 @@ function renderPresuPrev(){
     fila.appendChild(ta);
     if(!l.titulo){
       const pr = document.createElement('div');
-      pr.textContent = (l.cant > 1 ? l.cant + (l.unidad||'') + ' · ' : '') + plata(l.sub);
-      pr.style.cssText = 'flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--texto2);padding-top:11px;white-space:nowrap';
+      pr.style.cssText = 'flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--texto2);padding-top:8px;white-space:nowrap;text-align:right';
+      pr.innerHTML = plata(l.sub) +
+        (presuVerUnit && l.uds > 1 ? '<br><span style="font-weight:400;font-size:.64rem">' + plataUnit(l.unit) + ' c/u</span>' : '');
       fila.appendChild(pr);
     }
     const bo = document.createElement('button');
@@ -11402,11 +11447,14 @@ function renderPresuPrev(){
   });
   const tot = presuPrevLineas.reduce((s,l)=> s + (l.titulo ? 0 : (l.sub||0)), 0);
   const t = document.createElement('div');
-  t.textContent = 'Total: ' + plata(tot);
-  t.style.cssText = 'text-align:right;font-weight:800;font-size:.85rem;margin-top:8px;color:var(--texto)';
+  t.textContent = presuVerTotal ? ('Total: ' + plata(tot)) : '(el PDF sale sin total)';
+  t.style.cssText = 'text-align:right;font-weight:' + (presuVerTotal ? '800' : '400') +
+    ';font-size:' + (presuVerTotal ? '.85rem' : '.7rem') + ';margin-top:8px;color:var(--' + (presuVerTotal ? 'texto' : 'texto2') + ')';
   cont.appendChild(t);
 }
 
+document.getElementById('presuPrevTotal').onclick = ()=>{ presuVerTotal = !presuVerTotal; presuPintarBotones(); renderPresuPrev(); };
+document.getElementById('presuPrevUnit').onclick  = ()=>{ presuVerUnit  = !presuVerUnit;  presuPintarBotones(); renderPresuPrev(); };
 document.getElementById('presuPrevCancel').onclick = ()=>
   document.getElementById('modalPresuPrev').classList.remove('abierto');
 document.getElementById('modalPresuPrev').addEventListener('click', e=>{
@@ -11421,7 +11469,8 @@ document.getElementById('presuPrevReset').onclick = ()=>{
 document.getElementById('presuPrevOk').onclick = ()=>{
   document.getElementById('modalPresuPrev').classList.remove('abierto');
   const tot = presuPrevLineas.reduce((s2,l)=> s2 + (l.titulo ? 0 : (l.sub||0)), 0);
-  generarPDFPedido(presuPrevPedido, {lineas: presuPrevLineas, total: tot, fecha: Date.now(), _prev: true});
+  generarPDFPedido(presuPrevPedido, {lineas: presuPrevLineas, total: tot, fecha: Date.now(),
+    verTotal: presuVerTotal, verUnit: presuVerUnit, _prev: true});
 };
 
 document.getElementById('pedPDF').onclick = ()=>{
