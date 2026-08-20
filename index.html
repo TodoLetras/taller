@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v154</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v155</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -599,6 +599,22 @@
     </details>
     <div class="acciones">
       <button id="cartCerrar" class="btn-secundario">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalPresuPrev">
+  <div class="hoja">
+    <h2>📝 Antes de generar el PDF</h2>
+    <div style="font-size:.7rem;color:var(--texto2);margin-bottom:8px;line-height:1.4">
+      Este es el texto que va a salir en el presupuesto. Podés corregirlo acá:
+      lo que escribas es lo que se imprime. El membrete y el pie se agregan solos.
+    </div>
+    <div id="presuPrevLista"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button id="presuPrevCancel" style="flex:1;border-radius:11px;padding:12px;font-weight:700;background:var(--panel2);border:1px solid var(--borde);color:var(--texto2)">Cancelar</button>
+      <button id="presuPrevReset" style="flex:1;border-radius:11px;padding:12px;font-weight:700;background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)">↺ Original</button>
+      <button id="presuPrevOk" style="flex:2;border-radius:11px;padding:12px;font-weight:800;background:var(--ambar);border:none;color:#1a1200">🖼 Generar PDF</button>
     </div>
   </div>
 </div>
@@ -11340,11 +11356,79 @@ async function generarPDFPedido(p, version){
   }
   btn.textContent = txtOrig;
 }
+/* ---------- vista previa del presupuesto ----------
+   Se muestra SOLO el texto, antes de armar el PDF. Lo que se corrija acá es
+   lo que se imprime; el membrete y el pie los pone el PDF. Los precios y las
+   cantidades no se tocan desde acá: eso se cambia en el pedido. */
+let presuPrevLineas = null, presuPrevPedido = null;
+
+function abrirPresuPrev(p){
+  presuPrevPedido = p;
+  presuPrevLineas = lineasPresupuesto(p).map(l=> ({...l}));
+  renderPresuPrev();
+  document.getElementById('modalPresuPrev').classList.add('abierto');
+}
+
+function renderPresuPrev(){
+  const cont = document.getElementById('presuPrevLista');
+  cont.innerHTML = '';
+  presuPrevLineas.forEach((l, i)=>{
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:6px';
+    const ta = document.createElement('textarea');
+    ta.value = l.nombre + (l.medidas || '') + (l.tecnica ? ' · ' + l.tecnica : '');
+    ta.rows = 1;
+    ta.style.cssText = 'flex:1;min-width:0;margin:0;min-height:38px;resize:vertical;' +
+      (l.titulo ? 'font-weight:800;text-transform:uppercase;font-size:.72rem' : 'font-size:.76rem');
+    ta.addEventListener('input', ()=>{
+      presuPrevLineas[i].nombre = ta.value;
+      presuPrevLineas[i].medidas = '';      // ya está adentro del texto editado
+      presuPrevLineas[i].tecnica = '';
+    });
+    fila.appendChild(ta);
+    if(!l.titulo){
+      const pr = document.createElement('div');
+      pr.textContent = (l.cant > 1 ? l.cant + (l.unidad||'') + ' · ' : '') + plata(l.sub);
+      pr.style.cssText = 'flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--texto2);padding-top:11px;white-space:nowrap';
+      fila.appendChild(pr);
+    }
+    const bo = document.createElement('button');
+    bo.textContent = '✕';
+    bo.title = 'Sacar este renglón del PDF (no toca el pedido)';
+    bo.style.cssText = 'flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:1px solid var(--borde);background:var(--panel2);color:var(--texto2);padding:0;margin-top:5px';
+    bo.onclick = ()=>{ presuPrevLineas.splice(i,1); renderPresuPrev(); };
+    fila.appendChild(bo);
+    cont.appendChild(fila);
+  });
+  const tot = presuPrevLineas.reduce((s,l)=> s + (l.titulo ? 0 : (l.sub||0)), 0);
+  const t = document.createElement('div');
+  t.textContent = 'Total: ' + plata(tot);
+  t.style.cssText = 'text-align:right;font-weight:800;font-size:.85rem;margin-top:8px;color:var(--texto)';
+  cont.appendChild(t);
+}
+
+document.getElementById('presuPrevCancel').onclick = ()=>
+  document.getElementById('modalPresuPrev').classList.remove('abierto');
+document.getElementById('modalPresuPrev').addEventListener('click', e=>{
+  if(e.target === document.getElementById('modalPresuPrev'))
+    document.getElementById('modalPresuPrev').classList.remove('abierto');
+});
+document.getElementById('presuPrevReset').onclick = ()=>{
+  presuPrevLineas = lineasPresupuesto(presuPrevPedido).map(l=> ({...l}));
+  renderPresuPrev();
+  toast('Texto original restaurado');
+};
+document.getElementById('presuPrevOk').onclick = ()=>{
+  document.getElementById('modalPresuPrev').classList.remove('abierto');
+  const tot = presuPrevLineas.reduce((s2,l)=> s2 + (l.titulo ? 0 : (l.sub||0)), 0);
+  generarPDFPedido(presuPrevPedido, {lineas: presuPrevLineas, total: tot, fecha: Date.now(), _prev: true});
+};
+
 document.getElementById('pedPDF').onclick = ()=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
   if(!p) return;
   if(!p.items.filter(i=>i.conf!==false).length){ toast('El pedido no tiene ítems para presupuestar'); return; }
-  generarPDFPedido(p);
+  abrirPresuPrev(p);
 };
 
 /* ---------- offset tradicional AD (GTO / Komori) ---------- */
