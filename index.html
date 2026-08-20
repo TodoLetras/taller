@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v156</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v159</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -11383,6 +11383,140 @@ async function generarPDFPedido(p, version){
   }
   btn.textContent = txtOrig;
 }
+/* ================= FOLLETOS EN PLIEGO COMPARTIDO =================
+   El proveedor arma un pliego con trabajos de varios clientes y cobra por
+   tirada fija. Sale MUY barato, pero sólo sirve si el trabajo entra en su
+   grilla: papel 115 g, 4/0 o 4/4, y tiradas de 1.000, 2.000 o 5.000.
+   Las tiradas se pueden sumar (3.000 = 1.000 + 2.000). Cortan ellos, las
+   piezas salen pegadas y entregan la cantidad justa, sin merma. */
+const COMPARTIDO = {
+  base: {w: 10, h: 15},      // módulo de la grilla, en cm
+  gramaje: 115,
+  colores: ['4/0', '4/4'],
+  tiradas: [
+    {n: 1000, precio: {'4/0': 21000, '4/4': 24000}},
+    {n: 2000, precio: {'4/0': 34000, '4/4': 37000}},
+    {n: 5000, precio: {'4/0': 63000, '4/4': 67000}},
+  ]
+};
+
+/* Cuántas piezas entran en UN módulo (si la pieza es más chica). */
+function compPorModulo(w, h){
+  const B = COMPARTIDO.base;
+  const r = posarPliego(w, h, B.w, B.h, 0, true);
+  return r ? r.n : 0;
+}
+/* Si la pieza NO entra en un módulo: cuántos módulos hacen falta.
+   Los módulos se juntan en grilla, así que el rectángulo disponible es
+   a×b módulos, con el módulo en cualquiera de sus dos orientaciones.
+   Ej: una de 12×12 necesita 2 módulos (rectángulo de 15×20), con
+   desperdicio, porque en uno solo de 10×15 no entra. */
+function compModulos(w, h, max){
+  const B = COMPARTIDO.base;
+  max = max || 16;
+  for(let k = 1; k <= max; k++){
+    for(let a = 1; a <= k; a++){
+      if(k % a) continue;
+      const b = k / a;
+      for(const [uw, uh] of [[B.w, B.h], [B.h, B.w]]){
+        const RW = a*uw, RH = b*uh;
+        if((w <= RW + 1e-9 && h <= RH + 1e-9) || (h <= RW + 1e-9 && w <= RH + 1e-9))
+          return {k, RW, RH};
+      }
+    }
+  }
+  return null;
+}
+
+/* Combinación de tiradas más barata que cubra `unidades` módulos.
+   Se pueden repetir y sumar, así que se busca de verdad el mínimo:
+   4.000 sale más barato como una de 5.000 que como dos de 2.000. */
+function compMejorCombo(unidades, col){
+  if(unidades <= 0) return null;
+  const ts = COMPARTIDO.tiradas.filter(t=> t.precio[col] > 0);
+  if(!ts.length) return null;
+  const paso = 1000;
+  const tope = Math.ceil(unidades / paso);
+  const mejor = new Array(tope + 1).fill(null);
+  mejor[0] = {costo: 0, combo: []};
+  for(let i = 1; i <= tope; i++){
+    for(const t of ts){
+      const desde = Math.max(0, i - t.n/paso);
+      const prev = mejor[desde];
+      if(!prev) continue;
+      const c = prev.costo + t.precio[col];
+      if(!mejor[i] || c < mejor[i].costo)
+        mejor[i] = {costo: c, combo: prev.combo.concat([t.n])};
+    }
+  }
+  const r = mejor[tope];
+  if(!r) return null;
+  const total = r.combo.reduce((s,n)=> s + n, 0);
+  return {costo: r.costo, combo: r.combo.sort((a,b)=> b-a), unidades: total};
+}
+
+/* ¿Este trabajo se puede hacer en pliego compartido? Devuelve el cálculo
+   o el motivo por el que no. */
+function compartidoPara(pzW, pzH, cant, col, papel){
+  const gr = (papel && (papel.gramaje || parseInt((papel.nombre||'').match(/(\d{2,3})\s*g/i)?.[1]))) || 0;
+  if(!COMPARTIDO.colores.includes(col))
+    return {no: 'sólo 4/0 o 4/4'};
+  if(gr && gr !== COMPARTIDO.gramaje)
+    return {no: 'sólo papel de ' + COMPARTIDO.gramaje + ' g'};
+  const porMod = compPorModulo(pzW, pzH);
+  let unidades, porPieza = 0, salen = cant;
+  if(porMod >= 1){
+    unidades = Math.ceil(cant / porMod);
+    salen = unidades * porMod;
+  }else{
+    const m = compModulos(pzW, pzH);
+    if(!m) return {no: 'la pieza es muy grande para la grilla'};
+    porPieza = m.k;
+    unidades = cant * m.k;
+  }
+  const combo = compMejorCombo(unidades, col);
+  if(!combo) return {no: 'no hay tirada que lo cubra'};
+  // si la combinación da más módulos de los pedidos, salen piezas de más
+  if(porMod >= 1) salen = combo.unidades * porMod;
+  return {
+    costo: combo.costo, combo: combo.combo, unidades: combo.unidades,
+    porModulo: porMod, porPieza, salen,
+    unitario: salen > 0 ? combo.costo / salen : 0
+  };
+}
+
+/* ---- los colores, en castellano ----
+   "4/4" es jerga de imprenta: el cliente no tiene por qué saber que 4 son las
+   tintas de la cuatricromía. El primer número es el frente y el segundo el
+   dorso; 0 significa que ese lado va en blanco. */
+function coloresParaCliente(col){
+  const m = String(col || '').match(/^(\d+)\s*\/\s*(\d+)$/);
+  if(!m) return col || '';
+  const lado = (n)=> n >= 4 ? 'a color' : (n === 1 ? 'a 1 color' : 'a ' + n + ' colores');
+  const f = parseInt(m[1]), d = parseInt(m[2]);
+  if(!d) return 'frente ' + lado(f);
+  if(f === d) return 'frente y dorso ' + lado(f);
+  return 'frente ' + lado(f) + ', dorso ' + lado(d);
+}
+
+/* ---- nombre del papel para el CLIENTE ----
+   El catálogo trae el nombre completo del proveedor, con la medida del pliego
+   de donde se corta y cuántas hojas trae el paquete. Al cliente no le importa
+   de qué pliego salió ni cómo viene envasado: solo qué papel es. */
+function papelParaCliente(nombre){
+  let t = ' ' + (nombre || '') + ' ';
+  t = t.replace(/\b\d{2,3}\s*[x×]\s*\d{2,3}\s*(cm)?\b/gi, '');      // 70 x 100 cm · 82×118
+  t = t.replace(/\bcaja\s*x?\s*\d+\s*hojas?\.?/gi, '');              // Caja x 125 Hojas.
+  t = t.replace(/\bpaq(uete)?\.?\s*x?\s*\d+\s*h(ojas?)?\.?/gi, '');  // paq 250h
+  t = t.replace(/\bresma\s*x?\s*\d+\b/gi, '');
+  t = t.replace(/\s{2,}/g, ' ');
+  t = t.replace(/\s*([-·|])\s*(?=[-·|])/g, '');          // separadores que quedaron pegados
+  t = t.replace(/([^\s])\s*-\s*/g, '$1 - ');             // deja un espacio a cada lado del guion
+  t = t.replace(/^[\s\-·|]+|[\s\-·|.]+$/g, '');          // separadores sueltos en las puntas
+  t = t.replace(/\s{2,}/g, ' ').trim();
+  return t;
+}
+
 /* ---------- vista previa del presupuesto ----------
    Se muestra SOLO el texto, antes de armar el PDF. Lo que se corrija acá es
    lo que se imprime; el membrete y el pie los pone el PDF. Los precios y las
@@ -12161,6 +12295,34 @@ function calcularAd(){
         '<div style="font-size:.6rem;color:var(--texto2);margin-top:4px">✓ = unitario mejor que tu pedido en tradicional. El corte va a precio fijo, no por hoja; las terminaciones se suman por hoja.</div></div>';
     }
   }
+  /* ---- ¿conviene el pliego compartido? ----
+     Se compara contra la mejor opción propia. Sólo aparece si el trabajo
+     entra en la grilla del proveedor y si además sale más barato. */
+  const compa = compartidoPara(pzW, pzH, q, adColSel, papel);
+  if(q > 0 && compa && !compa.no){
+    const mio = opciones[0] ? opciones[0].op : null;
+    const ahorro = mio ? mio.costo - compa.costo : 0;
+    const conviene = ahorro > 0;
+    h += '<div style="margin-top:10px;padding:10px 12px;border-radius:11px;font-size:.74rem;line-height:1.55;' +
+      'background:' + (conviene ? 'rgba(76,210,125,.10)' : 'var(--panel2)') +
+      ';border:1px dashed ' + (conviene ? '#4cd27d' : 'var(--borde)') + '">' +
+      '<b style="color:' + (conviene ? '#4cd27d' : 'var(--texto2)') + '">📚 Folletos en pliego compartido</b><br>' +
+      '<span style="color:var(--texto2)">' +
+      compa.combo.map(n=> n.toLocaleString('es-AR')).join(' + ') + ' módulos de 10×15' +
+      (compa.porModulo > 1 ? ' · entran ' + compa.porModulo + ' por módulo' : '') +
+      (compa.porPieza > 1 ? ' · cada pieza ocupa ' + compa.porPieza + ' módulos' : '') +
+      ' → <b style="color:var(--texto)">' + plata(compa.costo) + '</b> de costo' +
+      ' (' + plataUnit(compa.unitario) + ' c/u' +
+      (compa.salen > q ? ' · salen ' + compa.salen.toLocaleString('es-AR') : '') + ')' +
+      '<br>' + (conviene
+        ? '✅ Te ahorrás <b style="color:#4cd27d">' + plata(ahorro) + '</b> contra hacerlo vos (' + plata(mio.costo) + ')'
+        : (mio ? 'Conviene hacerlo vos: ' + plata(mio.costo) + ' contra ' + plata(compa.costo) : '')) +
+      '</span></div>';
+  }else if(q > 0 && compa && compa.no && /115/.test(papel.nombre||'')){
+    h += '<div style="margin-top:10px;padding:8px 11px;border-radius:10px;background:var(--panel2);' +
+      'border:1px dashed var(--borde);font-size:.7rem;color:var(--texto2)">' +
+      '📚 Pliego compartido: no aplica (' + compa.no + ')</div>';
+  }
   res.innerHTML = h;
   dibujarEsquemaAd(opciones[0].op);
   const cvOD = document.getElementById('adOdEsquema');
@@ -12235,9 +12397,18 @@ function calcularAd(){
       const desc = document.getElementById('adDesc').value.trim();
       const nombre = (desc ? desc + ' · ' : '') + 'Offset AD · ' + pzW + '×' + pzH + 'cm · ' + adColSel + ' · ' + papel.nombre +
         ' · ' + op.piezas.toLocaleString('es-AR') + ' u (' + op.maquina + (op.giro?', giro':'') + ')';
-      /* para el cliente: sin "Offset AD" ni el nombre de la máquina */
-      const nombreCli = (desc ? desc + ' · ' : '') + pzW + '×' + pzH + 'cm · ' + adColSel + ' · ' + papel.nombre +
-        ' · ' + op.piezas.toLocaleString('es-AR') + ' u';
+      /* Para el cliente, en el orden en que lo lee: cuántas, de qué medida,
+         en qué papel, a cuántos colores y con qué terminaciones.
+         Sin "Offset AD", sin la máquina y sin los datos de compra del papel. */
+      const termsCli = [];
+      if(op.plastNombre) termsCli.push(op.plastNombre);
+      if(op.troqNombre)  termsCli.push(op.troqNombre.toLowerCase());
+      const nombreCli = (desc ? desc + ' · ' : '') +
+        op.piezas.toLocaleString('es-AR') + ' u · ' +
+        pzW + '×' + pzH + ' cm · ' +
+        papelParaCliente(papel.nombre) + ' · ' +
+        coloresParaCliente(adColSel) +
+        (termsCli.length ? ' · ' + termsCli.join(' · ') : '');
       /* lo que se cargó, para poder reabrir y corregir sin empezar de cero */
       const adInput = {
         desc, W: document.getElementById('adW').value, H: document.getElementById('adH').value,
