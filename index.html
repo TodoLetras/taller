@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v159</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v160</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -11485,6 +11485,36 @@ function compartidoPara(pzW, pzH, cant, col, papel){
   };
 }
 
+/* Arma el compartido con la MISMA forma que una opción propia, para que
+   entre como una fila más de la tabla: mismo %, misma venta, mismo ＋.
+   Las columnas que no existen acá (papel, millar, chapas) van en cero. */
+function compartidoComoOpcion(pzW, pzH, q, col, papel, margenBase){
+  const c = compartidoPara(pzW, pzH, q, col, papel);
+  if(!c || c.no) return null;
+  const margen = margenBase;
+  const venta = c.costo * (1 + margen/100);
+  const det = [];
+  det.push('📚 Pliego compartido · módulo de ' + COMPARTIDO.base.w + '×' + COMPARTIDO.base.h + ' cm, papel ' + COMPARTIDO.gramaje + ' g');
+  if(c.porModulo > 1) det.push('Entran ' + c.porModulo + ' piezas por módulo → ' + c.unidades.toLocaleString('es-AR') + ' módulos');
+  else if(c.porPieza > 1) det.push('Cada pieza ocupa ' + c.porPieza + ' módulos → ' + c.unidades.toLocaleString('es-AR') + ' módulos');
+  else det.push(c.unidades.toLocaleString('es-AR') + ' módulos');
+  det.push('Tiradas: ' + c.combo.map(n=> n.toLocaleString('es-AR')).join(' + ') + ' = ' + plata(c.costo));
+  det.push('Lo cortan ellos y las piezas salen pegadas. Sin merma: entregan la cantidad justa.');
+  if(c.salen > q) det.push('Salen ' + c.salen.toLocaleString('es-AR') + ' piezas (' + (c.salen - q).toLocaleString('es-AR') + ' de más).');
+  return {
+    compartido: true, combo: c.combo, modulos: c.unidades,
+    pliegos: c.unidades, pliegosNetos: c.unidades, piezas: c.salen,
+    papelCosto: 0, millarCosto: 0, chapasCosto: 0, postCosto: 0, corteCosto: 0, troqCosto: 0,
+    paqDec: 0, millares: 0, pasadasN: 0, chapas: 0,
+    costo: c.costo, margen, venta, unitario: c.salen > 0 ? venta / c.salen : 0,
+    maquina: 'pliego compartido', giro: false,
+    nota: c.combo.map(n=> n.toLocaleString('es-AR')).join('+') + ' módulos' +
+          (c.porModulo > 1 ? ' · ' + c.porModulo + ' por módulo' : '') +
+          (c.porPieza > 1 ? ' · ' + c.porPieza + ' módulos c/u' : ''),
+    desglose: det
+  };
+}
+
 /* ---- los colores, en castellano ----
    "4/4" es jerga de imprenta: el cliente no tiene por qué saber que 4 son las
    tintas de la cuatricromía. El primer número es el frente y el segundo el
@@ -12155,6 +12185,31 @@ function calcularAd(){
                  {tipo:'paquetes', n, margenOver: adMargenOver[etq]});
     if(op && op.piezas > 0) opciones.push({etq, op});
   }
+  /* ---- folletos en pliego compartido ----
+     Una fila por cada cantidad pedida, con el mismo % editable que el resto.
+     Va JUSTO ANTES de su equivalente propia cuando sale más barata, así la
+     alternativa aparece en el lugar donde ibas a mirar. */
+  if(!adOrig || adOrig === 1){
+    for(let k = 0; k < qLista.length; k++){
+      const qi = qLista[k];
+      const etqPropia = 'Tu pedido: ' + qi + ' u';
+      const idx = opciones.findIndex(o=> o.etq === etqPropia);
+      if(idx < 0) continue;
+      const propia = opciones[idx].op;
+      const oc = compartidoComoOpcion(pzW, pzH, qi, adColSel, papel, propia.margen);
+      if(!oc) continue;
+      const etqC = '📚 Compartido: ' + qi.toLocaleString('es-AR') + ' u';
+      const mo = adMargenOver[etqC];
+      if(mo != null){
+        oc.margen = mo;
+        oc.venta = oc.costo * (1 + mo/100);
+        oc.unitario = oc.piezas > 0 ? oc.venta / oc.piezas : 0;
+      }
+      oc.ahorro = propia.costo - oc.costo;
+      opciones.splice(oc.ahorro > 0 ? idx : idx + 1, 0, {etq: etqC, op: oc});
+      k += 0;
+    }
+  }
   if(!opciones.length){ res.innerHTML = '<div class="vacio" style="padding:10px">La pieza no entra en los pliegos de máquina.</div>'; return; }
   let h = '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:6px">' + opciones[0].op.detalle + ' · demasía ' + adCfg.demasia + ' pliegos/postura</div>' +
     (adOrig > 1 ? '' :
@@ -12171,18 +12226,27 @@ function calcularAd(){
     '<td style="padding:5px 2px" title="Incluir en el PDF del cliente">📄</td>' +
     '<td style="text-align:left;padding:5px 4px">Opción</td><td>Pliegos</td><td>Piezas</td><td>Papel</td><td>Millar</td><td>Chapas</td><td>Postura</td><td>Corte</td><td>Costo</td><td>%</td><td style="color:#4cd27d">VENTA</td><td>Unit.</td><td></td></tr>';
   for(const {etq, op} of opciones){
-    h += '<tr style="border-top:1px dashed var(--borde);text-align:right">' +
+    const gana = op.compartido && op.ahorro > 0;
+    h += '<tr style="border-top:1px dashed var(--borde);text-align:right' +
+      (gana ? ';background:rgba(76,210,125,.08)' : '') + '">' +
       '<td style="padding:7px 2px;width:26px"><input type="checkbox" class="adSel" data-etq="' + etq + '"' +
         (adPdfSel[etq] !== false ? ' checked' : '') +
         ' style="width:17px;height:17px;accent-color:#4cd27d;margin:0"></td>' +
-      '<td style="text-align:left;padding:7px 4px;white-space:nowrap"><b>' + etq + '</b>' + (op.nota?'<br><span style="font-size:.6rem;color:var(--texto2)">'+op.nota+'</span>':'') + '</td>' +
+      '<td style="text-align:left;padding:7px 4px;white-space:nowrap"><b' +
+        (gana ? ' style="color:#4cd27d"' : '') + '>' + etq + '</b>' +
+        (op.nota?'<br><span style="font-size:.6rem;color:var(--texto2)">'+op.nota+'</span>':'') +
+        (gana ? '<br><span style="font-size:.6rem;color:#4cd27d;font-weight:700">✅ ahorrás ' + plata(op.ahorro) + '</span>' : '') + '</td>' +
       '<td>' + op.pliegos.toLocaleString('es-AR') + '</td>' +
       '<td><b>' + op.piezas.toLocaleString('es-AR') + '</b></td>' +
-      '<td>' + plata(op.papelCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.paqDec.toLocaleString('es-AR') + ' paq</span></td>' +
-      '<td>' + plata(op.millarCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.millares + ' mill · ' + op.pliegosNetos.toLocaleString('es-AR') + ' pl × ' + op.pasadasN + (op.pasadasN>1?' pasadas':' pasada') + '</span></td>' +
-      '<td>' + plata(op.chapasCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.chapas + ' ch</span></td>' +
-      '<td>' + plata(op.postCosto) + '</td>' +
-      '<td>' + plata(op.corteCosto) + '</td>' +
+      (op.compartido
+        ? '<td style="color:var(--texto2)">—</td><td style="color:var(--texto2)">—</td>' +
+          '<td style="color:var(--texto2)">—</td><td style="color:var(--texto2)">—</td>' +
+          '<td style="color:var(--texto2)">—</td>'
+        : '<td>' + plata(op.papelCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.paqDec.toLocaleString('es-AR') + ' paq</span></td>' +
+          '<td>' + plata(op.millarCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.millares + ' mill · ' + op.pliegosNetos.toLocaleString('es-AR') + ' pl × ' + op.pasadasN + (op.pasadasN>1?' pasadas':' pasada') + '</span></td>' +
+          '<td>' + plata(op.chapasCosto) + '<br><span style="font-size:.6rem;color:var(--texto2)">' + op.chapas + ' ch</span></td>' +
+          '<td>' + plata(op.postCosto) + '</td>' +
+          '<td>' + plata(op.corteCosto) + '</td>') +
       '<td><b>' + plata(op.costo) + '</b></td>' +
       '<td style="padding:3px 2px"><input class="adMrg" data-etq="' + etq + '" type="number" inputmode="numeric" value="' + op.margen +
         '" title="Margen de esta fila. Borralo para volver al automático." ' +
@@ -12295,34 +12359,6 @@ function calcularAd(){
         '<div style="font-size:.6rem;color:var(--texto2);margin-top:4px">✓ = unitario mejor que tu pedido en tradicional. El corte va a precio fijo, no por hoja; las terminaciones se suman por hoja.</div></div>';
     }
   }
-  /* ---- ¿conviene el pliego compartido? ----
-     Se compara contra la mejor opción propia. Sólo aparece si el trabajo
-     entra en la grilla del proveedor y si además sale más barato. */
-  const compa = compartidoPara(pzW, pzH, q, adColSel, papel);
-  if(q > 0 && compa && !compa.no){
-    const mio = opciones[0] ? opciones[0].op : null;
-    const ahorro = mio ? mio.costo - compa.costo : 0;
-    const conviene = ahorro > 0;
-    h += '<div style="margin-top:10px;padding:10px 12px;border-radius:11px;font-size:.74rem;line-height:1.55;' +
-      'background:' + (conviene ? 'rgba(76,210,125,.10)' : 'var(--panel2)') +
-      ';border:1px dashed ' + (conviene ? '#4cd27d' : 'var(--borde)') + '">' +
-      '<b style="color:' + (conviene ? '#4cd27d' : 'var(--texto2)') + '">📚 Folletos en pliego compartido</b><br>' +
-      '<span style="color:var(--texto2)">' +
-      compa.combo.map(n=> n.toLocaleString('es-AR')).join(' + ') + ' módulos de 10×15' +
-      (compa.porModulo > 1 ? ' · entran ' + compa.porModulo + ' por módulo' : '') +
-      (compa.porPieza > 1 ? ' · cada pieza ocupa ' + compa.porPieza + ' módulos' : '') +
-      ' → <b style="color:var(--texto)">' + plata(compa.costo) + '</b> de costo' +
-      ' (' + plataUnit(compa.unitario) + ' c/u' +
-      (compa.salen > q ? ' · salen ' + compa.salen.toLocaleString('es-AR') : '') + ')' +
-      '<br>' + (conviene
-        ? '✅ Te ahorrás <b style="color:#4cd27d">' + plata(ahorro) + '</b> contra hacerlo vos (' + plata(mio.costo) + ')'
-        : (mio ? 'Conviene hacerlo vos: ' + plata(mio.costo) + ' contra ' + plata(compa.costo) : '')) +
-      '</span></div>';
-  }else if(q > 0 && compa && compa.no && /115/.test(papel.nombre||'')){
-    h += '<div style="margin-top:10px;padding:8px 11px;border-radius:10px;background:var(--panel2);' +
-      'border:1px dashed var(--borde);font-size:.7rem;color:var(--texto2)">' +
-      '📚 Pliego compartido: no aplica (' + compa.no + ')</div>';
-  }
   res.innerHTML = h;
   dibujarEsquemaAd(opciones[0].op);
   const cvOD = document.getElementById('adOdEsquema');
@@ -12395,8 +12431,12 @@ function calcularAd(){
     btn.onclick = ()=>{
       const {etq, op} = lista[i];
       const desc = document.getElementById('adDesc').value.trim();
-      const nombre = (desc ? desc + ' · ' : '') + 'Offset AD · ' + pzW + '×' + pzH + 'cm · ' + adColSel + ' · ' + papel.nombre +
-        ' · ' + op.piezas.toLocaleString('es-AR') + ' u (' + op.maquina + (op.giro?', giro':'') + ')';
+      /* nombre interno: el compartido dice de dónde sale, para el taller */
+      const nombre = (desc ? desc + ' · ' : '') +
+        (op.compartido ? 'Folletos compartido · ' : 'Offset AD · ') +
+        pzW + '×' + pzH + 'cm · ' + adColSel + ' · ' + papel.nombre +
+        ' · ' + op.piezas.toLocaleString('es-AR') + ' u (' +
+        (op.compartido ? op.combo.map(n=> n.toLocaleString('es-AR')).join('+') + ' módulos' : op.maquina + (op.giro?', giro':'')) + ')';
       /* Para el cliente, en el orden en que lo lee: cuántas, de qué medida,
          en qué papel, a cuántos colores y con qué terminaciones.
          Sin "Offset AD", sin la máquina y sin los datos de compra del papel. */
