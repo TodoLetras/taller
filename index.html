@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v160</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v162</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -758,14 +758,14 @@
       <button id="odModoPieza">Por pieza (calcula posado)</button>
     </div>
     <div id="odZonaHojas">
-      <input id="odHojas" type="number" inputmode="numeric" min="1" placeholder="Cantidad de hojas">
+      <input id="odHojas" type="text" inputmode="text" placeholder="Cantidad de hojas · varias separadas por espacio: 50 100 250">
     </div>
     <div id="odZonaPieza" style="display:none">
       <div style="display:flex;gap:8px;align-items:center">
         <input id="odPzAncho" type="text" inputmode="decimal" step="0.1" placeholder="Ancho cm" style="flex:1;margin:0">
         <span style="color:var(--texto2)">×</span>
         <input id="odPzAlto" type="text" inputmode="decimal" step="0.1" placeholder="Alto cm" style="flex:1;margin:0">
-        <input id="odPzCant" type="number" inputmode="numeric" placeholder="Piezas" style="flex:1;margin:0">
+        <input id="odPzCant" type="text" inputmode="text" placeholder="Piezas · 500 1000 2000" style="flex:1;margin:0">
       </div>
       <div id="odPosado" style="font-size:.74rem;color:#5ab8ff;font-weight:700;margin-top:8px;line-height:1.5"></div>
     </div>
@@ -10305,11 +10305,13 @@ function renderOffDig(){
   document.getElementById('odModoPieza').classList.toggle('activo', !!odMeta.porPieza);
   document.getElementById('odZonaHojas').style.display = odMeta.porPieza ? 'none' : 'block';
   document.getElementById('odZonaPieza').style.display = odMeta.porPieza ? 'block' : 'none';
-  document.getElementById('odHojas').value = odMeta.hojas || '';
+  document.getElementById('odHojas').value = (odMeta.hojasLista && odMeta.hojasLista.length > 1)
+    ? odMeta.hojasLista.join(' ') : (odMeta.hojas || '');
   odMedidaOriginal = null;
   document.getElementById('odPzAncho').value = odMeta.pzAncho || '';
   document.getElementById('odPzAlto').value = odMeta.pzAlto || '';
-  document.getElementById('odPzCant').value = odMeta.pzCant || '';
+  document.getElementById('odPzCant').value = (odMeta.pzListaCant && odMeta.pzListaCant.length > 1)
+    ? odMeta.pzListaCant.join(' ') : (odMeta.pzCant || '');
   document.getElementById('odDesc').value = odMeta.desc || '';
   // terminaciones
   const terms = document.getElementById('odTerms');
@@ -10515,6 +10517,56 @@ function actualizarOffDig(){
       actualizarOffDig();
       toast('Margen del pedido: ' + odPedido.odMargen + '% ✓');
     });
+    /* ---- comparación de cantidades ----
+       Cada fila es el mismo trabajo con otra cantidad, para ver cómo baja el
+       unitario. El ＋ carga esa cantidad directamente al pedido. */
+    const listaQ = odMeta.porPieza ? odMeta.pzListaCant : odMeta.hojasLista;
+    if(listaQ && listaQ.length > 1){
+      let hc = '<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--borde)">' +
+        '<div style="font-size:.72rem;color:var(--texto2);margin-bottom:6px">📊 Comparación de cantidades</div>' +
+        '<div style="overflow-x:auto"><table style="width:100%;min-width:420px;border-collapse:separate;border-spacing:4px 0;font-size:.72rem">' +
+        '<tr style="color:var(--texto2);font-size:.6rem;text-transform:uppercase;text-align:right">' +
+        '<td style="text-align:left">' + (odMeta.porPieza ? 'Piezas' : 'Hojas') + '</td>' +
+        '<td>Hojas</td><td>Costo</td><td style="color:#4cd27d">Venta</td><td>Unit.</td><td></td></tr>';
+      for(const qi of listaQ){
+        const m2 = {...odMeta};
+        if(odMeta.porPieza) m2.pzCant = qi; else m2.hojas = qi;
+        m2.costoManual = null;          // el costo real cargado vale sólo para la cantidad principal
+        m2.ventaManual = null;
+        const c2 = odCalcular(m2);
+        if(!c2 || !(c2.hojas > 0)) continue;
+        const uds = odMeta.porPieza ? qi : c2.hojas;
+        const esActual = qi === (odMeta.porPieza ? odMeta.pzCant : odMeta.hojas);
+        hc += '<tr style="text-align:right' + (esActual ? ';background:rgba(90,184,255,.10)' : '') + '">' +
+          '<td style="text-align:left;padding:5px 3px"><b>' + qi.toLocaleString('es-AR') + '</b>' +
+            (esActual ? ' <span style="font-size:.58rem;color:#5ab8ff">actual</span>' : '') + '</td>' +
+          '<td>' + c2.hojas + '</td>' +
+          '<td>' + plata(c2.costo) + '</td>' +
+          '<td style="color:#4cd27d;font-weight:800">' + plata(c2.venta) + '</td>' +
+          '<td style="white-space:nowrap">' + plataUnit(uds > 0 ? c2.venta / uds : 0) + '</td>' +
+          '<td><button class="odUsarQ" data-q="' + qi + '" style="background:var(--ambar);color:#1a1200;border:none;border-radius:7px;padding:5px 8px;font-weight:800;font-size:.7rem">＋</button></td></tr>';
+      }
+      hc += '</table></div></div>';
+      r.innerHTML += hc;
+      setTimeout(()=>{
+        r.querySelectorAll('.odUsarQ').forEach(b=>{
+          b.onclick = ()=>{
+            const qi = parseInt(b.dataset.q);
+            if(odMeta.porPieza){
+              odMeta.pzCant = qi;
+              document.getElementById('odPzCant').value = qi;
+            }else{
+              odMeta.hojas = qi;
+              document.getElementById('odHojas').value = qi;
+            }
+            odMeta.hojasLista = null; odMeta.pzListaCant = null;
+            actualizarOffDig();
+            document.getElementById('odAgregar').click();
+          };
+        });
+      }, 0);
+    }
+
     // 🖨 ¿Conviene offset tradicional? (solo cotizando por pieza, papel de gramaje equivalente con precio)
     if(odMeta.porPieza && calc.posado && calc.posado.n > 0 && (odMeta.pzCant||0) > 0 && odMeta.papel !== 'auto'){
       const colAD = AD_COLORES.find(x=> x[0]===odMeta.modo);
@@ -10542,10 +10594,26 @@ function actualizarOffDig(){
   }
 }
 // entradas del armador
-document.getElementById('odHojas').addEventListener('input', e=>{ odMeta.hojas = parseInt(e.target.value)||null; actualizarOffDig(); });
+/* Se pueden tipear varias cantidades separadas por espacio. La primera es la
+   que manda (posado, costo real, venta pactada, ＋ Agregar); las demás salen
+   en una tabla de comparación abajo, cada una con su propio ＋. */
+function odLista(txt){
+  return String(txt||'').split(/[^0-9]+/).map(n=> parseInt(n)).filter(n=> n > 0).slice(0, 8);
+}
+document.getElementById('odHojas').addEventListener('input', e=>{
+  const L = odLista(e.target.value);
+  odMeta.hojasLista = L.length > 1 ? L : null;
+  odMeta.hojas = L[0] || null;
+  actualizarOffDig();
+});
 document.getElementById('odPzAncho').addEventListener('input', e=>{ odMeta.pzAncho = parseFloat(e.target.value)||null; odMedidaOriginal = null; actualizarOffDig(); });
 document.getElementById('odPzAlto').addEventListener('input', e=>{ odMeta.pzAlto = parseFloat(e.target.value)||null; odMedidaOriginal = null; actualizarOffDig(); });
-document.getElementById('odPzCant').addEventListener('input', e=>{ odMeta.pzCant = parseInt(e.target.value)||null; actualizarOffDig(); });
+document.getElementById('odPzCant').addEventListener('input', e=>{
+  const L = odLista(e.target.value);
+  odMeta.pzListaCant = L.length > 1 ? L : null;
+  odMeta.pzCant = L[0] || null;
+  actualizarOffDig();
+});
 document.getElementById('odDesc').addEventListener('input', e=>{ odMeta.desc = e.target.value.trim(); });
 document.getElementById('odModoHojas').onclick = ()=>{ odMeta.porPieza = false; renderOffDig(); };
 document.getElementById('odModoPieza').onclick = ()=>{ odMeta.porPieza = true; renderOffDig(); };
@@ -11430,29 +11498,38 @@ function compModulos(w, h, max){
 
 /* Combinación de tiradas más barata que cubra `unidades` módulos.
    Se pueden repetir y sumar, así que se busca de verdad el mínimo:
-   4.000 sale más barato como una de 5.000 que como dos de 2.000. */
+   4.000 sale más barato como una de 5.000 que como dos de 2.000.
+   OJO: el camino se guarda como "de qué tirada vine", NO como la lista
+   entera. Copiando la lista en cada paso el costo crece al cuadrado y
+   con cantidades grandes (un cero de más al tipear) cuelga la app. */
 function compMejorCombo(unidades, col){
-  if(unidades <= 0) return null;
+  if(!(unidades > 0)) return null;
   const ts = COMPARTIDO.tiradas.filter(t=> t.precio[col] > 0);
   if(!ts.length) return null;
   const paso = 1000;
   const tope = Math.ceil(unidades / paso);
-  const mejor = new Array(tope + 1).fill(null);
-  mejor[0] = {costo: 0, combo: []};
+  if(tope > 200000) return null;              // fuera de escala: no es un trabajo real
+  const costo = new Float64Array(tope + 1).fill(Infinity);
+  const vino  = new Int8Array(tope + 1).fill(-1);
+  costo[0] = 0;
   for(let i = 1; i <= tope; i++){
-    for(const t of ts){
-      const desde = Math.max(0, i - t.n/paso);
-      const prev = mejor[desde];
-      if(!prev) continue;
-      const c = prev.costo + t.precio[col];
-      if(!mejor[i] || c < mejor[i].costo)
-        mejor[i] = {costo: c, combo: prev.combo.concat([t.n])};
+    for(let k = 0; k < ts.length; k++){
+      const desde = Math.max(0, i - ts[k].n/paso);
+      if(costo[desde] === Infinity) continue;
+      const c = costo[desde] + ts[k].precio[col];
+      if(c < costo[i]){ costo[i] = c; vino[i] = k; }
     }
   }
-  const r = mejor[tope];
-  if(!r) return null;
-  const total = r.combo.reduce((s,n)=> s + n, 0);
-  return {costo: r.costo, combo: r.combo.sort((a,b)=> b-a), unidades: total};
+  if(costo[tope] === Infinity) return null;
+  const combo = [];
+  let i = tope;
+  while(i > 0 && vino[i] >= 0 && combo.length < 5000){
+    const t = ts[vino[i]];
+    combo.push(t.n);
+    i = Math.max(0, i - t.n/paso);
+  }
+  combo.sort((a,b)=> b - a);
+  return {costo: costo[tope], combo, unidades: combo.reduce((s,n)=> s + n, 0)};
 }
 
 /* ¿Este trabajo se puede hacer en pliego compartido? Devuelve el cálculo
@@ -11485,6 +11562,14 @@ function compartidoPara(pzW, pzH, cant, col, papel){
   };
 }
 
+/* "5000 + 5000 + 5000..." es ilegible: se agrupa en "3 × 5.000". */
+function comboTexto(combo){
+  const cuenta = new Map();
+  for(const n of combo) cuenta.set(n, (cuenta.get(n)||0) + 1);
+  return [...cuenta.entries()].sort((a,b)=> b[0]-a[0])
+    .map(([n,c])=> (c > 1 ? c + ' × ' : '') + n.toLocaleString('es-AR')).join(' + ');
+}
+
 /* Arma el compartido con la MISMA forma que una opción propia, para que
    entre como una fila más de la tabla: mismo %, misma venta, mismo ＋.
    Las columnas que no existen acá (papel, millar, chapas) van en cero. */
@@ -11498,7 +11583,7 @@ function compartidoComoOpcion(pzW, pzH, q, col, papel, margenBase){
   if(c.porModulo > 1) det.push('Entran ' + c.porModulo + ' piezas por módulo → ' + c.unidades.toLocaleString('es-AR') + ' módulos');
   else if(c.porPieza > 1) det.push('Cada pieza ocupa ' + c.porPieza + ' módulos → ' + c.unidades.toLocaleString('es-AR') + ' módulos');
   else det.push(c.unidades.toLocaleString('es-AR') + ' módulos');
-  det.push('Tiradas: ' + c.combo.map(n=> n.toLocaleString('es-AR')).join(' + ') + ' = ' + plata(c.costo));
+  det.push('Tiradas: ' + comboTexto(c.combo) + ' = ' + plata(c.costo));
   det.push('Lo cortan ellos y las piezas salen pegadas. Sin merma: entregan la cantidad justa.');
   if(c.salen > q) det.push('Salen ' + c.salen.toLocaleString('es-AR') + ' piezas (' + (c.salen - q).toLocaleString('es-AR') + ' de más).');
   return {
@@ -11508,7 +11593,7 @@ function compartidoComoOpcion(pzW, pzH, q, col, papel, margenBase){
     paqDec: 0, millares: 0, pasadasN: 0, chapas: 0,
     costo: c.costo, margen, venta, unitario: c.salen > 0 ? venta / c.salen : 0,
     maquina: 'pliego compartido', giro: false,
-    nota: c.combo.map(n=> n.toLocaleString('es-AR')).join('+') + ' módulos' +
+    nota: comboTexto(c.combo) + ' módulos' +
           (c.porModulo > 1 ? ' · ' + c.porModulo + ' por módulo' : '') +
           (c.porPieza > 1 ? ' · ' + c.porPieza + ' módulos c/u' : ''),
     desglose: det
@@ -12436,7 +12521,7 @@ function calcularAd(){
         (op.compartido ? 'Folletos compartido · ' : 'Offset AD · ') +
         pzW + '×' + pzH + 'cm · ' + adColSel + ' · ' + papel.nombre +
         ' · ' + op.piezas.toLocaleString('es-AR') + ' u (' +
-        (op.compartido ? op.combo.map(n=> n.toLocaleString('es-AR')).join('+') + ' módulos' : op.maquina + (op.giro?', giro':'')) + ')';
+        (op.compartido ? comboTexto(op.combo) + ' módulos' : op.maquina + (op.giro?', giro':'')) + ')';
       /* Para el cliente, en el orden en que lo lee: cuántas, de qué medida,
          en qué papel, a cuántos colores y con qué terminaciones.
          Sin "Offset AD", sin la máquina y sin los datos de compra del papel. */
