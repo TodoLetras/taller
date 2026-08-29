@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aro Ø600 · cartel saliente · dos modos de cierre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{color-scheme:dark;--acero:#0d1622;--panel:#152337;--panel-alto:#1c2f47;--linea:#2a4160;
+    --texto:#e6edf6;--tenue:#8ba3c0;--ambar:#f7b733;--rojo:#e2412f;--radio:10px}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--acero);
+    font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px;background:var(--acero);
+    min-height:100vh;color:var(--texto)}
+  header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  h1{color:var(--texto);font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0;text-transform:uppercase}
+  header .sub{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--tenue);
+    letter-spacing:.08em;text-transform:uppercase}
+  .escena{position:relative;border:1px solid var(--linea);border-radius:var(--radio);overflow:hidden;
+    background:linear-gradient(180deg,#101d2e 0%,#0b1421 100%);touch-action:none;height:min(58vh,420px)}
+  .escena canvas{display:block;width:100%;height:100%}
+  .hint{position:absolute;left:10px;bottom:9px;font-family:'IBM Plex Mono',monospace;font-size:10px;
+    color:#5f7a99;letter-spacing:.06em;pointer-events:none}
+  .barra{display:flex;gap:8px;margin:10px 0 16px;flex-wrap:wrap}
+  button.tgl{flex:1 1 auto;min-width:92px;background:var(--panel);color:var(--texto);border:1px solid var(--linea);
+    border-radius:8px;padding:9px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;transition:.15s}
+  button.tgl[aria-pressed="true"]{background:var(--ambar);border-color:var(--ambar);color:#1a1204}
+  button.tgl:focus-visible,input:focus-visible{outline:2px solid var(--ambar);outline-offset:2px}
+  h2{font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--tenue);margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--linea)}
+  .campo{margin-bottom:14px}
+  .campo .fila{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px}
+  .campo label{font-size:14px;color:var(--texto)}
+  .campo .val{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:var(--ambar)}
+  .campo .val span{color:var(--tenue);font-weight:400;font-size:11px;margin-left:2px}
+  .campo.off{opacity:.4}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:26px;background:transparent;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--linea);border-radius:2px}
+  input[type=range]::-moz-range-track{height:3px;background:var(--linea);border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-10px;
+    border-radius:50%;background:var(--texto);border:3px solid var(--acero);box-shadow:0 0 0 1px var(--linea)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border:3px solid var(--acero);border-radius:50%;
+    background:var(--texto);box-shadow:0 0 0 1px var(--linea)}
+  .datos{border:1px solid var(--linea);border-radius:var(--radio);overflow:hidden}
+  .dato{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 12px;
+    border-bottom:1px solid var(--linea);background:var(--panel)}
+  .dato:last-child{border-bottom:0}
+  .dato.destacado{background:var(--panel-alto)}
+  .dato .k{font-size:13px;color:var(--tenue)}
+  .dato .v{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;white-space:nowrap}
+  .dato.destacado .v{color:var(--ambar);font-size:17px}
+  .descargas{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .descargas button{background:transparent;border:1px solid var(--ambar);color:var(--ambar);border-radius:8px;
+    padding:12px 8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .descargas button:active{background:var(--ambar);color:#1a1204}
+  .descargas button:disabled{opacity:.35;border-color:var(--linea);color:var(--tenue);cursor:not-allowed}
+  .aviso{font-size:12px;line-height:1.55;color:var(--tenue);margin-top:14px}
+  .aviso b{color:var(--texto);font-weight:600}
+  .error{color:var(--rojo);font-size:13px;margin-top:8px;min-height:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Aro para cartel saliente</h1>
+    <span class="sub" id="modoTxt">modo mixto</span>
+  </header>
+
+  <div class="escena" id="escena"><div class="hint">arrastrá para girar · dos dedos para acercar</div></div>
+
+  <div class="barra">
+    <button class="tgl" id="btnModo" aria-pressed="false">Dos ángulos</button>
+    <button class="tgl" id="btnNervio" aria-pressed="true">Nervio</button>
+    <button class="tgl" id="btnTornillo" aria-pressed="true">Prisionero</button>
+    <button class="tgl" id="btnTapas" aria-pressed="true">Tapas</button>
+    <button class="tgl" id="btnCano" aria-pressed="true">Caños</button>
+  </div>
+
+  <h2>Medidas</h2>
+  <div id="controles"></div>
+
+  <h2>Para fabricar</h2>
+  <div class="datos" id="datos"></div>
+  <div class="error" id="error"></div>
+
+  <h2>Archivos</h2>
+  <div class="descargas">
+    <button id="dlAro">STL · aro completo</button>
+    <button id="dlAng">STL · ángulo rolado</button>
+    <button id="dlGuia">STL · guía del fondo</button>
+    <button id="dlDxfFijo">DXF · acrílico fijo</button>
+    <button id="dlDxfAng">DXF · acrílico del ángulo</button>
+  </div>
+
+  <p class="aviso">
+    Sale de una pieza, parado sobre el canto: Ø600 de huella y 100 de alto.
+    Los refuerzos del caño, la ménsula a 45°, el nervio y la torre del prisionero salen
+    en la misma impresión, sin soportes.
+    El <b>prisionero</b> entra por la cara desmontable y muerde el caño desde arriba, así el cartel
+    no se corre. Poné inserto de bronce a calor y taladrá Ø5,5 los 4 mm de la tapa del manguito.
+    Con más de un caño van <b>paralelos</b> entre sí, entrando los dos del lado de la pared,
+    así se atornillan a una misma placa y trancan el giro.
+    La <b>guía del fondo</b> es una cuna que abraza la punta del caño contra la pared de enfrente y le hace
+    de tope. Va suelta a propósito: se atornilla desde afuera <b>después</b> de meter el acrílico fijo,
+    porque si viniera impresa con el aro no lo dejaría pasar.
+    Orden: aro, acrílico fijo, caños, guías, prisioneros, módulos y cara desmontable.
+    El <b>ángulo rolado</b> se imprime aparte y acostado, con el ala parada; es la misma pieza para los
+    dos lados, se da vuelta y listo.
+  </p>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const P = [
+  {id:"diam", label:"Diámetro exterior", min:200, max:1200, step:10, val:600, u:"mm"},
+  {id:"alto", label:"Profundidad del aro", min:40, max:300, step:5, val:100, u:"mm"},
+  {id:"pared",label:"Espesor de pared", min:2, max:15, step:.5, val:3, u:"mm"},
+  {id:"acr",  label:"Espesor del acrílico", min:2, max:10, step:.5, val:4, u:"mm"},
+  {id:"asie", label:"Profundidad del asiento fijo", min:6, max:40, step:1, val:12, u:"mm", soloA:true},
+  {id:"pest", label:"Mordida del asiento", min:4, max:30, step:1, val:12, u:"mm", soloA:true},
+  {id:"ala",  label:"Ala del ángulo sobre el acrílico", min:8, max:40, step:1, val:12, u:"mm"},
+  {id:"faldon",label:"Ala del ángulo sobre el aro", min:8, max:60, step:1, val:12, u:"mm"},
+  {id:"cano", label:"Lado del caño", min:10, max:80, step:1, val:30, u:"mm"},
+  {id:"holg", label:"Holgura del encastre", min:0, max:2, step:.1, val:.6, u:"mm"},
+  {id:"rInt", label:"Refuerzo hacia adentro", min:0, max:20, step:1, val:6, u:"mm"},
+  {id:"rExt", label:"Refuerzo hacia afuera", min:0, max:30, step:1, val:10, u:"mm"},
+  {id:"guia", label:"Largo de la guía del fondo", min:0, max:90, step:5, val:40, u:"mm"},
+  {id:"canos",label:"Cantidad de caños", min:1, max:3, step:1, val:2, u:""},
+  {id:"sep",  label:"Separación entre ejes", min:40, max:400, step:10, val:140, u:"mm"}
+];
+const V = {}; P.forEach(p => V[p.id] = p.val);
+let modoB = false, nervio = true, prisionero = true, verTapas = true, verCano = true;
+
+const CORN = 4, CORNL = 8, ESPANG = 4, PARM = 4, NERVW = 12, NERVH = 4;
+const DPRIS = 11, DHUECO = 5.5, HPRIS = 12, GAPPRIS = 8;
+
+const cont = document.getElementById("controles");
+P.forEach(p => {
+  const d = document.createElement("div");
+  d.className = "campo"; d.id = "c_"+p.id;
+  d.innerHTML = '<div class="fila"><label for="i_'+p.id+'">'+p.label+'</label>'+
+    '<span class="val" id="v_'+p.id+'"></span></div>'+
+    '<input type="range" id="i_'+p.id+'" min="'+p.min+'" max="'+p.max+'" step="'+p.step+'" value="'+p.val+'">';
+  cont.appendChild(d);
+  d.querySelector("input").addEventListener("input", e => { V[p.id] = parseFloat(e.target.value); refrescar(); });
+});
+function fmt(n){ return (Math.round(n*10)/10).toString().replace(".", ","); }
+function pintarValores(){
+  P.forEach(p => {
+    const t = p.id === "canos" ? (V.canos===1 ? "uno" : V.canos+" caños")
+            : p.id === "sep" ? (V.canos===1 ? "—" : fmt(V.sep)+"<span>mm</span>")
+            : p.id === "guia" && V.guia === 0 ? "sin guía"
+            : p.id === "cano" ? fmt(V.cano)+"<span>× "+fmt(V.cano)+" mm</span>"
+            : fmt(V[p.id])+'<span>'+p.u+'</span>';
+    document.getElementById("v_"+p.id).innerHTML = t;
+    document.getElementById("c_"+p.id).className = "campo" + ((p.soloA && modoB) ? " off" : "");
+  });
+  document.getElementById("modoTxt").textContent = modoB ? "dos ángulos · dos caras Ø"+V.diam
+                                                         : "cara fija + ángulo";
+}
+function tgl(id, get, set){
+  const b = document.getElementById(id);
+  b.addEventListener("click", ()=>{ set(!get()); b.setAttribute("aria-pressed", get()?"true":"false"); refrescar(); });
+}
+tgl("btnModo",()=>modoB,v=>modoB=v);
+tgl("btnNervio",()=>nervio,v=>nervio=v);
+tgl("btnTornillo",()=>prisionero,v=>prisionero=v);
+tgl("btnTapas",()=>verTapas,v=>verTapas=v);
+tgl("btnCano",()=>verCano,v=>verCano=v);
+
+// ---------------- malla ----------------
+function pt(t,r,z){ return [r*Math.cos(t), r*Math.sin(t), z]; }
+function tri(a,p,q,r){ a.push(p[0],p[1],p[2], q[0],q[1],q[2], r[0],r[1],r[2]); }
+function quad(a,p0,p1,p2,p3){ tri(a,p0,p1,p2); tri(a,p0,p2,p3); }
+function geo(arr){
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(arr,3));
+  g.computeVertexNormals();
+  return g;
+}
+function invertir(g){
+  const ng = g.index ? g.toNonIndexed() : g;
+  const p = ng.attributes.position.array;
+  for (let i=0;i<p.length;i+=9)
+    for (let k=0;k<3;k++){ const t = p[i+3+k]; p[i+3+k] = p[i+6+k]; p[i+6+k] = t; }
+  ng.computeVertexNormals();
+  return ng;
+}
+function revol(perf, t0, t1){
+  const a = [], n = Math.max(3, Math.ceil(Math.abs(t1-t0)/(Math.PI/72))), st = (t1-t0)/n;
+  for (let i=0;i<n;i++){
+    const ta = t0+i*st, tb = ta+st;
+    for (let j=0;j<perf.length;j++){
+      const p = perf[j], q = perf[(j+1)%perf.length];
+      if (Math.abs(p[0]-q[0])<1e-9 && Math.abs(p[1]-q[1])<1e-9) continue;
+      quad(a, pt(ta,p[0],p[1]), pt(tb,p[0],p[1]), pt(tb,q[0],q[1]), pt(ta,q[0],q[1]));
+    }
+  }
+  const g = [geo(a)];
+  if (Math.abs((t1-t0) - 2*Math.PI) > 1e-6){
+    const forma = new THREE.Shape(perf.map(p => new THREE.Vector2(p[0], p[1])));
+    [[t0,false],[t1,true]].forEach(([t,flip]) => {
+      let c = new THREE.ShapeGeometry(forma);
+      c.applyMatrix4(new THREE.Matrix4().makeBasis(
+        new THREE.Vector3(Math.cos(t), Math.sin(t), 0),
+        new THREE.Vector3(0,0,1),
+        new THREE.Vector3(Math.sin(t), -Math.cos(t), 0)));
+      if (flip) c = invertir(c);
+      g.push(c);
+    });
+  }
+  return g;
+}
+function marco(c){ return {x:[Math.cos(c),Math.sin(c),0], y:[-Math.sin(c),Math.cos(c),0]}; }
+function Lp(m,x,y,z){ return [m.x[0]*x+m.y[0]*y, m.x[1]*x+m.y[1]*y, z]; }
+function caja(c,x0,x1,y0,y1,z0,z1){
+  const m = marco(c), a = [], v = (x,y,z)=>Lp(m,x,y,z);
+  quad(a, v(x1,y0,z0), v(x1,y1,z0), v(x1,y1,z1), v(x1,y0,z1));
+  quad(a, v(x0,y1,z0), v(x0,y0,z0), v(x0,y0,z1), v(x0,y1,z1));
+  quad(a, v(x0,y1,z0), v(x0,y1,z1), v(x1,y1,z1), v(x1,y1,z0));
+  quad(a, v(x0,y0,z0), v(x1,y0,z0), v(x1,y0,z1), v(x0,y0,z1));
+  quad(a, v(x0,y0,z1), v(x1,y0,z1), v(x1,y1,z1), v(x0,y1,z1));
+  quad(a, v(x0,y0,z0), v(x0,y1,z0), v(x1,y1,z0), v(x1,y0,z0));
+  return geo(a);
+}
+// cuña a 45°: lg>0 hacia adentro, lg<0 hacia afuera
+function mensula(c, xExt, lg, zBase, y0, y1){
+  const m = marco(c), a = [], v = (x,y,z)=>Lp(m,x,y,z);
+  const A0=v(xExt,y0,zBase), B0=v(xExt-lg,y0,zBase), C0=v(xExt,y0,zBase-Math.abs(lg));
+  const A1=v(xExt,y1,zBase), B1=v(xExt-lg,y1,zBase), C1=v(xExt,y1,zBase-Math.abs(lg));
+  tri(a,A0,C0,B0); tri(a,A1,B1,C1);
+  quad(a,A0,B0,B1,A1); quad(a,B0,C0,C1,B1); quad(a,C0,A0,A1,C1);
+  return geo(a);
+}
+// torre cilíndrica hueca con eje z
+function torre(cx, cy, z0, z1, rOut, rIn, n){
+  const a = [];
+  n = n || 28;
+  for (let i=0;i<n;i++){
+    const t0 = i*2*Math.PI/n, t1 = (i+1)*2*Math.PI/n;
+    const O = (r,t,z) => [cx + r*Math.cos(t), cy + r*Math.sin(t), z];
+    quad(a, O(rOut,t0,z0), O(rOut,t1,z0), O(rOut,t1,z1), O(rOut,t0,z1));
+    quad(a, O(rIn,t0,z0), O(rIn,t0,z1), O(rIn,t1,z1), O(rIn,t1,z0));
+    quad(a, O(rIn,t0,z1), O(rOut,t0,z1), O(rOut,t1,z1), O(rIn,t1,z1));
+    quad(a, O(rIn,t0,z0), O(rIn,t1,z0), O(rOut,t1,z0), O(rOut,t0,z0));
+  }
+  return geo(a);
+}
+
+// ---------------- medidas ----------------
+function M(){
+  const Ro = V.diam/2, Ri = Ro - V.pared;
+  const w = V.cano + V.holg, wg = w + 2*PARM;
+  const zc = V.alto/2;
+  const z1 = zc - w/2, z2 = zc + w/2;
+  const alfa = Math.asin(Math.min(.95,(w/2)/Ri));
+  const Rfijo = Ri - V.pest;                       // borde interno del asiento
+  const paso = 2*(Ri - Math.max(V.rInt,0)) - 2;    // paso libre entre refuerzos
+  const dFijo = Math.min(2*Rfijo + V.pest, paso);  // el acrílico fijo no puede pasarse del paso
+  const mordida = (dFijo - 2*Rfijo)/2;
+  return {Ro,Ri,w,wg,zc,z1,z2,alfa,Rfijo,dFijo,paso,mordida};
+}
+function problemas(){
+  const m = M(), e = [];
+  if (!modoB && V.pest > V.asie) e.push("El cono del asiento queda más chato que 45°: subí la profundidad del asiento o bajá la mordida.");
+  if (!modoB && m.mordida < 2) e.push("El acrílico fijo no muerde el asiento: achicá el refuerzo hacia adentro o subí la mordida.");
+  if (m.z1 < CORNL + 6) e.push("El caño queda muy cerca del canto: subí la profundidad del aro.");
+  if (V.cano + 2*V.holg >= V.diam/3) e.push("El caño es muy grande para ese diámetro.");
+  if (V.canos > 1 && V.sep < m.wg + 8) e.push("Los caños se pisan: separalos más.");
+  const ks = canos(), lim = (V.canos-1)/2*V.sep + m.w/2 + PARM;
+  if (lim > m.Ri*0.86) e.push("Los caños quedan muy al borde del aro: acercalos.");
+  for (let i=0;i<ks.length-1;i++)
+    if (ks[i+1].a0 < ks[i].a1 + .02) e.push("Las ventanas se tocan entre sí.");
+  if (nervio && (m.zc - NERVW/2 < CORNL + 2)) e.push("El nervio choca con la cornisa.");
+  if (V.faldon > V.alto*0.6) e.push("El ala del ángulo sobre el aro tapa medio cartel.");
+  return e;
+}
+// Los caños son paralelos entre sí y al eje que apunta a la pared (180°).
+// Cada uno es una cuerda a distancia o del centro; la ventana en la banda queda oblicua.
+function canos(){
+  const m = M(), out = [];
+  const th = y => { let a = Math.atan2(-y, -Math.sqrt(Math.max(1, m.Ri*m.Ri - y*y)));
+                    return (a + 2*Math.PI) % (2*Math.PI); };
+  for (let k=0;k<V.canos;k++){
+    const o = (k - (V.canos-1)/2) * V.sep;
+    const A = th(o - m.w/2), B = th(o + m.w/2);
+    out.push({o, a0: Math.min(A,B), a1: Math.max(A,B), th: th(o),
+              xi: Math.sqrt(Math.max(1, m.Ri*m.Ri - o*o)),
+              xo: Math.sqrt(Math.max(1, m.Ro*m.Ro - o*o))});
+  }
+  out.sort((p,q)=>p.a0-q.a0);
+  return out;
+}
+
+// ---------------- perfiles ----------------
+function perfAro(){
+  const m = M(), H = V.alto, p = [];
+  if (modoB) p.push([m.Ri,0],[m.Ro,0]);
+  else p.push([m.Ri,0],[m.Ro+CORN,0],[m.Ro+CORN,CORNL],[m.Ro,CORNL]);
+  if (nervio){
+    p.push([m.Ro, m.zc-NERVW/2],[m.Ro+NERVH, m.zc],[m.Ro, m.zc+NERVW/2]);
+  }
+  p.push([m.Ro,H],[m.Ri,H]);
+  if (!modoB) p.push([m.Ri,V.asie],[m.Rfijo,V.asie]);
+  return p;
+}
+function perfAngulo(lado){          // lado -1: apoyado en z=0 (la que se exporta)
+  const m = M(), H = V.alto;
+  const ze = lado > 0 ? H : 0, d = lado;
+  const zf = ze + d*V.acr;                      // cara externa del acrílico
+  return [[m.Ro-V.ala, zf],[m.Ro, zf],[m.Ro, ze - d*V.faldon],
+          [m.Ro+ESPANG, ze - d*V.faldon],[m.Ro+ESPANG, zf + d*ESPANG],[m.Ro-V.ala, zf + d*ESPANG]];
+}
+function refuerzos(){
+  const m = M(), g = [], h = m.w/2, hg = m.wg/2, C = Math.PI;
+  canos().forEach(k => {
+    const x1 = k.xo + V.rExt, x0 = k.xi - V.rInt;
+    g.push(caja(C,x0,x1,k.o-hg,k.o-h,m.zc-hg,m.zc+hg));
+    g.push(caja(C,x0,x1,k.o+h,k.o+hg,m.zc-hg,m.zc+hg));
+    g.push(caja(C,x0,x1,k.o-h,k.o+h,m.zc-hg,m.zc-h));
+    if (prisionero){
+      g.push(caja(C,x0,x1,k.o-h,k.o-GAPPRIS/2,m.zc+h,m.zc+hg));
+      g.push(caja(C,x0,x1,k.o+GAPPRIS/2,k.o+h,m.zc+h,m.zc+hg));
+      const xb = k.xo - DPRIS/2, P = Lp(marco(C), xb, k.o, 0);
+      g.push(torre(P[0], P[1], m.zc+h, m.zc+h+HPRIS, DPRIS/2, DHUECO/2));
+    } else {
+      g.push(caja(C,x0,x1,k.o-h,k.o+h,m.zc+h,m.zc+hg));
+    }
+    if (V.rInt > 0) g.push(mensula(C, k.xi, V.rInt, m.zc-hg, k.o-hg, k.o+hg));
+    if (V.rExt > 0) g.push(mensula(C, k.xo, -V.rExt, m.zc-hg, k.o-hg, k.o+hg));
+  });
+  return g;
+}
+// Cuna del fondo: abraza la punta del caño contra la pared opuesta.
+// Va atornillada después de meter el acrílico fijo, por eso es pieza suelta.
+function guias(){
+  if (V.guia <= 0) return [];
+  const m = M(), g = [], h = m.w/2, hg = m.wg/2, C = Math.PI, esp = PARM;
+  canos().forEach(k => {
+    const x0 = -k.xi, x1 = -k.xi + V.guia;
+    g.push(caja(C, x0-esp-2, x0, k.o-hg, k.o+hg, m.zc-hg, m.zc+hg));       // respaldo y tope
+    g.push(caja(C, x0, x1, k.o-hg, k.o+hg, m.zc-hg, m.zc-h));              // piso
+    g.push(caja(C, x0, x1, k.o-hg, k.o-h, m.zc-h, m.zc+hg));               // costado
+    g.push(caja(C, x0, x1, k.o+h, k.o+hg, m.zc-h, m.zc+hg));               // costado
+  });
+  return g;
+}
+function guiaUna(){
+  if (V.guia <= 0) return [];
+  const m = M(), h = m.w/2, hg = m.wg/2, C = 0, esp = PARM, g = [];
+  const x0 = 0, x1 = V.guia;
+  g.push(caja(C, x0-esp-2, x0, -hg, hg, -hg, hg));
+  g.push(caja(C, x0, x1, -hg, hg, -hg, -h));
+  g.push(caja(C, x0, x1, -hg, -h, -h, hg));
+  g.push(caja(C, x0, x1, h, hg, -h, hg));
+  return g;
+}
+function aroGeoms(){
+  const m = M(), g = [], H = V.alto;
+  const cortar = (zA,zB) => {
+    const q = [];
+    q.push([m.Ri,zA],[m.Ro,zA]);
+    if (nervio && m.zc > zA && m.zc < zB){
+      q.push([m.Ro,Math.max(zA,m.zc-NERVW/2)],[m.Ro+NERVH,m.zc],[m.Ro,Math.min(zB,m.zc+NERVW/2)]);
+    }
+    q.push([m.Ro,zB],[m.Ri,zB]);
+    return q;
+  };
+  // tramo inferior (con cornisa o canto) y superior (con asiento)
+  const inf = [], sup = [];
+  if (modoB) inf.push([m.Ri,0],[m.Ro,0]);
+  else inf.push([m.Ri,0],[m.Ro+CORN,0],[m.Ro+CORN,CORNL],[m.Ro,CORNL]);
+  inf.push([m.Ro,m.z1],[m.Ri,m.z1]);
+  sup.push([m.Ri,m.z2],[m.Ro,m.z2]);
+  if (nervio && m.zc+NERVW/2 > m.z2){
+    sup.push([m.Ro,Math.max(m.z2,m.zc-NERVW/2)],[m.Ro+NERVH,m.zc],[m.Ro,m.zc+NERVW/2]);
+  }
+  sup.push([m.Ro,V.alto],[m.Ri,V.alto]);
+  if (!modoB) sup.push([m.Ri,V.asie],[m.Rfijo,V.asie]);
+  revol(inf, 0, 2*Math.PI).forEach(x=>g.push(x));
+  revol(sup, 0, 2*Math.PI).forEach(x=>g.push(x));
+  // anillo del medio, cortado en las ventanas
+  const med = cortar(m.z1, m.z2), ks = canos();
+  for (let i=0;i<ks.length;i++){
+    const desde = ks[i].a1;
+    const hasta = (i === ks.length-1) ? ks[0].a0 + 2*Math.PI : ks[i+1].a0;
+    if (hasta > desde + 1e-4) revol(med, desde, hasta).forEach(x=>g.push(x));
+  }
+  refuerzos().forEach(x=>g.push(x));
+  return g;
+}
+
+// ---------------- escena ----------------
+const cajaEsc = document.getElementById("escena");
+const escena = new THREE.Scene();
+const camara = new THREE.PerspectiveCamera(38,1,1,30000);
+const render = new THREE.WebGLRenderer({antialias:true, alpha:true});
+render.setPixelRatio(Math.min(devicePixelRatio,2));
+render.outputEncoding = THREE.sRGBEncoding;
+cajaEsc.appendChild(render.domElement);
+escena.add(new THREE.AmbientLight(0x9ab4d4,.6));
+const key = new THREE.DirectionalLight(0xffffff,.9); key.position.set(500,800,900); escena.add(key);
+const fill = new THREE.DirectionalLight(0x74a0d6,.5); fill.position.set(-800,-300,-400); escena.add(fill);
+
+const matAro = new THREE.MeshStandardMaterial({color:0x33445c,roughness:.6,metalness:.2,side:THREE.DoubleSide});
+const matAng = new THREE.MeshStandardMaterial({color:0x7f97b6,roughness:.5,metalness:.15,side:THREE.DoubleSide});
+const matCano= new THREE.MeshStandardMaterial({color:0xf7b733,roughness:.35,metalness:.5,
+  transparent:true,opacity:.8,side:THREE.DoubleSide});
+const matAcr = new THREE.MeshStandardMaterial({color:0xe8f1fb,roughness:.1,transparent:true,
+  opacity:.3,side:THREE.DoubleSide});
+
+const grupo = new THREE.Group();
+escena.add(grupo);
+function reconstruir(){
+  while (grupo.children.length){ const c = grupo.children.pop(); if (c.geometry) c.geometry.dispose(); }
+  const m = M();
+  aroGeoms().forEach(g => grupo.add(new THREE.Mesh(g, matAro)));
+  if (verTapas){
+    revol(perfAngulo(1), 0, 2*Math.PI).forEach(g => grupo.add(new THREE.Mesh(g, matAng)));
+    if (modoB) revol(perfAngulo(-1), 0, 2*Math.PI).forEach(g => grupo.add(new THREE.Mesh(g, matAng)));
+    // acrílicos
+    const discos = [[m.Ro, V.alto + V.acr/2]];
+    if (modoB) discos.push([m.Ro, -V.acr/2]);
+    else discos.push([m.dFijo/2, V.asie + V.acr/2]);
+    discos.forEach(([r,z]) => {
+      const d = new THREE.Mesh(new THREE.CylinderGeometry(r, r, V.acr, 96), matAcr);
+      d.rotation.x = Math.PI/2; d.position.z = z; grupo.add(d);
+    });
+  }
+  guias().forEach(g => grupo.add(new THREE.Mesh(g, matAng)));
+  if (verCano)
+    canos().forEach(k => {
+      const fondo = V.guia > 0 ? -(k.xi - 2) : -(k.xi - V.rInt - 10);
+      grupo.add(new THREE.Mesh(caja(Math.PI, fondo, k.xo + V.diam*.3,
+        k.o-V.cano/2, k.o+V.cano/2, m.zc-V.cano/2, m.zc+V.cano/2), matCano));
+    });
+  grupo.position.z = -V.alto/2;
+}
+
+let rotY=-.75, rotX=.35, dist=1500, arr=null, pin=null;
+function encuadrar(){ dist = Math.max(V.diam, V.alto*3)*2.0; }
+const el = render.domElement;
+el.addEventListener("pointerdown", e => { arr={x:e.clientX,y:e.clientY}; el.setPointerCapture(e.pointerId); });
+el.addEventListener("pointermove", e => { if(!arr) return;
+  rotY -= (e.clientX-arr.x)*.008; rotX -= (e.clientY-arr.y)*.006;
+  rotX = Math.max(-1.45, Math.min(1.45, rotX)); arr={x:e.clientX,y:e.clientY}; });
+["pointerup","pointercancel","pointerleave"].forEach(t=>el.addEventListener(t,()=>arr=null));
+el.addEventListener("wheel", e=>{ e.preventDefault();
+  dist = Math.max(V.diam*.5, Math.min(V.diam*6, dist*(1+e.deltaY*.001))); }, {passive:false});
+el.addEventListener("touchstart", e=>{ if(e.touches.length===2)
+  pin = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); },{passive:true});
+el.addEventListener("touchmove", e=>{ if(e.touches.length===2 && pin){
+  const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+  dist = Math.max(V.diam*.5, Math.min(V.diam*6, dist*pin/d)); pin=d; arr=null; } },{passive:true});
+el.addEventListener("touchend",()=>pin=null);
+function medir(){ const w=cajaEsc.clientWidth,h=cajaEsc.clientHeight;
+  render.setSize(w,h,false); camara.aspect=w/h; camara.updateProjectionMatrix(); }
+addEventListener("resize", medir);
+const reducido = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function loop(){
+  requestAnimationFrame(loop);
+  if (!arr && !reducido) rotY += .0022;
+  camara.position.set(dist*Math.cos(rotX)*Math.sin(rotY), dist*Math.sin(rotX), dist*Math.cos(rotX)*Math.cos(rotY));
+  camara.lookAt(0,0,0);
+  render.render(escena, camara);
+}
+
+// ---------------- datos ----------------
+function volumen(perf){
+  let A = 0, cx = 0;
+  for (let i=0;i<perf.length;i++){
+    const p = perf[i], q = perf[(i+1)%perf.length];
+    const cr = p[0]*q[1] - q[0]*p[1];
+    A += cr; cx += (p[0]+q[0])*cr;
+  }
+  A /= 2; cx = cx/(6*A);
+  return Math.abs(2*Math.PI*cx*A);
+}
+function pintarDatos(){
+  const m = M(), nv = V.canos;
+  const volRef = nv*((m.wg*m.wg - m.w*m.w)*(V.rInt+V.rExt+V.pared)
+                   + m.wg*(V.rInt*V.rInt + V.rExt*V.rExt)/2);
+  const vol = (volumen(perfAro()) - nv*m.w*m.w*V.pared + volRef
+             + (modoB?2:1)*volumen(perfAngulo(-1)))/1000;
+  const filas = [
+    ["Cama de impresión", "Ø"+fmt(V.diam + 2*Math.max(V.rExt, modoB?0:CORN, nervio?NERVH:0))+
+      " × "+fmt(V.alto)+" alto", true],
+    [modoB ? "Acrílicos ×2" : "Acrílico del ángulo", "Ø"+fmt(V.diam)+" mm", false]
+  ];
+  if (!modoB){
+    filas.push(["Acrílico fijo", "Ø"+fmt(m.dFijo)+" mm · muerde "+fmt(m.mordida)+" mm", true]);
+    filas.push(["Paso libre entre refuerzos", "Ø"+fmt(m.paso)+" mm", false]);
+    filas.push(["Luz visible de la cara fija", "Ø"+fmt(2*m.Rfijo)+" mm", false]);
+  }
+  filas.push(["Encastres", nv+(nv===1?" caño":" caños paralelos")+
+    (nv>1?" a "+fmt(V.sep)+" mm":"")+" · eje a "+fmt(m.zc)+" del canto", false]);
+  filas.push(["Luz del encastre", fmt(m.w)+" × "+fmt(m.w)+" mm", false]);
+  if (V.guia > 0) filas.push(["Guía del fondo", nv+(nv===1?" pieza":" piezas")+" de "+fmt(V.guia)+
+    " mm · 2 tornillos c/u", false]);
+  if (prisionero) filas.push(["Prisioneros", nv+" · inserto M5 · Ø"+fmt(DHUECO)+" el hueco", false]);
+  filas.push(["Ángulo rolado", (modoB?"2 piezas":"1 pieza")+" · ala "+fmt(V.ala)+" mm", false]);
+  filas.push(["Material sólido", fmt(vol)+" cm³ · "+Math.round(vol*1.24)+" g", false]);
+  filas.push(["Impreso ~20 % relleno", "≈ "+Math.round(vol*1.24*.62)+" g", false]);
+  document.getElementById("datos").innerHTML = filas.map(f =>
+    '<div class="dato'+(f[2]?' destacado':'')+'"><span class="k">'+f[0]+'</span><span class="v">'+f[1]+'</span></div>').join("");
+}
+
+// ---------------- exportar ----------------
+function stl(geoms){
+  const t = [];
+  geoms.forEach(g => {
+    const ng = g.index ? g.toNonIndexed() : g;
+    const p = ng.attributes.position.array;
+    for (let i=0;i<p.length;i+=9)
+      t.push([[p[i],p[i+1],p[i+2]],[p[i+3],p[i+4],p[i+5]],[p[i+6],p[i+7],p[i+8]]]);
+  });
+  const buf = new ArrayBuffer(84+t.length*50), dv = new DataView(buf);
+  dv.setUint32(80, t.length, true);
+  let o = 84;
+  t.forEach(f => {
+    const ux=f[1][0]-f[0][0],uy=f[1][1]-f[0][1],uz=f[1][2]-f[0][2];
+    const vx=f[2][0]-f[0][0],vy=f[2][1]-f[0][1],vz=f[2][2]-f[0][2];
+    let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    const l = Math.hypot(nx,ny,nz)||1;
+    dv.setFloat32(o,nx/l,true); dv.setFloat32(o+4,ny/l,true); dv.setFloat32(o+8,nz/l,true); o+=12;
+    f.forEach(v=>{ dv.setFloat32(o,v[0],true); dv.setFloat32(o+4,v[1],true); dv.setFloat32(o+8,v[2],true); o+=12; });
+    dv.setUint16(o,0,true); o+=2;
+  });
+  return new Blob([buf],{type:"model/stl"});
+}
+function centrar(gs){
+  const b = new THREE.Box3();
+  gs.forEach(g=>{ g.computeBoundingBox(); b.union(g.boundingBox); });
+  gs.forEach(g => g.translate(-(b.min.x+b.max.x)/2, -(b.min.y+b.max.y)/2, -b.min.z));
+  return gs;
+}
+function bajar(b,n){ const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=n; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000); }
+function dxf(d, nombre){
+  const t = ["0","SECTION","2","ENTITIES","0","CIRCLE","8","ACRILICO","10","0.0","20","0.0","30","0.0",
+             "40",(d/2).toFixed(3),"0","ENDSEC","0","EOF"].join("\n");
+  bajar(new Blob([t],{type:"application/dxf"}), nombre);
+}
+document.getElementById("dlAro").addEventListener("click",()=>{
+  bajar(stl(centrar(aroGeoms())), "aro"+V.diam+"x"+V.alto+(modoB?"_2angulos":"_mixto")+".stl"); });
+document.getElementById("dlAng").addEventListener("click",()=>{
+  bajar(stl(centrar(revol(perfAngulo(-1),0,2*Math.PI))), "angulo_rolado_"+V.diam+".stl"); });
+document.getElementById("dlGuia").addEventListener("click",()=>{
+  bajar(stl(centrar(guiaUna())), "guia_cano"+V.cano+".stl"); });
+document.getElementById("dlDxfFijo").addEventListener("click",()=>{
+  dxf(M().dFijo, "acrilico_fijo_D"+Math.round(M().dFijo)+".dxf"); });
+document.getElementById("dlDxfAng").addEventListener("click",()=>{
+  dxf(V.diam, "acrilico_D"+V.diam+".dxf"); });
+
+function refrescar(){
+  const e = problemas();
+  document.getElementById("error").textContent = e.join(" ");
+  ["dlAro","dlAng","dlGuia","dlDxfFijo","dlDxfAng"].forEach(id => document.getElementById(id).disabled = e.length>0);
+  if (!e.length){
+    document.getElementById("dlDxfFijo").disabled = modoB;
+    document.getElementById("dlGuia").disabled = V.guia <= 0;
+  }
+  pintarValores(); pintarDatos(); encuadrar();
+  if (!e.length) reconstruir();
+}
+medir(); refrescar(); loop();
+})();
+</script>
+</body>
+</html>
