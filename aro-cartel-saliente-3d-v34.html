@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aro Ø600 · cartel saliente · dos modos de cierre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{color-scheme:dark;--acero:#0d1622;--panel:#152337;--panel-alto:#1c2f47;--linea:#2a4160;
+    --texto:#e6edf6;--tenue:#8ba3c0;--ambar:#f7b733;--rojo:#e2412f;--radio:10px}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--acero);
+    font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px;background:var(--acero);
+    min-height:100vh;color:var(--texto)}
+  header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  h1{color:var(--texto);font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0;text-transform:uppercase}
+  header .sub{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--tenue);
+    letter-spacing:.08em;text-transform:uppercase}
+  .escena{position:relative;border:1px solid var(--linea);border-radius:var(--radio);overflow:hidden;
+    background:linear-gradient(180deg,#101d2e 0%,#0b1421 100%);touch-action:none;height:min(58vh,420px)}
+  .escena canvas{display:block;width:100%;height:100%}
+  .hint{position:absolute;left:10px;bottom:9px;font-family:'IBM Plex Mono',monospace;font-size:10px;
+    color:#5f7a99;letter-spacing:.06em;pointer-events:none}
+  .barra{display:flex;gap:8px;margin:10px 0 16px;flex-wrap:wrap}
+  button.tgl{flex:1 1 auto;min-width:92px;background:var(--panel);color:var(--texto);border:1px solid var(--linea);
+    border-radius:8px;padding:9px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;transition:.15s}
+  button.tgl[aria-pressed="true"]{background:var(--ambar);border-color:var(--ambar);color:#1a1204}
+  button.tgl:focus-visible,input:focus-visible{outline:2px solid var(--ambar);outline-offset:2px}
+  h2{font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--tenue);margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--linea)}
+  .campo{margin-bottom:14px}
+  .campo .fila{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px}
+  .campo label{font-size:14px;color:var(--texto)}
+  .campo .val{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:var(--ambar)}
+  .campo .val span{color:var(--tenue);font-weight:400;font-size:11px;margin-left:2px}
+  .campo.off{opacity:.4}
+  .oculto{position:absolute;width:1px;height:1px;opacity:0;left:-9999px}
+  .aviso3d{display:none;position:absolute;top:10px;left:10px;right:10px;z-index:3;
+    background:rgba(220,80,60,.92);color:#fff;font-size:12.5px;font-weight:600;
+    padding:7px 11px;border-radius:8px;text-align:center}
+  .precio{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+  .precio label{font-size:13px;color:var(--tenue);flex:1;cursor:pointer}
+  .campoP{padding:0;margin:0}
+  .campoP .ayuda{margin:2px 0 8px}
+  .precio input{width:96px;padding:5px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.16);
+    background:rgba(255,255,255,.05);color:var(--texto);font-family:'IBM Plex Mono',monospace;
+    font-size:13px;text-align:right}
+  .precio .un{font-size:11px;color:var(--tenue);width:26px}
+  #costos{margin-top:14px}
+  .nota{font-size:12px;color:var(--tenue);margin:6px 0 10px;line-height:1.4}
+  .nota b{color:var(--ambar);font-weight:600}
+  .cost{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:13px}
+  .cost .k{color:var(--tenue)}
+  .cost .v{font-family:'IBM Plex Mono',monospace;color:var(--texto)}
+  .cost.sub{border-top:1px solid rgba(255,255,255,.12);margin-top:6px;padding-top:8px}
+  .cost.total{border-top:2px solid var(--ambar);margin-top:8px;padding-top:10px;font-size:16px}
+  .cost.total .k,.cost.total .v{color:var(--ambar);font-weight:600}
+  header .ver{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ambar);
+    border:1px solid var(--ambar);border-radius:5px;padding:1px 6px;margin-left:8px;opacity:.8}
+  .escena.noche{background:#05070d;border-color:#1a2436}
+  .barra.aspecto{align-items:center}
+  .barra.aspecto .col{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--tenue)}
+  .barra.aspecto input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--tenue);
+    border-radius:6px;background:none;cursor:pointer}
+  .campo .fila label{cursor:pointer}
+  .ayudabtn{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;
+    border-radius:50%;border:1px solid var(--tenue);color:var(--tenue);background:none;
+    font-size:11px;line-height:1;padding:0;margin-left:6px;cursor:pointer;flex:none}
+  .ayudabtn:hover{border-color:var(--ambar);color:var(--ambar)}
+  .ayuda{display:none;margin:6px 0 2px;padding:9px 11px;border-left:2px solid var(--ambar);
+    background:rgba(255,255,255,.04);border-radius:0 6px 6px 0;font-size:13px;line-height:1.45;color:var(--tenue)}
+  .campo.abierta .ayuda{display:block}
+  .campo.abierta .ayudabtn{border-color:var(--ambar);color:var(--ambar)}
+  .demo{margin-top:8px;padding:5px 10px;font-size:12px;font-weight:600;border-radius:6px;
+    border:1px solid var(--ambar);color:var(--ambar);background:none;cursor:pointer}
+  .demo:disabled{opacity:.5}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:26px;background:transparent;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--linea);border-radius:2px}
+  input[type=range]::-moz-range-track{height:3px;background:var(--linea);border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-10px;
+    border-radius:50%;background:var(--texto);border:3px solid var(--acero);box-shadow:0 0 0 1px var(--linea)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border:3px solid var(--acero);border-radius:50%;
+    background:var(--texto);box-shadow:0 0 0 1px var(--linea)}
+  .datos{border:1px solid var(--linea);border-radius:var(--radio);overflow:hidden}
+  .dato{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 12px;
+    border-bottom:1px solid var(--linea);background:var(--panel)}
+  .dato:last-child{border-bottom:0}
+  .dato.destacado{background:var(--panel-alto)}
+  .dato .k{font-size:13px;color:var(--tenue)}
+  .dato .v{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;white-space:nowrap}
+  .dato.destacado .v{color:var(--ambar);font-size:17px}
+  .descargas{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .descargas button{background:transparent;border:1px solid var(--ambar);color:var(--ambar);border-radius:8px;
+    padding:12px 8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .descargas button:active{background:var(--ambar);color:#1a1204}
+  .descargas #dlTodo{grid-column:1 / -1;background:var(--ambar);color:#1a1204;border-color:var(--ambar)}
+  .descargas button:disabled{opacity:.35;border-color:var(--linea);color:var(--tenue);cursor:not-allowed}
+  .aviso{font-size:12px;line-height:1.55;color:var(--tenue);margin-top:14px}
+  .aviso b{color:var(--texto);font-weight:600}
+  .error{color:var(--rojo);font-size:13px;margin-top:8px;min-height:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Aro para cartel saliente</h1>
+    <span class="sub" id="modoTxt">modo mixto</span>
+    <span class="ver">v22</span>
+  </header>
+
+  <div class="escena" id="escena"><div class="aviso3d" id="aviso3d"></div><div class="hint">arrastrá para girar · dos dedos para acercar · doble toque acomoda</div></div>
+
+  <div class="barra">
+    <button class="tgl" id="btnForma" aria-pressed="false">Rectangular</button>
+    <button class="tgl" id="btnModo" aria-pressed="false">Dos ángulos</button>
+    <button class="tgl" id="btnNervio" aria-pressed="true">Nervio</button>
+    <button class="tgl" id="btnTornillo" aria-pressed="true">Prisionero</button>
+    <button class="tgl" id="btnTapas" aria-pressed="true">Tapas</button>
+    <button class="tgl" id="btnCano" aria-pressed="true">Caños</button>
+    <button class="tgl" id="btnMarca" aria-pressed="true">Marca de la guía</button>
+    <button class="tgl" id="btnSolo" aria-pressed="false">Solo la guía</button>
+    <button class="tgl" id="btnAristas" aria-pressed="true">Aristas</button>
+    <button class="tgl" id="btnLuz" aria-pressed="false">Luz encendida</button>
+    <button class="tgl" id="btnDoble" aria-pressed="true">Doble tira</button>
+    <button class="tgl" id="btnPlanch" aria-pressed="true">Planchuela</button>
+  </div>
+
+  <div class="barra aspecto">
+    <label class="col"><span>Aro</span><input type="color" id="colAro" value="#33445c"></label>
+    <label class="col"><span>Caño</span><input type="color" id="colCano" value="#f7b733"></label>
+    <label class="col"><span>Gráfica</span><input type="color" id="colAcr" value="#e8f1fb"></label>
+    <button class="tgl" id="btnGraf">Subir gráfica</button>
+    <button class="tgl" id="btnGirar">Girar 90°</button>
+    <button class="tgl" id="btnSinGraf">Quitar</button>
+    <input type="file" id="fileGraf" accept="image/*" class="oculto">
+  </div>
+
+  <div class="barra" style="margin-bottom:10px">
+    <button class="tgl" id="btnCliente" aria-pressed="false">Modo cliente</button>
+  </div>
+
+  <div id="bloqueCosto">
+  <h2>Costo</h2>
+  <div class="barra" id="maquinas"></div>
+  <div class="nota" id="notaMaq"></div>
+  <div id="precios"></div>
+  <div id="costos"></div>
+  </div>
+
+  <h2>Medidas</h2>
+  <div id="controles"></div>
+
+  <h2>Para fabricar</h2>
+  <div class="datos" id="datos"></div>
+  <div class="error" id="error"></div>
+
+  <div id="descargas">
+  <h2>Archivos</h2>
+  <div class="descargas">
+    <button id="dlAro">STL · aro completo</button>
+    <button id="dlAng">STL · ángulo rolado</button>
+    <button id="dlGuia">STL · guía del fondo</button>
+    <button id="dlDxfFijo">DXF · acrílico fijo</button>
+    <button id="dlDxfAng">DXF · acrílico del ángulo</button>
+    <button id="dlTodo">Bajar todo · zip</button>
+  </div>
+  </div>
+
+  <p class="aviso">
+    Sale de una pieza, parado sobre el canto, con la <b>cara fija contra la cama</b>, que es la de la
+    cornisa y el cono. Dado vuelta, el cono del asiento y las ménsulas del caño se convierten en
+    voladizos y el laminador te llena de soportes.
+    La ventana del caño y el manguito cierran <b>a dos aguas</b>, así no queda ningún puente
+    al aire arriba del caño. Con el slider de <b>voladizo</b> le decís cuánto se anima tu máquina:
+    a menos grados, más tendidas las pendientes y más alto el techo. El asiento de la cara fija
+    es una pestaña recta, sin voladizo de ningún tipo.
+    Los <b>nervios</b> van por afuera y trabajan como una viga I: con 3 nervios la pared de 3 mm se
+    porta casi como una de 6, con la mitad del material. Por dentro no van, porque le comen el paso
+    al acrílico fijo.
+    Los refuerzos del caño, la ménsula, los nervios y la torre del prisionero salen
+    en la misma impresión, sin soportes.
+    El <b>prisionero</b> entra por la cara desmontable y muerde el caño desde arriba, así el cartel
+    no se corre. Poné inserto de bronce a calor y taladrá Ø5,5 los 4 mm de la tapa del manguito.
+    Con más de un caño van <b>paralelos</b> entre sí, entrando los dos del lado de la pared,
+    así se atornillan a una misma placa y trancan el giro.
+    La <b>guía del fondo</b> es una cuna que abraza la punta del caño contra la pared de enfrente y le hace
+    de tope. Va suelta a propósito: se atornilla desde afuera <b>después</b> de meter el acrílico fijo,
+    porque si viniera impresa con el aro no lo dejaría pasar.
+    Orden: aro, acrílico fijo, caños, guías, prisioneros, módulos y cara desmontable.
+    El <b>ángulo rolado</b> se imprime aparte y acostado, con el ala parada; es la misma pieza para los
+    dos lados, se da vuelta y listo.
+  </p>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const P = [
+  {id:"diam", label:"Diámetro exterior", labelRect:"Ancho del cartel", min:200, max:1200, step:10, val:600, u:"mm", ayuda:"El diámetro de afuera de todo, sin contar el nervio. El acrílico de la cara desmontable sale con esta misma medida, al ras del canto."},
+  {id:"altoc",label:"Alto del cartel", min:100, max:1200, step:10, val:400, u:"mm", soloRect:true,
+   ayuda:"El alto visto de frente. El ancho es el deslizador de arriba. Los caños entran por el lado corto, el que va contra la pared."},
+  {id:"radio",label:"Radio de las puntas", min:0, max:400, step:5, val:80, u:"mm", soloRect:true,
+   ayuda:"Cuánto se redondean las cuatro esquinas. Si lo llevás a la mitad del alto te queda una pastilla, con las puntas de media caña."},
+  {id:"alto", label:"Profundidad del aro", min:40, max:300, step:5, val:100, u:"mm", ayuda:"Lo que el cartel mide de canto a canto, o sea lo que se ve de costado. También manda dónde caen los nervios y si entra la torre del prisionero."},
+  {id:"vol",  label:"Voladizo máximo de tu máquina", min:20, max:50, step:1, val:35, u:"°", ayuda:"Hasta cuánto se anima a colgar tu impresora. Gobierna todo lo inclinado: las ménsulas del caño, el techo a dos aguas de la ventana y los nervios. Si se te descuelga al imprimir, bajalo."},
+  {id:"pared",label:"Espesor de pared", min:2, max:15, step:.5, val:3, u:"mm", ayuda:"El espesor del aro. Subirlo es la forma más cara de ganar rigidez: te duplica el peso. Antes de tocar esto, sumá nervios."},
+  {id:"acr",  label:"Espesor del acrílico", min:2, max:10, step:.5, val:4, u:"mm", ayuda:"El espesor de los acrílicos que vas a usar. De acá salen la altura del ángulo y cuánto se hunde el asiento fijo."},
+  {id:"asie", label:"Profundidad del asiento fijo", min:6, max:40, step:1, val:12, u:"mm", soloA:true, ayuda:"Cuánto entra el acrílico fijo desde el canto, o sea a qué profundidad queda hundido de ese lado."},
+  {id:"pest", label:"Mordida del asiento", min:4, max:30, step:1, val:12, u:"mm", soloA:true, ayuda:"Cuánto pisa el aro al acrílico fijo por el borde. Menos de 2 mm no agarra y el acrílico se te escapa."},
+  {id:"ala",  label:"Ala del ángulo sobre el acrílico", min:6, max:40, step:1, val:8, u:"mm", ayuda:"Lo que el ángulo rolado tapa del acrílico. Más ala agarra más pero pesa más: es la pieza más pesada de todo el conjunto."},
+  {id:"espTapa",label:"Espesor del ala sobre el acrílico", min:2, max:8, step:.5, val:3, u:"mm",
+   ayuda:"Lo que mide de espesor la pestaña que pisa el acrílico. Es lo que ves de frente cuando mirás el cartel, así que también es una decisión estética. Con menos de 2,5 se pone flexible al rolarlo."},
+  {id:"espFald",label:"Espesor del ala sobre el aro", min:2, max:8, step:.5, val:3, u:"mm",
+   ayuda:"Lo que mide de espesor la pestaña que abraza el aro por afuera. Esta trabaja más que la otra: es la que aprieta contra el aro, así que no la bajes tanto."},
+  {id:"faldon",label:"Ala del ángulo sobre el aro", min:6, max:60, step:1, val:8, u:"mm", ayuda:"Lo que el ángulo baja por afuera del aro. Los nervios se corren solos para no quedar debajo del faldón."},
+  {id:"nervs",label:"Cantidad de nervios", min:1, max:7, step:1, val:3, u:"", ayuda:"Cuántos nervios dan la vuelta por afuera. Uno siempre queda en el eje del caño. Trabajan como una viga I: con tres, la pared de 3 se porta casi como una de 6."},
+  {id:"cano", label:"Lado del caño", min:10, max:80, step:1, val:30, u:"mm", ayuda:"La medida del caño cuadrado que ya tenés. De acá salen la ventana en la pared, el manguito y la cuna del fondo."},
+  {id:"holg", label:"Holgura del encastre", min:0, max:2, step:.1, val:.6, u:"mm", ayuda:"El aire entre el caño y el manguito. Con 0,6 entra justo, con 1 entra suelto. Si te queda trabado, subilo antes de agarrar la lima."},
+  {id:"rInt", label:"Refuerzo hacia adentro", min:0, max:20, step:1, val:6, u:"mm", ayuda:"Cuánto sobresale el manguito hacia adentro del aro. No conviene pasarse porque le roba paso al acrílico fijo cuando entra."},
+  {id:"rExt", label:"Refuerzo hacia afuera", min:0, max:30, step:1, val:10, u:"mm", ayuda:"Cuánto sobresale el manguito hacia afuera. Acá sí podés ser generoso: es donde el caño hace palanca."},
+  {id:"vuelo",  label:"Vuelo del caño fuera del cartel", min:50, max:900, step:10, val:300, u:"mm",
+   ayuda:"Cuánto separa el cartel de la pared, o sea el pedazo de caño que queda a la vista entre la planchuela y el cartel. Se suma a lo que el caño mide adentro para el costo de la herrería."},
+  {id:"planchL",label:"Largo de la planchuela", min:100, max:900, step:10, val:300, u:"mm",
+   ayuda:"El alto de la base de hierro contra la pared. Cuanto más larga, más separados quedan los tarugos de arriba y los de abajo, y menos fuerza hace cada uno para aguantar el vuelco. No la dejes más corta que la separación entre caños."},
+  {id:"planchW",label:"Ancho de la planchuela", min:25.4, max:127, step:12.7, val:101.6, u:"mm",
+   ayuda:"Las medidas comerciales van de media pulgada en media pulgada. Cambiarlo casi no mueve el costo: la de 101,6 sale 17.650 el metro contra 12.345 la de 76,2, unos mil quinientos pesos de diferencia en toda la pieza. Al elegir una de esas dos, el precio del metro se carga solo."},
+  {id:"guia", label:"Largo de la guía del fondo", min:0, max:90, step:5, val:40, u:"mm", ayuda:"El largo de la cuna que abraza la punta del caño. El respaldo es un pedazo de aro con la misma curva, para pegarlo a la pared del fondo por toda esa superficie. El aro trae marcada la posición con una repisa y dos topes. Va entera del lado de adentro y no se ve. En 0 no se hace."},
+  {id:"canos",label:"Cantidad de caños", min:1, max:3, step:1, val:2, u:"", ayuda:"Con uno solo el cartel puede girar sobre el caño; con dos queda firme. Tres es para carteles grandes."},
+  {id:"sep",  label:"Separación entre ejes", min:40, max:400, step:10, val:140, u:"mm", ayuda:"La distancia entre los ejes de los caños. Cuanto más separados, menos trabaja el cartel cuando algo lo empuja de costado."}
+];
+const V = {}; P.forEach(p => V[p.id] = p.val);
+let forma = "circ";
+let modoB = false, nervio = true, prisionero = true, verTapas = true, verCano = true, soloGuia = false, marcaGuia = true;
+
+const CORN = 4, CORNL = 8, PARM = 4, NERVW = 12, NERVH = 4;
+const DPRIS = 11, DHUECO = 5.5, HPRIS = 12, GAPPRIS = 8;
+
+const cont = document.getElementById("controles");
+P.forEach(p => {
+  const d = document.createElement("div");
+  d.className = "campo"; d.id = "c_"+p.id;
+  d.innerHTML = '<div class="fila"><span style="display:flex;align-items:center;min-width:0">'+
+      '<label for="i_'+p.id+'">'+p.label+'</label>'+
+      '<button class="ayudabtn" id="q_'+p.id+'" aria-label="qué es">?</button></span>'+
+    '<span class="val" id="v_'+p.id+'"></span></div>'+
+    '<div class="ayuda">'+p.ayuda+
+      '<div><button class="demo" id="d_'+p.id+'">ver qué cambia</button></div></div>'+
+    '<input type="range" id="i_'+p.id+'" min="'+p.min+'" max="'+p.max+'" step="'+p.step+'" value="'+p.val+'">';
+  cont.appendChild(d);
+  d.querySelector("input").addEventListener("input", e => {
+    if (demo && demo.p.id !== p.id) pararDemo();
+    V[p.id] = parseFloat(e.target.value);
+    if (p.id === "planchW"){                       // el precio del metro sigue al ancho comercial
+      const tab = {"76.2":12345, "101.6":17650}, pr = tab[V.planchW.toFixed(1)];
+      if (pr && typeof PR !== "undefined"){ PR.planch_ml = pr; document.getElementById("p_planch_ml").value = pr; }
+    }
+    refrescar(); });
+  const abrir = () => d.classList.toggle("abierta");
+  d.querySelector("#q_"+p.id).addEventListener("click", abrir);
+  d.querySelector("label").addEventListener("click", e => { e.preventDefault(); abrir(); });
+  d.querySelector("#d_"+p.id).addEventListener("click", () => verDemo(p));
+});
+// ---------------- el videíto: barre una medida de punta a punta y vuelve ----------------
+let demo = null;
+function pararDemo(){
+  if (!demo) return;
+  clearInterval(demo.t);
+  V[demo.p.id] = demo.orig;
+  document.getElementById("i_"+demo.p.id).value = demo.orig;
+  document.getElementById("d_"+demo.p.id).textContent = "ver qué cambia";
+  document.getElementById("d_"+demo.p.id).disabled = false;
+  demo = null;
+  refrescar();
+}
+function verDemo(p){
+  const reanudar = demo && demo.p.id === p.id;
+  pararDemo();
+  if (reanudar) return;
+  const orig = V[p.id], N = 30;
+  const btn = document.getElementById("d_"+p.id);
+  btn.textContent = "parar";
+  let i = 0;
+  const t = setInterval(() => {
+    const u = (1 - Math.cos(2*Math.PI*i/N))/2;                 // va y vuelve, suave en las puntas
+    let v = p.min + (p.max - p.min)*u;
+    v = Math.max(p.min, Math.min(p.max, Math.round(v/p.step)*p.step));
+    V[p.id] = v;
+    document.getElementById("i_"+p.id).value = v;
+    refrescar();
+    if (++i > N) pararDemo();
+  }, 110);
+  demo = {t, p, orig};
+}
+function TAN(){ return Math.tan(V.vol*Math.PI/180); }   // avance horizontal por cada mm de altura
+function fmt(n){ return (Math.round(n*10)/10).toString().replace(".", ","); }
+function pintarValores(){
+  P.forEach(p => {
+    const et = document.querySelector("#c_"+p.id+" label");
+    if (et) et.textContent = (esRect() && p.labelRect) ? p.labelRect : p.label;
+    const t = p.id === "canos" ? (V.canos===1 ? "uno" : V.canos+" caños")
+            : p.id === "sep" ? (V.canos===1 ? "—" : fmt(V.sep)+"<span>mm</span>")
+            : p.id === "nervs" ? (!nervio ? "sin nervios" : V.nervs===1 ? "uno" : V.nervs+" nervios")
+            : p.id === "guia" && V.guia === 0 ? "sin guía"
+            : p.id === "cano" ? fmt(V.cano)+"<span>× "+fmt(V.cano)+" mm</span>"
+            : fmt(V[p.id])+'<span>'+p.u+'</span>';
+    document.getElementById("v_"+p.id).innerHTML = t;
+    document.getElementById("c_"+p.id).className = "campo" +
+      (((p.soloA && modoB) || (p.soloRect && !esRect())) ? " off" : "");
+  });
+  const med = esRect() ? V.diam+"×"+V.altoc : "Ø"+V.diam;
+  document.getElementById("modoTxt").textContent = soloGuia ? "guía del fondo · pieza suelta"
+                                          : (esRect() ? "rectangular · " : "circular · ") +
+                                            (modoB ? "dos ángulos · "+med : "cara fija + ángulo · "+med);
+}
+function tgl(id, get, set){
+  const b = document.getElementById(id);
+  b.addEventListener("click", ()=>{ set(!get()); b.setAttribute("aria-pressed", get()?"true":"false"); refrescar(); });
+}
+tgl("btnForma",()=>forma==="rect",v=>forma = v ? "rect" : "circ");
+tgl("btnModo",()=>modoB,v=>modoB=v);
+tgl("btnNervio",()=>nervio,v=>nervio=v);
+tgl("btnTornillo",()=>prisionero,v=>prisionero=v);
+tgl("btnTapas",()=>verTapas,v=>verTapas=v);
+tgl("btnCano",()=>verCano,v=>verCano=v);
+tgl("btnMarca",()=>marcaGuia,v=>marcaGuia=v);
+tgl("btnSolo",()=>soloGuia,v=>soloGuia=v);
+tgl("btnAristas",()=>verAristas,v=>{ verAristas=v; pintarAristas(); });
+tgl("btnLuz",()=>luzOn,v=>{ luzOn=v; aplicarLuz(); });
+tgl("btnDoble",()=>dobleTira,v=>dobleTira=v);
+tgl("btnPlanch",()=>verPlanch,v=>verPlanch=v);
+let modoCliente = false;
+tgl("btnCliente",()=>modoCliente,v=>{
+  modoCliente = v;
+  document.getElementById("bloqueCosto").style.display = v ? "none" : "";
+  document.getElementById("descargas").style.display = v ? "none" : "";
+});
+
+let colorAcr = 0xe8f1fb;
+function mezclar(a,b){ const c=new THREE.Color(a); return c.lerp(new THREE.Color(b), .5).getHex(); }
+function color(id, fn){
+  const i = document.getElementById(id);
+  i.addEventListener("input", () => { fn(parseInt(i.value.slice(1),16)); refrescar(); });
+}
+color("colAro",  v => matAro.color.setHex(v));
+color("colCano", v => matCano.color.setHex(v));
+color("colAcr",  v => colorAcr = v);
+document.getElementById("btnGraf").addEventListener("click", ()=>document.getElementById("fileGraf").click());
+document.getElementById("btnGirar").addEventListener("click", ()=>{
+  girGraf -= Math.PI/2;
+  if (girGraf <= -2*Math.PI) girGraf += 2*Math.PI;
+  orientarGraf(); refrescar();
+});
+document.getElementById("btnSinGraf").addEventListener("click", ()=>{
+  if (texGraf){ texGraf.dispose(); texGraf = null; } refrescar(); });
+function avisarGraf(t){
+  const a = document.getElementById("aviso3d");
+  a.textContent = t; a.style.display = "block";
+  clearTimeout(avisarGraf.t);
+  avisarGraf.t = setTimeout(refrescar, 2500);
+}
+document.getElementById("fileGraf").addEventListener("change", e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  avisarGraf("leyendo la imagen…");
+  const lector = new FileReader();
+  lector.onerror = () => avisarGraf("no pude abrir el archivo");
+  lector.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      if (texGraf) texGraf.dispose();
+      texGraf = new THREE.Texture(img);
+      texGraf.encoding = THREE.sRGBEncoding;
+      orientarGraf();
+      refrescar();
+      avisarGraf("gráfica cargada · " + img.width + " × " + img.height);
+    };
+    img.onerror = () => avisarGraf("no pude leer esa imagen");
+    img.src = lector.result;
+  };
+  lector.readAsDataURL(f);
+});
+
+// ---------------- malla ----------------
+function pt(t,r,z){ return [r*Math.cos(t), r*Math.sin(t), z]; }
+function tri(a,p,q,r){ a.push(p[0],p[1],p[2], q[0],q[1],q[2], r[0],r[1],r[2]); }
+function quad(a,p0,p1,p2,p3){ tri(a,p0,p1,p2); tri(a,p0,p2,p3); }
+function geo(arr){
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(arr,3));
+  g.computeVertexNormals();
+  return g;
+}
+function invertir(g){
+  const ng = g.index ? g.toNonIndexed() : g;
+  const p = ng.attributes.position.array;
+  for (let i=0;i<p.length;i+=9)
+    for (let k=0;k<3;k++){ const t = p[i+3+k]; p[i+3+k] = p[i+6+k]; p[i+6+k] = t; }
+  ng.computeVertexNormals();
+  return ng;
+}
+function revol(perf, t0, t1){
+  const a = [], n = Math.max(3, Math.ceil(Math.abs(t1-t0)/(Math.PI/72))), st = (t1-t0)/n;
+  for (let i=0;i<n;i++){
+    const ta = t0+i*st, tb = ta+st;
+    for (let j=0;j<perf.length;j++){
+      const p = perf[j], q = perf[(j+1)%perf.length];
+      if (Math.abs(p[0]-q[0])<1e-9 && Math.abs(p[1]-q[1])<1e-9) continue;
+      quad(a, pt(ta,p[0],p[1]), pt(tb,p[0],p[1]), pt(tb,q[0],q[1]), pt(ta,q[0],q[1]));
+    }
+  }
+  const g = [geo(a)];
+  if (Math.abs((t1-t0) - 2*Math.PI) > 1e-6){
+    const forma = new THREE.Shape(perf.map(p => new THREE.Vector2(p[0], p[1])));
+    [[t0,false],[t1,true]].forEach(([t,flip]) => {
+      let c = new THREE.ShapeGeometry(forma);
+      c.applyMatrix4(new THREE.Matrix4().makeBasis(
+        new THREE.Vector3(Math.cos(t), Math.sin(t), 0),
+        new THREE.Vector3(0,0,1),
+        new THREE.Vector3(Math.sin(t), -Math.cos(t), 0)));
+      if (flip) c = invertir(c);
+      g.push(c);
+    });
+  }
+  return g;
+}
+// ---------------- el recorrido del cartel ----------------
+function esRect(){ return forma === "rect"; }
+function dims(){
+  const A = V.diam, B = esRect() ? V.altoc : V.diam;
+  const R = esRect() ? Math.max(0, Math.min(V.radio, Math.min(A,B)/2)) : A/2;
+  return {A, B, R, a: A/2 - R, b: B/2 - R};
+}
+function tramos(){                        // segmentos del contorno exterior, en sentido antihorario
+  const {A,B,R,a,b} = dims(), t = [];
+  if (!esRect()){ t.push({tipo:"arco", cx:0, cy:0, R:A/2, a0:0, a1:2*Math.PI, len:Math.PI*A}); }
+  else {
+    const rec = (x0,y0,x1,y1,nx,ny) => t.push({tipo:"recta",x0,y0,x1,y1,nx,ny,len:Math.hypot(x1-x0,y1-y0)});
+    const arc = (cx,cy,a0) => t.push({tipo:"arco",cx,cy,R,a0,a1:a0+Math.PI/2,len:Math.PI*R/2});
+    rec( A/2,0,  A/2,b,  1,0);
+    arc( a, b, 0);
+    rec( a,B/2, -a,B/2,  0,1);
+    arc(-a, b, Math.PI/2);
+    rec(-A/2,b, -A/2,-b, -1,0);
+    arc(-a,-b, Math.PI);
+    rec(-a,-B/2, a,-B/2, 0,-1);
+    arc( a,-b, 3*Math.PI/2);
+    rec( A/2,-b, A/2,0,  1,0);
+  }
+  let s = 0;
+  t.forEach(x => { x.s0 = s; s += x.len; x.s1 = s; });
+  return {t, L: s};
+}
+function largoCont(){ return tramos().L; }
+function puntoN(u){                        // punto y normal exterior en el parámetro u de 0 a 1
+  const {t, L} = tramos();
+  let s = (u - Math.floor(u))*L;
+  for (const x of t){
+    if (s > x.s1 + 1e-9 && x !== t[t.length-1]) continue;
+    const f = x.len > 1e-9 ? (s - x.s0)/x.len : 0;
+    if (x.tipo === "recta")
+      return [x.x0 + (x.x1-x.x0)*f, x.y0 + (x.y1-x.y0)*f, x.nx, x.ny];
+    const ang = x.a0 + (x.a1-x.a0)*f;
+    return [x.cx + x.R*Math.cos(ang), x.cy + x.R*Math.sin(ang), Math.cos(ang), Math.sin(ang)];
+  }
+  return [0,0,1,0];
+}
+function baseU(u){                         // origen desde donde se miden los radios del perfil
+  const [x,y,nx,ny] = puntoN(u), Rr = V.diam/2;
+  return {qx: x - nx*Rr, qy: y - ny*Rr, nx, ny};
+}
+function pos(u,r,z){ const q = baseU(u); return [q.qx + q.nx*r, q.qy + q.ny*r, z]; }
+function muestras(u0,u1){                  // parámetros donde hay que poner un anillo de puntos
+  const {t, L} = tramos(), out = [u0];
+  const paso = Math.PI/72;
+  t.forEach(x => {
+    const n = x.tipo === "arco" ? Math.max(1, Math.ceil(Math.abs(x.a1-x.a0)/paso)) : 1;
+    for (let i=0;i<=n;i++){
+      const s = x.s0 + x.len*i/n;
+      for (const k of [-1,0,1]){          // el recorrido puede dar la vuelta
+        const uu = s/L + k;
+        if (uu > u0 + 1e-9 && uu < u1 - 1e-9) out.push(uu);
+      }
+    }
+  });
+  out.push(u1);
+  return out.sort((p,q)=>p-q);
+}
+// barre el perfil a lo largo del contorno, de u0 a u1
+function sweep(perf, u0, u1){
+  const a = [], us = muestras(u0,u1);
+  for (let i=0;i<us.length-1;i++){
+    const ua = us[i], ub = us[i+1];
+    if (ub - ua < 1e-12) continue;
+    for (let j=0;j<perf.length;j++){
+      const p = perf[j], q = perf[(j+1)%perf.length];
+      if (Math.abs(p[0]-q[0])<1e-9 && Math.abs(p[1]-q[1])<1e-9) continue;
+      quad(a, pos(ua,p[0],p[1]), pos(ub,p[0],p[1]), pos(ub,q[0],q[1]), pos(ua,q[0],q[1]));
+    }
+  }
+  const g = [geo(a)];
+  if (Math.abs((u1-u0) - 1) > 1e-9){
+    const forma2 = new THREE.Shape(perf.map(p => new THREE.Vector2(p[0], p[1])));
+    [[u0,false],[u1,true]].forEach(([u,flip]) => {
+      const q = baseU(u);
+      let c = new THREE.ShapeGeometry(forma2);
+      c.applyMatrix4(new THREE.Matrix4().makeBasis(
+        new THREE.Vector3(q.nx, q.ny, 0),
+        new THREE.Vector3(0,0,1),
+        new THREE.Vector3(q.ny, -q.nx, 0)).setPosition(q.qx, q.qy, 0));
+      if (flip) c = invertir(c);
+      g.push(c);
+    });
+  }
+  return g;
+}
+// contorno cerrado con un rebaje hacia adentro, como Shape de three
+function formaCont(inset){
+  const {A,B,R} = dims(), s = new THREE.Shape();
+  const A2 = A/2 - inset, B2 = B/2 - inset, R2 = Math.max(0, R - inset);
+  if (!esRect()){ s.absarc(0, 0, Math.max(1, A2), 0, 2*Math.PI, false); return s; }
+  const a = A2 - R2, b = B2 - R2;
+  s.moveTo(A2, -b);
+  s.lineTo(A2, b);   s.absarc(a, b, R2, 0, Math.PI/2, false);
+  s.lineTo(-a, B2);  s.absarc(-a, b, R2, Math.PI/2, Math.PI, false);
+  s.lineTo(-A2, -b); s.absarc(-a, -b, R2, Math.PI, 1.5*Math.PI, false);
+  s.lineTo(a, -B2);  s.absarc(a, -b, R2, 1.5*Math.PI, 2*Math.PI, false);
+  return s;
+}
+// placa plana del acrílico, con la gráfica mapeada de borde a borde
+function placa(inset){
+  const g = new THREE.ShapeGeometry(formaCont(inset), 64);
+  g.computeBoundingBox();
+  const b = g.boundingBox, p = g.attributes.position, uv = [];
+  for (let i=0;i<p.count;i++)
+    uv.push((p.getX(i)-b.min.x)/(b.max.x-b.min.x), (p.getY(i)-b.min.y)/(b.max.y-b.min.y));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv,2));
+  return g;
+}
+function marco(c){ return {x:[Math.cos(c),Math.sin(c),0], y:[-Math.sin(c),Math.cos(c),0]}; }
+function Lp(m,x,y,z){ return [m.x[0]*x+m.y[0]*y, m.x[1]*x+m.y[1]*y, z]; }
+function caja(c,x0,x1,y0,y1,z0,z1){
+  const m = marco(c), a = [], v = (x,y,z)=>Lp(m,x,y,z);
+  quad(a, v(x1,y0,z0), v(x1,y1,z0), v(x1,y1,z1), v(x1,y0,z1));
+  quad(a, v(x0,y1,z0), v(x0,y0,z0), v(x0,y0,z1), v(x0,y1,z1));
+  quad(a, v(x0,y1,z0), v(x0,y1,z1), v(x1,y1,z1), v(x1,y1,z0));
+  quad(a, v(x0,y0,z0), v(x1,y0,z0), v(x1,y0,z1), v(x0,y0,z1));
+  quad(a, v(x0,y0,z1), v(x1,y0,z1), v(x1,y1,z1), v(x0,y1,z1));
+  quad(a, v(x0,y0,z0), v(x0,y1,z0), v(x1,y1,z0), v(x1,y0,z0));
+  return geo(a);
+}
+// cuña a 45°: lg>0 hacia adentro, lg<0 hacia afuera
+function mensula(c, xExt, lg, zBase, y0, y1){
+  // trapecio, no triángulo: la punta lleva un pie recto para que el piso del
+  // manguito apoye en algo y no quede el filo colgando
+  const m = marco(c), a = [], v = (x,y,z)=>Lp(m,x,y,z), pie = 1.5;
+  const caida = Math.abs(lg)/TAN() + pie;
+  const xf = xExt - lg;
+  const A0=v(xExt,y0,zBase), B0=v(xf,y0,zBase), D0=v(xf,y0,zBase-pie), C0=v(xExt,y0,zBase-caida);
+  const A1=v(xExt,y1,zBase), B1=v(xf,y1,zBase), D1=v(xf,y1,zBase-pie), C1=v(xExt,y1,zBase-caida);
+  quad(a,A0,C0,D0,B0); quad(a,A1,B1,D1,C1);
+  quad(a,A0,B0,B1,A1); quad(a,B0,D0,D1,B1); quad(a,D0,C0,C1,D1); quad(a,C0,A0,A1,C1);
+  return geo(a);
+}
+// prisma de sección libre en el plano (y,z), extruido a lo largo del eje local x
+function prismaYZ(C, x0, x1, pts){
+  const m = marco(C), a = [];
+  const v = (x,p) => Lp(m, x, p[0], p[1]);
+  for (let i=0;i<pts.length;i++){
+    const p = pts[i], q = pts[(i+1)%pts.length];
+    quad(a, v(x0,p), v(x1,p), v(x1,q), v(x0,q));
+  }
+  const caras = THREE.ShapeUtils.triangulateShape(pts.map(p=>new THREE.Vector2(p[0],p[1])), []);
+  caras.forEach(f => {
+    tri(a, v(x0,pts[f[0]]), v(x0,pts[f[2]]), v(x0,pts[f[1]]));
+    tri(a, v(x1,pts[f[0]]), v(x1,pts[f[1]]), v(x1,pts[f[2]]));
+  });
+  return geo(a);
+}
+// torre cilíndrica hueca con eje z
+function torre(cx, cy, z0, z1, rOut, rIn, n){
+  const a = [];
+  n = n || 28;
+  for (let i=0;i<n;i++){
+    const t0 = i*2*Math.PI/n, t1 = (i+1)*2*Math.PI/n;
+    const O = (r,t,z) => [cx + r*Math.cos(t), cy + r*Math.sin(t), z];
+    quad(a, O(rOut,t0,z0), O(rOut,t1,z0), O(rOut,t1,z1), O(rOut,t0,z1));
+    quad(a, O(rIn,t0,z0), O(rIn,t0,z1), O(rIn,t1,z1), O(rIn,t1,z0));
+    quad(a, O(rIn,t0,z1), O(rOut,t0,z1), O(rOut,t1,z1), O(rIn,t1,z1));
+    quad(a, O(rIn,t0,z0), O(rIn,t1,z0), O(rOut,t1,z0), O(rOut,t0,z0));
+  }
+  return geo(a);
+}
+
+// ---------------- medidas ----------------
+function M(){
+  const Ro = V.diam/2, Ri = Ro - V.pared;
+  const w = V.cano + V.holg, wg = w + 2*PARM;
+  const zc = V.alto/2;
+  const z1 = zc - w/2, z2 = zc + w/2;
+  const alfa = Math.asin(Math.min(.95,(w/2)/Ri));
+  const Rfijo = Ri - V.pest;                       // borde interno del asiento
+  const paso = 2*(Ri - Math.max(V.rInt,0)) - 2;    // paso libre entre refuerzos
+  const dFijo = Math.min(2*Rfijo + V.pest, paso);  // el acrílico fijo no puede pasarse del paso
+  const mordida = (dFijo - 2*Rfijo)/2;
+  return {Ro,Ri,w,wg,zc,z1,z2,alfa,Rfijo,dFijo,paso,mordida};
+}
+function problemas(){
+  const m = M(), e = [];
+  if (!modoB && V.asie + 6 > m.z1) e.push("El asiento choca con la ventana del caño: bajá la profundidad del asiento.");
+  if (!modoB && m.mordida < 2) e.push("El acrílico fijo no muerde el asiento: achicá el refuerzo hacia adentro o subí la mordida.");
+  if (m.z1 < CORNL + 6) e.push("El caño queda muy cerca del canto: subí la profundidad del aro.");
+  const ladoCorto = esRect() ? V.altoc : V.diam;
+  if (V.cano + 2*V.holg >= ladoCorto/3)
+    e.push(esRect() ? "El caño es muy grande para ese alto de cartel." : "El caño es muy grande para ese diámetro.");
+  if (esRect() && dims().R > Math.min(V.diam, V.altoc)/2 - 1)
+    e.push("El radio de las puntas se pasa: no queda lado recto.");
+  if (esRect() && (V.canos-1)/2*V.sep + m.w/2 + PARM > dims().b - 2)
+    e.push("Los caños no entran en el tramo recto del lado corto: acercalos, achicá el radio o subí el alto.");
+  if (V.canos > 1 && V.sep < m.wg + 8) e.push("Los caños se pisan: separalos más.");
+  const ks = canos(), lim = (V.canos-1)/2*V.sep + m.w/2 + PARM;
+  if (!esRect() && lim > m.Ri*0.86) e.push("Los caños quedan muy al borde del aro: acercalos.");
+  for (let i=0;i<ks.length-1;i++)
+    if (ks[i+1].a0 < ks[i].a1 + .02) e.push("Las ventanas se tocan entre sí.");
+  if (nervio && (m.zc - NERVW/2 < CORNL + 2)) e.push("El nervio choca con la cornisa.");
+  if (hTecho() < 3) e.push("No hay lugar para el techo a dos aguas: subí la profundidad del aro o achicá el caño.");
+  if (prisionero && alturaTorre() <= 4)
+    e.push("No entra la torre del prisionero: subí la profundidad del aro o achicá el caño.");
+  if (V.guia > 0 && V.canos > 1 && arcoGuia() > V.sep - 4)
+    e.push("Los respaldos de las guías se tocan entre sí: separá más los caños.");
+  if (nervio && pasoNerv() < 0)
+    e.push("Los nervios no entran entre el faldón del ángulo y la cornisa: achicá el faldón o subí la profundidad.");
+  if (nervio && V.nervs > 1 && pasoNerv() < 2*nervSemi() + 1)
+    e.push("No entran tantos nervios: bajá la cantidad o subí la profundidad del aro.");
+  if (V.ala <= V.espFald + 1) e.push("El ala del ángulo es más chica que su propio espesor.");
+  if (V.planchL < minPlanchuela())
+    e.push("La planchuela queda más corta que los caños: subila a por lo menos "+Math.ceil(minPlanchuela())+" mm.");
+  if (V.faldon > V.alto*0.6) e.push("El ala del ángulo sobre el aro tapa medio cartel.");
+  return e;
+}
+// Los caños son paralelos entre sí y al eje que apunta a la pared (180°).
+// Cada uno es una cuerda a distancia o del centro; la ventana en la banda queda oblicua.
+// altura disponible para cerrar el techo a 45°; si no entra entera, cierra con un puente corto
+function hTecho(){
+  const m = M();
+  return Math.max(0, Math.min((m.w/2)/TAN(), V.alto - 4 - m.z2));
+}
+function alturaTorre(){
+  const m = M(), gp = prisionero ? GAPPRIS/2 : 0;
+  const cum = m.zc + m.w/2 + Math.max(0, Math.min((m.w/2 - gp)/TAN(), hTecho()));
+  return Math.max(0, Math.min(HPRIS, V.alto - 3 - cum));
+}
+function nervSemi(){ return Math.max(NERVW/2, NERVH/TAN()); }
+function pasoNerv(){
+  const m = M(), semi = nervSemi();
+  // el nervio no puede meterse debajo del faldón del ángulo ni en la cornisa
+  const zMin = (modoB ? V.faldon : Math.max(CORNL, V.asie)) + semi + 3;
+  const zMax = V.alto - V.faldon - semi - 3;
+  if (V.nervs < 2) return 0;
+  return 2*Math.min(m.zc - zMin, zMax - m.zc)/(V.nervs - 1);
+}
+function nervios(){
+  if (!nervio) return [];
+  const m = M(), n = Math.max(1, V.nervs), pa = pasoNerv(), out = [];
+  for (let k=0;k<n;k++) out.push(m.zc + (k - (n-1)/2)*pa);
+  return out.sort((a,b)=>a-b);
+}
+// tramo de pared exterior entre dos alturas, con los nervios en relieve
+function paredExterna(zA, zB){
+  const m = M(), semi = nervSemi(), zs = nervios();
+  const R = t => {
+    let r = m.Ro;
+    zs.forEach(z => { const d = Math.abs(t-z); if (d < semi) r = Math.max(r, m.Ro + NERVH*(1 - d/semi)); });
+    return r;
+  };
+  const bp = [zA];
+  zs.forEach(z => [z-semi, z, z+semi].forEach(t => { if (t > zA+1e-6 && t < zB-1e-6) bp.push(t); }));
+  bp.push(zB);
+  bp.sort((a,b)=>a-b);
+  return bp.map(t => [R(t), t]);
+}
+function gapAng(y, R){
+  const m = M(), r = R || m.Ri;
+  let a = Math.atan2(-y, -Math.sqrt(Math.max(1, r*r - y*y)));
+  return (a + 2*Math.PI) % (2*Math.PI);
+}
+// parámetro u donde el borde del caño (a distancia y del eje) cruza la pared de entrada
+function uEntrada(y, R){
+  if (!esRect()) return gapAng(y, R)/(2*Math.PI);
+  const {t, L} = tramos(), lado = t[4];           // el lado corto de la izquierda
+  const f = (lado.y0 - y)/(lado.y0 - lado.y1);
+  return (lado.s0 + lado.len*Math.min(1,Math.max(0,f)))/L;
+}
+function canos(){
+  const m = M(), out = [];
+  const Rmax = m.Ro + (nervio ? NERVH : 0);
+  for (let k=0;k<V.canos;k++){
+    const o = (k - (V.canos-1)/2) * V.sep;
+    let cand;
+    if (esRect())                                  // entra perpendicular al lado corto
+      cand = [uEntrada(o - m.w/2), uEntrada(o + m.w/2)];
+    else                                           // entra en cuerda: la ventana se cierra al crecer el radio
+      cand = [uEntrada(o - m.w/2, m.Ri), uEntrada(o + m.w/2, m.Ri),
+              uEntrada(o - m.w/2, Rmax), uEntrada(o + m.w/2, Rmax)];
+    out.push({o, a0: Math.min.apply(null,cand), a1: Math.max.apply(null,cand),
+              th: esRect() ? uEntrada(o) : gapAng(o)/(2*Math.PI),
+              xi: esRect() ? V.diam/2 - V.pared : Math.sqrt(Math.max(1, m.Ri*m.Ri - o*o)),
+              xo: esRect() ? V.diam/2           : Math.sqrt(Math.max(1, m.Ro*m.Ro - o*o))});
+  }
+  out.sort((p,q)=>p.a0-q.a0);
+  return out;
+}
+
+// ---------------- perfiles ----------------
+function perfAro(){
+  const m = M(), H = V.alto, p = [];
+  if (modoB){ p.push([m.Ri,0]); paredExterna(0, H).forEach(q=>p.push(q)); }
+  else { p.push([m.Rfijo,0],[m.Ro+CORN,0],[m.Ro+CORN,CORNL]);
+         paredExterna(CORNL, H).forEach(q=>p.push(q)); }
+  p.push([m.Ri,H]);
+  if (!modoB) p.push([m.Ri,V.asie],[m.Rfijo,V.asie]);
+  return p;
+}
+function perfAngulo(lado){          // lado -1: apoyado en z=0 (la que se exporta)
+  const m = M(), H = V.alto;
+  const ze = lado > 0 ? H : 0, d = lado;
+  const zf = ze + d*V.acr;                      // cara externa del acrílico
+  return [[m.Ro-V.ala, zf],[m.Ro, zf],[m.Ro, ze - d*V.faldon],
+          [m.Ro+V.espFald, ze - d*V.faldon],[m.Ro+V.espFald, zf + d*V.espTapa],
+          [m.Ro-V.ala, zf + d*V.espTapa]];
+}
+function refuerzos(){
+  const m = M(), g = [], h = m.w/2, hg = m.wg/2, C = Math.PI;
+  canos().forEach(k => {
+    const x1 = k.xo + V.rExt, x0 = k.xi - V.rInt;
+    g.push(caja(C,x0,x1,k.o-hg,k.o-h,m.zc-hg,m.zc+hg));
+    g.push(caja(C,x0,x1,k.o+h,k.o+hg,m.zc-hg,m.zc+hg));
+    g.push(caja(C,x0,x1,k.o-h,k.o+h,m.zc-hg,m.zc-h));
+    // techo a dos aguas: cada capa apoya en la anterior, sin puente
+    const zt = m.zc + h, gp = prisionero ? GAPPRIS/2 : 0;
+    const cum = zt + Math.max(0, Math.min((h - gp)/TAN(), hTecho()));
+    [-1,1].forEach(s => {
+      g.push(prismaYZ(C, x0, x1, [
+        [k.o + s*hg, zt], [k.o + s*h, zt], [k.o + s*gp, cum],
+        [k.o + s*gp, cum + PARM], [k.o + s*hg, zt + PARM]
+      ].map(p => s>0 ? p : p)));
+    });
+    if (prisionero && alturaTorre() > 4){
+      const xb = k.xo - DPRIS/2, P = Lp(marco(C), xb, k.o, 0);
+      g.push(torre(P[0], P[1], cum, cum + alturaTorre(), DPRIS/2, DHUECO/2));
+    }
+    if (V.rInt > 0) g.push(mensula(C, k.xi, V.rInt, m.zc-hg, k.o-hg, k.o+hg));
+    if (V.rExt > 0) g.push(mensula(C, k.xo, -V.rExt, m.zc-hg, k.o-hg, k.o+hg));
+  });
+  return g;
+}
+// Cuna del fondo: abraza la punta del caño contra la pared opuesta.
+// Va atornillada después de meter el acrílico fijo, por eso es pieza suelta.
+// cuna del fondo: un pedazo de aro con la misma curva, para pegar, más la cuna del caño
+function arcoGuia(){                         // largo de la pestaña que se pega, medida sobre el contorno
+  const m = M();
+  let L = 3*m.wg;
+  if (V.canos > 1) L = Math.min(L, V.sep*0.85);
+  if (esRect()){                             // no puede treparse a la curva de la punta
+    const maxO = (V.canos-1)/2*V.sep;
+    return Math.max(20, Math.min(L, 2*(dims().b - maxO)));
+  }
+  return Math.min(L, Math.PI*m.Ri*0.5);
+}
+function thFondo(o){                         // parámetro u donde el caño llega a la pared del fondo
+  const m = M();
+  if (esRect()){
+    const {t, L} = tramos();                 // el fondo son los dos rectos del lado derecho
+    const s = o >= 0 ? t[0].s0 + Math.min(t[0].len, o) : t[8].s0 + Math.max(0, t[8].len + o);
+    return s/L;
+  }
+  return Math.atan2(-o, Math.sqrt(Math.max(1, m.Ri*m.Ri - o*o)))/(2*Math.PI);
+}
+function topeGuia(o){                        // dónde topa la punta del caño
+  const m = M(), R = m.Ri - PARM;
+  if (esRect()) return R;
+  return Math.sqrt(Math.max(1, R*R - Math.pow(Math.abs(o) + m.w/2, 2)));
+}
+function guiaDe(k){                           // una guía entera, en su lugar
+  const m = M(), g = [], h = m.w/2, hg = m.wg/2, C = Math.PI;
+  const xw = y => Math.sqrt(Math.max(1, m.Ri*m.Ri - y*y));
+  const dA = arcoGuia()/(2*largoCont()), tf = thFondo(k.o);
+  const perf = [[m.Ri, m.zc-hg],[m.Ri-PARM, m.zc-hg],[m.Ri-PARM, m.zc+hg],[m.Ri, m.zc+hg]];
+  sweep(perf, tf - dA, tf + dA).forEach(x => g.push(x));       // pestaña, la cara que se pega
+  const x0 = -topeGuia(k.o), N = esRect() ? 1 : 8, paso = m.wg/N;
+  for (let i=0;i<N;i++){                                       // respaldo macizo hasta la pared
+    const yA = k.o-hg + i*paso, yB = yA + paso;
+    const xp = esRect() ? -m.Ri : -xw(Math.max(Math.abs(yA), Math.abs(yB)));
+    if (xp < x0 - 1e-6) g.push(caja(C, xp, x0, yA, yB, m.zc-hg, m.zc+hg));
+  }
+  const x1 = x0 + V.guia;                                      // cuna abierta hacia arriba
+  g.push(caja(C, x0, x1, k.o-hg, k.o+hg, m.zc-hg, m.zc-h));
+  g.push(caja(C, x0, x1, k.o-hg, k.o-h,  m.zc-h,  m.zc+hg));
+  g.push(caja(C, x0, x1, k.o+h,  k.o+hg, m.zc-h,  m.zc+hg));
+  return g;
+}
+function guias(){
+  if (V.guia <= 0) return [];
+  const g = [];
+  canos().forEach(k => guiaDe(k).forEach(x => g.push(x)));
+  return g;
+}
+function guiaUna(){ return guias(); }
+// la planchuela: la base de hierro que va contra la pared, atravesada a los caños
+const PLANCH_ESP = 6.4;
+function vuelo(){ return V.vuelo; }
+function largoPlanchuela(){ return V.planchL; }
+function minPlanchuela(){ return V.sep*(V.canos-1) + V.cano + 40; }
+function planchuela(){
+  if (!verCano || !verPlanch) return [];
+  const m = M(), k = canos()[0], x0 = k.xo + vuelo();
+  const L = largoPlanchuela();
+  return [caja(Math.PI, x0, x0 + PLANCH_ESP, -L/2, L/2,
+               m.zc - V.planchW/2, m.zc + V.planchW/2)];
+}
+// las mismas piezas, movidas en fila para imprimir: no se giran, se trasladan
+function guiasSueltas(){
+  if (V.guia <= 0) return [];
+  const out = [];
+  let y = 0;
+  canos().forEach(k => {
+    const g = guiaDe(k), b = new THREE.Box3();
+    g.forEach(x => { x.computeBoundingBox(); b.union(x.boundingBox); });
+    g.forEach(x => { x.translate(-b.min.x, y - b.min.y, -b.min.z); out.push(x); });
+    y += (b.max.y - b.min.y) + 10;
+  });
+  return out;
+}
+// marca en el aro donde va pegada cada guía: repisa abajo y un tope en cada punta
+function topesGuia(){
+  if (V.guia <= 0 || !marcaGuia) return [];
+  const m = M(), g = [], hg = m.wg/2, t = 2, dA = arcoGuia()/(2*largoCont());
+  const dHolg = (V.holg + 0.4)/largoCont();                       // aire para que la guía entre
+  const zb = m.zc - hg - V.holg/2;
+  const repisa = [[m.Ri, zb - t/TAN()],[m.Ri, zb],[m.Ri - t, zb]];   // sube en pendiente, sin voladizo
+  const tope   = [[m.Ri, zb],[m.Ri - t, zb],[m.Ri - t, m.zc + hg],[m.Ri, m.zc + hg]];
+  canos().forEach(k => {
+    const tf = thFondo(k.o), a = dA + dHolg, w = 3/largoCont();
+    sweep(repisa, tf - a, tf + a).forEach(x => g.push(x));
+    sweep(tope, tf + a, tf + a + w).forEach(x => g.push(x));
+    sweep(tope, tf - a - w, tf - a).forEach(x => g.push(x));
+  });
+  return g;
+}
+// las mismas guías, pero acomodadas en fila para imprimir
+function aroGeoms(){
+  const m = M(), g = [], H = V.alto;
+  const cortar = (zA,zB) => {
+    const q = [[m.Ri,zA]];
+    paredExterna(zA, zB).forEach(x=>q.push(x));
+    q.push([m.Ri,zB]);
+    return q;
+  };
+  // tramo inferior (con cornisa o canto) y superior (con asiento)
+  const inf = [], sup = [];
+  if (modoB){ inf.push([m.Ri,0]); paredExterna(0, m.z1).forEach(q=>inf.push(q)); }
+  else { inf.push([m.Rfijo,0],[m.Ro+CORN,0],[m.Ro+CORN,CORNL]);
+         paredExterna(CORNL, m.z1).forEach(q=>inf.push(q)); }
+  inf.push([m.Ri,m.z1]);
+  if (!modoB) inf.push([m.Ri,V.asie],[m.Rfijo,V.asie]);
+  const zTecho = m.z2 + hTecho();
+  sup.push([m.Ri,zTecho]);
+  paredExterna(zTecho, V.alto).forEach(q=>sup.push(q));
+  sup.push([m.Ri,V.alto]);
+  sweep(inf, 0, 1).forEach(x=>g.push(x));
+  sweep(sup, 0, 1).forEach(x=>g.push(x));
+  // anillo del medio, cortado en las ventanas
+  const ks = canos();
+  const arcos = (zA, zB, huecos) => {
+    const perf = cortar(zA, zB);
+    for (let i=0;i<huecos.length;i++){
+      const desde = huecos[i][1];
+      const hasta = (i === huecos.length-1) ? huecos[0][0] + 1 : huecos[i+1][0];
+      if (hasta > desde + 1e-6) sweep(perf, desde, hasta).forEach(x=>g.push(x));
+    }
+  };
+  arcos(m.z1, m.z2, ks.map(k=>[k.a0,k.a1]));
+  // el techo de la ventana se cierra en escalones de 45°, así no queda puente
+  const hT = hTecho(), paso45 = 1.5, nsub = Math.max(1, Math.ceil(hT/paso45));
+  for (let j=0;j<nsub && hT > 0.5;j++){
+    const t = j*hT/nsub, zA = m.z2 + t, zB = m.z2 + (j+1)*hT/nsub;
+    const huecos = ks.map(k => [uEntrada(k.o - m.w/2 + t*TAN()), uEntrada(k.o + m.w/2 - t*TAN())])
+                     .map(p => [Math.min(p[0],p[1]), Math.max(p[0],p[1])])
+                     .sort((a,b)=>a[0]-b[0]);
+    arcos(zA, zB, huecos);
+  }
+  refuerzos().forEach(x=>g.push(x));
+  topesGuia().forEach(x=>g.push(x));
+  return g;
+}
+
+// ---------------- escena ----------------
+const cajaEsc = document.getElementById("escena");
+const escena = new THREE.Scene();
+const camara = new THREE.PerspectiveCamera(38,1,1,30000);
+const render = new THREE.WebGLRenderer({antialias:true, alpha:true});
+render.setPixelRatio(Math.min(devicePixelRatio,2));
+render.outputEncoding = THREE.sRGBEncoding;
+cajaEsc.appendChild(render.domElement);
+const amb = new THREE.AmbientLight(0x9ab4d4,.6); escena.add(amb);
+const key = new THREE.DirectionalLight(0xffffff,.9); key.position.set(500,800,900); escena.add(key);
+const fill = new THREE.DirectionalLight(0x74a0d6,.5); fill.position.set(-800,-300,-400); escena.add(fill);
+
+const matAro = new THREE.MeshStandardMaterial({color:0x33445c,roughness:.6,metalness:.2,side:THREE.DoubleSide});
+const matAng = new THREE.MeshStandardMaterial({color:0x7f97b6,roughness:.5,metalness:.15,side:THREE.DoubleSide});
+const matCano= new THREE.MeshStandardMaterial({color:0xf7b733,roughness:.35,metalness:.5,
+  transparent:true,opacity:.8,side:THREE.DoubleSide});
+const matAcr = new THREE.MeshStandardMaterial({color:0xe8f1fb,roughness:.1,transparent:true,
+  opacity:.3,side:THREE.DoubleSide});
+
+const matAcrLuz = new THREE.MeshBasicMaterial({color:0xfff3d0,transparent:true,opacity:.95,side:THREE.DoubleSide});
+const matPlanch = new THREE.MeshStandardMaterial({color:0x8d939c, metalness:.75, roughness:.45});
+const matLinea = new THREE.LineBasicMaterial({color:0x0b1220, transparent:true, opacity:.55});
+let dobleTira = true, verPlanch = true;
+let verAristas = true, luzOn = false, texGraf = null, girGraf = -Math.PI/2;
+function orientarGraf(){
+  if (!texGraf) return;
+  texGraf.center.set(.5,.5);
+  texGraf.rotation = girGraf;
+  texGraf.needsUpdate = true;
+}
+
+const grupo = new THREE.Group();
+const lineas = new THREE.Group();
+grupo.add(lineas);
+escena.add(grupo);
+let paraAristas = [], tAristas = null;
+function aristas(g){ paraAristas.push(g); }
+function pintarAristas(){                    // se calculan al soltar, no mientras arrastrás
+  while (lineas.children.length){ const c = lineas.children.pop(); c.geometry.dispose(); }
+  if (!verAristas) return;
+  paraAristas.forEach(g => lineas.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 24), matLinea)));
+}
+function pedirAristas(){
+  clearTimeout(tAristas);
+  tAristas = setTimeout(pintarAristas, 200);
+}
+function aplicarLuz(){
+  document.getElementById("escena").classList.toggle("noche", luzOn);
+  matLinea.color.set(luzOn ? 0x000000 : 0x0b1220);
+  matLinea.opacity = luzOn ? .75 : .55;
+  key.intensity  = luzOn ? .25 : .9;
+  fill.intensity = luzOn ? .15 : .5;
+  amb.intensity  = luzOn ? .18 : .6;
+  matAro.emissive.set(0x000000);
+  matAng.emissive.set(0x000000);
+}
+function reconstruir(){
+  while (grupo.children.length){ const c = grupo.children.pop(); if (c.geometry) c.geometry.dispose(); }
+  while (lineas.children.length){ const c = lineas.children.pop(); c.geometry.dispose(); }
+  grupo.add(lineas);
+  paraAristas = [];
+  const m = M();
+  if (soloGuia){                                   // la pieza sola, acostada como se imprime
+    centrar(guiasSueltas()).forEach(g => { grupo.add(new THREE.Mesh(g, matAng)); aristas(g); });
+    grupo.position.z = -m.wg/2;
+    pedirAristas();
+    return;
+  }
+  aroGeoms().forEach(g => { grupo.add(new THREE.Mesh(g, matAro)); aristas(g); });
+  if (verTapas){
+    sweep(perfAngulo(1), 0, 1).forEach(g => { grupo.add(new THREE.Mesh(g, matAng)); aristas(g); });
+    if (modoB) sweep(perfAngulo(-1), 0, 1).forEach(g => { grupo.add(new THREE.Mesh(g, matAng)); aristas(g); });
+    // acrílicos
+    const discos = [[m.Ro, V.alto + V.acr/2]];
+    if (modoB) discos.push([m.Ro, -V.acr/2]);
+    else discos.push([m.dFijo/2, V.asie + V.acr/2]);
+    discos.forEach(([r,z]) => {
+      const mat = luzOn ? matAcrLuz.clone() : matAcr.clone();
+      mat.color.set(luzOn ? mezclar(colorAcr, 0xfff0c8) : colorAcr);
+      if (texGraf){ mat.map = texGraf; mat.opacity = luzOn ? 1 : .85; }
+      const d = new THREE.Mesh(placa(V.diam/2 - r), mat);
+      d.position.z = z; grupo.add(d);
+    });
+  }
+  guias().forEach(g => { grupo.add(new THREE.Mesh(g, matAng)); aristas(g); });
+  planchuela().forEach(g => { grupo.add(new THREE.Mesh(g, matPlanch)); aristas(g); });
+  if (verCano)
+    canos().forEach(k => {
+      const fondo = V.guia > 0 ? -topeGuia(k.o) : -(k.xi - V.rInt - 10);
+      grupo.add(new THREE.Mesh(caja(Math.PI, fondo, k.xo + vuelo(),
+        k.o-V.cano/2, k.o+V.cano/2, m.zc-V.cano/2, m.zc+V.cano/2), matCano));
+    });
+  grupo.position.z = -V.alto/2;
+  pedirAristas();
+}
+
+let rotY=-.75, rotX=.35, distBase=1500, zoomU=1, arr=null, pin=null, tocado=false;
+function encuadrar(){
+  const m = M();
+  distBase = soloGuia ? Math.max(arcoGuia(), V.guia*3, m.wg*3*V.canos)*2.2
+                      : Math.max(V.diam, V.alto*3)*2.0;
+}
+function dist(){ return distBase*zoomU; }
+function zoom(f){ zoomU = Math.max(.3, Math.min(3, zoomU*f)); }
+function acomodar(){ rotY = -.75; rotX = .35; zoomU = 1; }
+const el = render.domElement;
+el.addEventListener("pointerdown", e => {
+  arr = {x:e.clientX, y:e.clientY}; tocado = true; el.setPointerCapture(e.pointerId); });
+el.addEventListener("pointermove", e => {
+  if (!arr || pin) return;
+  rotY -= (e.clientX - arr.x)*.008;
+  rotX += (e.clientY - arr.y)*.006;                  // arrastrás para arriba, sube
+  rotX = Math.max(-1.45, Math.min(1.45, rotX));
+  arr = {x:e.clientX, y:e.clientY};
+});
+["pointerup","pointercancel","pointerleave"].forEach(t => el.addEventListener(t, ()=>arr=null));
+el.addEventListener("dblclick", acomodar);
+el.addEventListener("wheel", e => { e.preventDefault(); zoom(1 + e.deltaY*.001); }, {passive:false});
+const sep2 = e => Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+                             e.touches[0].clientY-e.touches[1].clientY);
+el.addEventListener("touchstart", e => { if (e.touches.length===2){ pin = sep2(e); arr = null; } }, {passive:true});
+el.addEventListener("touchmove", e => {
+  if (e.touches.length===2 && pin){ const d = sep2(e); zoom(pin/d); pin = d; arr = null; } }, {passive:true});
+["touchend","touchcancel"].forEach(t => el.addEventListener(t, e => {
+  if (!e.touches || e.touches.length < 2) pin = null; }));
+function medir(){ const w=cajaEsc.clientWidth,h=cajaEsc.clientHeight;
+  render.setSize(w,h,false); camara.aspect=w/h; camara.updateProjectionMatrix(); }
+addEventListener("resize", medir);
+const reducido = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function loop(){
+  requestAnimationFrame(loop);
+  if (!arr && !tocado && !reducido) rotY += .0022;
+  const D = dist();
+  camara.position.set(D*Math.cos(rotX)*Math.sin(rotY), D*Math.sin(rotX), D*Math.cos(rotX)*Math.cos(rotY));
+  camara.lookAt(0,0,0);
+  render.render(escena, camara);
+}
+
+// ---------------- datos ----------------
+function volumen(perf){
+  let A = 0, cx = 0;
+  for (let i=0;i<perf.length;i++){
+    const p = perf[i], q = perf[(i+1)%perf.length];
+    const cr = p[0]*q[1] - q[0]*p[1];
+    A += cr; cx += (p[0]+q[0])*cr;
+  }
+  A /= 2; cx = cx/(6*A);
+  // al barrer un perfil por un contorno cerrado convexo, el largo recorrido por su
+  // centro de área es L + 2*pi*(desplazamiento respecto del contorno exterior)
+  return Math.abs(A * (largoCont() + 2*Math.PI*(cx - V.diam/2)));
+}
+function volTotal(){                              // cm³ de material, todas las piezas
+  const m = M(), nv = V.canos;
+  const volRef = nv*((m.wg*m.wg - m.w*m.w)*(V.rInt+V.rExt+V.pared)
+                   + m.wg*(V.rInt*V.rInt + V.rExt*V.rExt)/2);
+  return (volumen(perfAro()) - nv*m.w*m.w*V.pared + volRef
+        + (modoB?2:1)*volumen(perfAngulo(-1))
+        + (V.guia>0 ? nv*(m.wg*m.wg*(PARM+2) + V.guia*m.wg*(m.wg+m.wg-m.w)) : 0))/1000;
+}
+function pesoImpreso(){ return volTotal()*1.24*0.62; }
+function pintarDatos(){
+  const m = M(), nv = V.canos;
+  const vol = volTotal();
+  const filas = [
+    ["Pendiente de los voladizos", fmt(V.vol)+"° · "+fmt(1/TAN())+" mm de alto por mm de vuelo", false],
+    ["Techo del encastre", hTecho() >= (M().w/2)/TAN() - .01 ? "dos aguas a 45° · sin puentes"
+        : "dos aguas · puente de "+fmt(M().w - 2*hTecho()*TAN())+" mm", false],
+    ["Apoyo en la cama", modoB ? "cualquiera de los dos cantos" : "la cara fija, la del cono", false],
+    ["Planchuela", fmt(largoPlanchuela())+" × "+fmt(V.planchW)+" × "+PLANCH_ESP+" mm", false],
+    ["Cama de impresión", (esRect()
+        ? fmt(V.diam + 2*Math.max(V.rExt, modoB?0:CORN, nervio?NERVH:0))+" × "+
+          fmt(V.altoc + 2*Math.max(modoB?0:CORN, nervio?NERVH:0))
+        : "Ø"+fmt(V.diam + 2*Math.max(V.rExt, modoB?0:CORN, nervio?NERVH:0)))+
+      " × "+fmt(V.alto)+" alto", true],
+    ["Ángulo rolado", "alas de "+fmt(V.ala)+" y "+fmt(V.faldon)+" mm, espesores "+
+      fmt(V.espTapa)+" y "+fmt(V.espFald), false],
+    [modoB ? "Acrílicos ×2" : "Acrílico del ángulo",
+      esRect() ? fmt(V.diam)+" × "+fmt(V.altoc)+" · esquinas R"+fmt(dims().R) : "Ø"+fmt(V.diam)+" mm", false]
+  ];
+  if (!modoB){
+    const ins = (V.diam - m.dFijo)/2;
+    filas.push(["Acrílico fijo", (esRect()
+      ? fmt(V.diam-2*ins)+" × "+fmt(V.altoc-2*ins)+" · R"+fmt(Math.max(0,dims().R-ins))
+      : "Ø"+fmt(m.dFijo))+" mm · muerde "+fmt(m.mordida)+" mm", true]);
+    filas.push(["Paso libre entre refuerzos", "Ø"+fmt(m.paso)+" mm", false]);
+    filas.push(["Luz visible de la cara fija", "Ø"+fmt(2*m.Rfijo)+" mm", false]);
+  }
+  filas.push(["Encastres", nv+(nv===1?" caño":" caños paralelos")+
+    (nv>1?" a "+fmt(V.sep)+" mm":"")+" · eje a "+fmt(m.zc)+" del canto", false]);
+  filas.push(["Luz del encastre", fmt(m.w)+" × "+fmt(m.w)+" mm", false]);
+  if (V.guia > 0) filas.push(["Guía del fondo", nv+(nv===1?" pieza":" piezas")+" de "+fmt(V.guia)+
+    " mm · 2 tornillos c/u", false]);
+  if (prisionero) filas.push(["Prisioneros", nv+" · inserto M5 · torre de "+fmt(alturaTorre())+" mm", false]);
+  if (nervio) filas.push(["Nervios", V.nervs+(V.nervs>1?" · cada "+fmt(pasoNerv())+" mm":" en el eje del caño"), false]);
+  filas.push(["Ángulo rolado", (modoB?"2 piezas":"1 pieza")+" · ala "+fmt(V.ala)+" mm", false]);
+  filas.push(["Material sólido", fmt(vol)+" cm³ · "+Math.round(vol*1.24)+" g", false]);
+  filas.push(["Impreso ~20 % relleno", "≈ "+Math.round(vol*1.24*.62)+" g", false]);
+  document.getElementById("datos").innerHTML = filas.map(f =>
+    '<div class="dato'+(f[2]?' destacado':'')+'"><span class="k">'+f[0]+'</span><span class="v">'+f[1]+'</span></div>').join("");
+}
+
+// ---------------- exportar ----------------
+function stlBuf(geoms){
+  const t = [];
+  geoms.forEach(g => {
+    const ng = g.index ? g.toNonIndexed() : g;
+    const p = ng.attributes.position.array;
+    for (let i=0;i<p.length;i+=9)
+      t.push([[p[i],p[i+1],p[i+2]],[p[i+3],p[i+4],p[i+5]],[p[i+6],p[i+7],p[i+8]]]);
+  });
+  const buf = new ArrayBuffer(84+t.length*50), dv = new DataView(buf);
+  dv.setUint32(80, t.length, true);
+  let o = 84;
+  t.forEach(f => {
+    const ux=f[1][0]-f[0][0],uy=f[1][1]-f[0][1],uz=f[1][2]-f[0][2];
+    const vx=f[2][0]-f[0][0],vy=f[2][1]-f[0][1],vz=f[2][2]-f[0][2];
+    let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    const l = Math.hypot(nx,ny,nz)||1;
+    dv.setFloat32(o,nx/l,true); dv.setFloat32(o+4,ny/l,true); dv.setFloat32(o+8,nz/l,true); o+=12;
+    f.forEach(v=>{ dv.setFloat32(o,v[0],true); dv.setFloat32(o+4,v[1],true); dv.setFloat32(o+8,v[2],true); o+=12; });
+    dv.setUint16(o,0,true); o+=2;
+  });
+  return buf;
+}
+function stl(geoms){ return new Blob([stlBuf(geoms)],{type:"model/stl"}); }
+
+// ---- zip sin compresión ----
+const CRCT = (()=>{ const t=[]; for(let n=0;n<256;n++){ let c=n;
+  for(let k=0;k<8;k++) c = c & 1 ? 0xEDB88320 ^ (c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c = 0xFFFFFFFF;
+  for (let i=0;i<u8.length;i++) c = CRCT[(c ^ u8[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF)>>>0; }
+function zip(files){
+  const enc = new TextEncoder(), locales = [], centrales = [];
+  let off = 0;
+  files.forEach(f => {
+    const nom = enc.encode(f.name), c = crc32(f.bytes), n = f.bytes.length;
+    const lh = new Uint8Array(30 + nom.length), dv = new DataView(lh.buffer);
+    dv.setUint32(0, 0x04034b50, true); dv.setUint16(4, 20, true); dv.setUint16(6, 0, true);
+    dv.setUint16(8, 0, true); dv.setUint16(10, 0, true); dv.setUint16(12, 0, true);
+    dv.setUint32(14, c, true); dv.setUint32(18, n, true); dv.setUint32(22, n, true);
+    dv.setUint16(26, nom.length, true); dv.setUint16(28, 0, true);
+    lh.set(nom, 30);
+    locales.push(lh, f.bytes);
+    const ch = new Uint8Array(46 + nom.length), dc = new DataView(ch.buffer);
+    dc.setUint32(0, 0x02014b50, true); dc.setUint16(4, 20, true); dc.setUint16(6, 20, true);
+    dc.setUint32(16, c, true); dc.setUint32(20, n, true); dc.setUint32(24, n, true);
+    dc.setUint16(28, nom.length, true); dc.setUint32(42, off, true);
+    ch.set(nom, 46);
+    centrales.push(ch);
+    off += lh.length + n;
+  });
+  const cdIni = off;
+  let cdLen = 0; centrales.forEach(c => cdLen += c.length);
+  const fin = new Uint8Array(22), df = new DataView(fin.buffer);
+  df.setUint32(0, 0x06054b50, true);
+  df.setUint16(8, files.length, true); df.setUint16(10, files.length, true);
+  df.setUint32(12, cdLen, true); df.setUint32(16, cdIni, true);
+  return new Blob([...locales, ...centrales, fin], {type:"application/zip"});
+}
+function centrar(gs){
+  const b = new THREE.Box3();
+  gs.forEach(g=>{ g.computeBoundingBox(); b.union(g.boundingBox); });
+  gs.forEach(g => g.translate(-(b.min.x+b.max.x)/2, -(b.min.y+b.max.y)/2, -b.min.z));
+  return gs;
+}
+function bajar(b,n){ const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=n; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000); }
+function dxfTexto(d){
+  const L = ["0","SECTION","2","ENTITIES"];
+  if (!esRect()){
+    L.push("0","CIRCLE","8","ACRILICO","10","0.0","20","0.0","30","0.0","40",(d/2).toFixed(3));
+  } else {
+    const inset = (V.diam - d)/2, {A,B,R} = dims();
+    const A2 = A/2 - inset, B2 = B/2 - inset, R2 = Math.max(0, R - inset);
+    const a = A2 - R2, b = B2 - R2, bl = Math.tan(Math.PI/8);   // 0,4142 = arco de 90°
+    const V8 = [[A2,-b,0],[A2,b,bl],[a,B2,0],[-a,B2,bl],[-A2,b,0],[-A2,-b,bl],[-a,-B2,0],[a,-B2,bl]];
+    L.push("0","LWPOLYLINE","8","ACRILICO","90","8","70","1");
+    V8.forEach(v => L.push("10",v[0].toFixed(3),"20",v[1].toFixed(3),"42",v[2].toFixed(5)));
+  }
+  L.push("0","ENDSEC","0","EOF");
+  return L.join("\n");
+}
+function dxf(d, nombre){ bajar(new Blob([dxfTexto(d)],{type:"application/dxf"}), nombre); }
+function leeme(){
+  const m = M();
+  const L = [];
+  L.push("CARTEL SALIENTE - "+(esRect()
+    ? "rectangular "+V.diam+" x "+V.altoc+", puntas R"+dims().R
+    : "circular D"+V.diam)+" - profundidad "+V.alto+" mm");
+  L.push(modoB ? "Modo: dos angulos, dos caras desmontables" : "Modo: cara fija + angulo");
+  L.push("");
+  L.push("PIEZAS IMPRESAS");
+  L.push("  aro completo ......... 1, parado sobre el canto, sin soportes");
+  L.push("  angulo rolado ........ "+(modoB?2:1)+", acostado, la misma pieza para los dos lados");
+  if (V.guia > 0) L.push("  guia del fondo ....... "+V.canos+", abierta hacia arriba");
+  L.push("");
+  L.push("ACRILICOS");
+  if (!modoB) L.push("  fijo ................. D"+m.dFijo.toFixed(1)+"  (muerde "+m.mordida.toFixed(1)+" mm)");
+  L.push("  del angulo ........... D"+V.diam+(modoB?"  x2":""));
+  L.push("");
+  L.push("MEDIDAS");
+  L.push("  pared "+V.pared+" | acrilico "+V.acr+" | cano "+V.cano+"x"+V.cano+" holgura "+V.holg);
+  L.push("  refuerzos "+V.rExt+" afuera / "+V.rInt+" adentro | eje del cano a "+m.zc+" del canto");
+  L.push("  "+V.canos+" cano(s)"+(V.canos>1?" paralelos a "+V.sep+" mm entre ejes":""));
+  if (!modoB) L.push("  asiento "+V.asie+" de profundidad, mordida "+V.pest);
+  L.push("  angulo: ala "+V.ala+" sobre el acrilico, "+V.faldon+" sobre el aro");
+  L.push("");
+  L.push("ORDEN DE ARMADO");
+  L.push("  1. aro");
+  if (!modoB) L.push("  2. acrilico fijo, entra desde la cara desmontable y asienta en el cono");
+  L.push("  3. canos");
+  if (V.guia > 0) L.push("  3b. planchuela de "+largoPlanchuela()+" x "+V.planchW+" x 6,4 contra la pared, soldada a los canos,");
+  L.push("      amurada con 4 tarugos del 10 lo mas separados posible entre si.");
+  L.push("  4. guias: van ENTERAS del lado de adentro. El respaldo copia la curva del aro,");
+  L.push("     asi que se pegan a la pared del fondo con sikaflex o VHB en toda esa cara.");
+  L.push("     El aro trae la marca: una repisa abajo y un tope en cada punta. Apoyala ahi y pegala.");
+  L.push("     Se imprimen paradas, tal como quedan puestas: la cuna abre para arriba y no lleva soporte.");
+  L.push("     La punta del cano queda cortada a escuadra y topa contra el respaldo por un solo lado. Es correcto.");
+  if (prisionero) L.push("  5. prisioneros: inserto M5, taladrar D5,5 los 4 mm de la tapa del manguito");
+  L.push("  6. modulos y fuente");
+  L.push("  7. acrilico "+V.diam+" y angulo rolado");
+  L.push("");
+  L.push("Imprimir con 3 perimetros. Pegar los acrilicos con VHB o sikaflex, nunca rigido.");
+  return L.join("\n");
+}
+document.getElementById("dlAro").addEventListener("click",()=>{
+  bajar(stl(centrar(aroGeoms())), "aro"+V.diam+"x"+V.alto+(modoB?"_2angulos":"_mixto")+".stl"); });
+document.getElementById("dlAng").addEventListener("click",()=>{
+  bajar(stl(centrar(sweep(perfAngulo(-1),0,1))), "angulo_rolado_"+V.diam+".stl"); });
+document.getElementById("dlGuia").addEventListener("click",()=>{
+  bajar(stl(centrar(guiasSueltas())), "guias_cano"+V.cano+".stl"); });
+document.getElementById("dlDxfFijo").addEventListener("click",()=>{
+  dxf(M().dFijo, "acrilico_fijo_D"+Math.round(M().dFijo)+".dxf"); });
+document.getElementById("dlDxfAng").addEventListener("click",()=>{
+  dxf(V.diam, "acrilico_D"+V.diam+".dxf"); });
+
+document.getElementById("dlTodo").addEventListener("click",()=>{
+  const enc = new TextEncoder(), base = "cartel"+V.diam+"x"+V.alto+(modoB?"_2angulos":"_mixto");
+  const fs = [
+    {name: base+"/aro.stl", bytes: new Uint8Array(stlBuf(centrar(aroGeoms())))},
+    {name: base+"/angulo_rolado.stl", bytes: new Uint8Array(stlBuf(centrar(sweep(perfAngulo(-1),0,1))))},
+    {name: base+"/acrilico_D"+V.diam+".dxf", bytes: enc.encode(dxfTexto(V.diam))},
+    {name: base+"/LEEME.txt", bytes: enc.encode(leeme())}
+  ];
+  if (V.guia > 0) fs.splice(2, 0, {name: base+"/guias_cano.stl", bytes: new Uint8Array(stlBuf(centrar(guiasSueltas())))});
+  if (!modoB) fs.push({name: base+"/acrilico_fijo_D"+Math.round(M().dFijo)+".dxf",
+                       bytes: enc.encode(dxfTexto(M().dFijo))});
+  bajar(zip(fs), base+".zip");
+});
+
+// ---------------- costo ----------------
+const PRECIOS = [
+  {k:"fil_kg",  l:"Filamento, el kilo",            v:28000, u:"$", ayuda:"Lo que te sale el rollo de un kilo puesto en el taller. Si comprás de 5 kg, dividí por cinco."},
+  {k:"gxh",     l:"Lo que imprime tu máquina",     v:125,   u:"g/h", ayuda:"Cuántos gramos por hora tira tu máquina de verdad, no lo que dice el laminador. Un kilo en 8 horas son 125 g/h, que con boquilla de 1 mm son unos 28 mm³/s."},
+  {k:"pcab",    l:"Consumo del cabezal",           v:175,   u:"W", ayuda:"Consumo continuo del cabezal, los motores, los ventiladores y la electrónica, sin contar la cama. En la Giga son unos 180 W."},
+  {k:"pzona",   l:"Consumo de cada zona de cama",  v:140,   u:"W", ayuda:"Consumo de cada cuadrante de cama encendido, unos 140 W en la Giga. En la Neptune va en 0 porque su cama ya está sumada arriba."},
+  {k:"setup",   l:"Preparación de la tanda",       v:4000,  u:"$", ayuda:"Lo que te cuesta arrancar y cerrar la tanda: calentar, nivelar, despegar las piezas y limpiar la cama. Es lo único que se reparte de verdad al agrupar."},
+  {k:"tanda",   l:"Piezas por tanda",              v:1,     u:"u", ayuda:"Cuántas piezas ponés en la misma tanda. Ojo: con un solo cabezal no baja el tiempo de máquina, la tanda tarda la suma de todas."},
+  {k:"kwh",     l:"Precio del kWh",                v:120,   u:"$", ayuda:"Lo que pagás el kilovatio hora, con impuestos incluidos."},
+  {k:"dolar",   l:"Dólar",                         v:1450,  u:"$", ayuda:"Solo se usa para pasar la hora de máquina a pesos. Al cambiarlo se recalcula sola."},
+  {k:"maq_h",   l:"Hora de máquina",               v:1958,  u:"$/h", ayuda:"Amortización más mantenimiento, dividido por las horas de vida útil. Sale de lo que vale la máquina más un 25 % de repuestos, sobre 5.000 horas en la Giga y 3.000 en la Neptune: 1,35 y 0,35 dólares la hora."},
+  {k:"mo_h",    l:"Mano de obra",                  v:6000,  u:"$/h", ayuda:"Tu hora de taller para armar el cartel: pegar acrílicos, poner LEDs, cablear."},
+  {k:"mo_hs",   l:"Horas de armado",               v:3,     u:"h", ayuda:"Cuántas horas te lleva armarlo, sin contar la impresión ni la instalación."},
+  {k:"cano_ml", l:"Caño, el metro",                v:3470,  u:"$", ayuda:"El metro de caño estructural. La barra de 6 m de 30×30 a 20.822 da 3.470 el metro."},
+  {k:"planch_ml",l:"Planchuela, el metro",         v:17650, u:"$", ayuda:"El metro de planchuela para la base contra la pared. La de 76,2 × 6,4 de 6 m a 74.067 da 12.345 el metro."},
+  {k:"pintura", l:"Pintura de la herrería",        v:50,    u:"%", ayuda:"Cuánto le sumás al hierro por antióxido y esmalte, en porcentaje sobre el material."},
+  {k:"sold_u",  l:"Soldadura, cada una",           v:1200,  u:"$", ayuda:"Cada unión soldada. Se cuentan dos por caño."},
+  {k:"acr_m2",  l:"Acrílico, el m²",               v:50000, u:"$", ayuda:"El metro cuadrado de acrílico del espesor que uses."},
+  {k:"acr_ml",  l:"Corte de acrílico, el metro",   v:1500,  u:"$", ayuda:"El metro lineal de corte, láser o router. Se cobra sobre el perímetro de cada tapa."},
+  {k:"led_ml",  l:"Tira LED, el metro",            v:7000,  u:"$", ayuda:"El metro de tira LED. Si va doble, poné el precio de una sola: la cantidad la duplica el botón."},
+  {k:"led_paso",l:"Separación entre tiras",        v:100,   u:"mm", ayuda:"Cada cuántos milímetros ponés una tira. De ahí saca cuántos metros entran en la cara del cartel. La regla es parecida a la profundidad de la caja."},
+  {k:"margen",  l:"Margen sobre el costo",         v:100,   u:"%", ayuda:"Cuánto le sumás al costo para llegar al precio de venta. En 100 vendés al doble."}
+];
+const FUENTES = [[5,12600],[10,18400],[15,25000],[20,28000],[25,31000],[30,36000],[40,45000]];
+// un solo cabezal en las dos: la cama de la Giga está dividida en zonas, el cabezal no
+const MAQUINAS = [
+  {id:"giga", nom:"OrangeStorm Giga", gxh:125, pcab:180, pzona:140, usd_h:1.35,
+   cama:[800,800,1000], zona:400, zonas:4},
+  {id:"nep",  nom:"Neptune 4 Max",    gxh:90,  pcab:200, pzona:0,   usd_h:0.35,
+   cama:[420,420,480], zona:420, zonas:1},
+  {id:"man",  nom:"A mano",           gxh:null, pcab:null, pzona:null, usd_h:null,
+   cama:null, zona:null, zonas:1}
+];
+let maquina = MAQUINAS[0];
+const PR = {}; PRECIOS.forEach(p => PR[p.k] = p.v);
+(function(){
+  const c = document.getElementById("maquinas");
+  MAQUINAS.forEach(mq => {
+    const b = document.createElement("button");
+    b.className = "tgl"; b.id = "mq_"+mq.id; b.textContent = mq.nom;
+    b.setAttribute("aria-pressed", String(mq === maquina));
+    b.addEventListener("click", () => {
+      maquina = mq;
+      MAQUINAS.forEach(o => document.getElementById("mq_"+o.id).setAttribute("aria-pressed", String(o===mq)));
+      if (mq.gxh) cargarMaquina();
+      pintarCostos();
+    });
+    c.appendChild(b);
+  });
+})();
+function medidaPieza(){                        // lo que ocupa el aro en la cama
+  const ex = 2*Math.max(V.rExt, modoB?0:CORN, nervio?NERVH:0);
+  return [V.diam + ex, (esRect() ? V.altoc : V.diam) + ex, V.alto];
+}
+function poner(k, v){ PR[k] = v; document.getElementById("p_"+k).value = v; }
+function cargarMaquina(){
+  if (!maquina.gxh) return;
+  poner("gxh", maquina.gxh);
+  poner("pcab", maquina.pcab);
+  poner("pzona", maquina.pzona);
+  poner("maq_h", Math.round(maquina.usd_h*PR.dolar));
+  poner("tanda", tandaSugerida());
+}
+function zonasPieza(){                          // cuadrantes de cama que ocupa una pieza
+  if (!maquina.zona || maquina.zonas < 2) return 1;
+  const m = medidaPieza(), z = maquina.zona;
+  if (m[0] <= z && m[1] <= z) return 1;
+  if ((m[0] <= 2*z && m[1] <= z) || (m[0] <= z && m[1] <= 2*z)) return 2;
+  return 4;
+}
+function tandaSugerida(){
+  if (!maquina.zona) return PR.tanda || 1;
+  return Math.max(1, Math.floor(maquina.zonas / zonasPieza()));
+}
+function zonasEncendidas(n){                    // si repartís piezas, se prenden más cuadrantes
+  return Math.min(maquina.zonas || 1, zonasPieza()*Math.max(1, n));
+}
+let arrancado = false;
+function notaMaquina(){
+  if (!arrancado){ arrancado = true; cargarMaquina(); }
+  const n = document.getElementById("notaMaq");
+  if (!maquina.cama){ n.innerHTML = "Valores cargados a mano."; return; }
+  const m = medidaPieza(), c = maquina.cama, tn = Math.max(1, PR.tanda||1);
+  const entra = m[0] <= c[0] && m[1] <= c[1] && m[2] <= c[2];
+  let t = "Cama de " + c[0] + " × " + c[1] + " × " + c[2] + ". El aro mide " +
+          fmt(m[0]) + " × " + fmt(m[1]) + " × " + fmt(m[2]) + ": " +
+          (entra ? "entra." : "<b>no entra, hay que partirlo.</b>");
+  if (maquina.zonas > 1){
+    t += " Ocupa " + zonasPieza() + " de los " + maquina.zonas + " cuadrantes, así que en una tanda " +
+         "entran hasta " + tandaSugerida() + ".";
+    t += " Con " + tn + (tn===1?" pieza":" piezas") + " quedan <b>" + zonasEncendidas(tn) +
+         " zonas de cama encendidas</b>.";
+  }
+  t += " <b>Un solo cabezal:</b> la tanda tarda las horas de una pieza por la cantidad, " +
+       "así que agrupar no baja el tiempo de máquina ni la luz, solo reparte la preparación.";
+  n.innerHTML = t;
+}
+(function(){
+  const c = document.getElementById("precios");
+  PRECIOS.forEach(p => {
+    const d = document.createElement("div");
+    d.className = "campo campoP";
+    d.innerHTML = '<div class="precio"><label for="p_'+p.k+'">'+p.l+'</label>'+
+      '<button class="ayudabtn" id="qp_'+p.k+'" aria-label="qué es">?</button>'+
+      '<input type="number" id="p_'+p.k+'" value="'+p.v+'" step="any" inputmode="decimal">'+
+      '<span class="un">'+p.u+'</span></div>'+
+      '<div class="ayuda">'+(p.ayuda||"")+'</div>';
+    c.appendChild(d);
+    const abrirP = () => d.classList.toggle("abierta");
+    d.querySelector("#qp_"+p.k).addEventListener("click", abrirP);
+    d.querySelector("label").addEventListener("click", e => { e.preventDefault(); abrirP(); });
+    d.querySelector("input").addEventListener("input", e => {
+      const n = parseFloat(e.target.value);
+      PR[p.k] = isNaN(n) ? 0 : n;
+      if (p.k === "dolar" && maquina.usd_h) poner("maq_h", Math.round(maquina.usd_h*PR.dolar));
+      pintarCostos();
+    });
+  });
+})();
+function areaCont(inset){                       // área encerrada por el contorno, en mm²
+  const {A,B,R} = dims();
+  const A2 = A - 2*inset, B2 = B - 2*inset, R2 = Math.max(0, R - inset);
+  if (!esRect()) return Math.PI*Math.pow(A2/2,2);
+  return A2*B2 - (4 - Math.PI)*R2*R2;
+}
+function perimCont(inset){
+  const {A,B,R} = dims();
+  const A2 = A - 2*inset, B2 = B - 2*inset, R2 = Math.max(0, R - inset);
+  if (!esRect()) return Math.PI*A2;
+  return 2*(A2 - 2*R2) + 2*(B2 - 2*R2) + 2*Math.PI*R2;
+}
+function fuentesPara(amp){                      // combinación más barata que cubra el consumo
+  const N = Math.max(1, Math.ceil(amp));
+  const mejor = new Array(N+1).fill(null);
+  mejor[0] = {costo:0, lista:[]};
+  for (let a=1;a<=N;a++){
+    FUENTES.forEach(([am,co]) => {
+      const prev = mejor[Math.max(0, a-am)];
+      if (prev && (!mejor[a] || prev.costo + co < mejor[a].costo))
+        mejor[a] = {costo: prev.costo + co, lista: prev.lista.concat([am])};
+    });
+  }
+  let r = mejor[N];
+  FUENTES.forEach(([am,co]) => { if (am >= amp && (!r || co < r.costo)) r = {costo:co, lista:[am]}; });
+  return r || {costo:0, lista:[]};
+}
+function costos(){
+  const gr = pesoImpreso();
+  const horas = PR.gxh > 0 ? gr/PR.gxh : 0;        // horas de UNA pieza
+  const tanda = Math.max(1, PR.tanda || 1);
+  const horasTanda = horas*tanda;                   // un solo cabezal: se suman
+  const zonas = zonasEncendidas(tanda);
+  const pot = PR.pcab + zonas*PR.pzona;
+  const filamento = gr/1000*PR.fil_kg;
+  const luz = pot/1000*horasTanda*PR.kwh/tanda;     // energía de la tanda, repartida
+  const maq = horasTanda*PR.maq_h/tanda;            // idem: da lo mismo que una sola
+  const prep = PR.setup/tanda;                      // esto sí baja al agrupar
+  const mano = PR.mo_hs*PR.mo_h;
+  // acrílicos: el de la cara desmontable y el fijo (o dos iguales en modo B)
+  const insFijo = modoB ? 0 : (V.diam - M().dFijo)/2;
+  const a1 = areaCont(0)/1e6, a2 = areaCont(insFijo)/1e6;
+  const p1 = perimCont(0)/1000, p2 = perimCont(insFijo)/1000;
+  const acrilico = (a1 + a2)*PR.acr_m2;
+  const corte = (p1 + p2)*PR.acr_ml;
+  // tiras: recorridos paralelos separados el paso, doble tira
+  const paso = Math.max(20, PR.led_paso);
+  const mlTira = (areaCont(V.pared)/1e6)/(paso/1000)*(dobleTira ? 2 : 1);
+  const led = mlTira*PR.led_ml;
+  const amp = mlTira*1.1;                        // 1 metro ≈ 1 A, con 10 % de margen
+  const f = fuentesPara(amp);
+  // herrería: caño desde la punta del fondo hasta afuera de la pared, más la planchuela
+  const k0 = canos()[0];
+  const largoCano = (topeGuia(k0.o) + k0.xo + V.vuelo)/1000;
+  const mlCano = largoCano*V.canos;
+  const mlPlanch = largoPlanchuela()/1000;
+  const herreria = (mlCano*PR.cano_ml + mlPlanch*PR.planch_ml)*(1 + PR.pintura/100)
+                 + V.canos*2*PR.sold_u;
+  const costo = filamento + luz + maq + prep + mano + acrilico + corte + led + f.costo + herreria;
+  return {gr, horas, horasTanda, tanda, zonas, pot, filamento, luz, maquina:maq, prep, mano, acrilico, corte, led, mlTira, amp,
+          mlCano, mlPlanch, largoCano, herreria,
+          fuentes:f, costo, venta: costo*(1 + PR.margen/100)};
+}
+const PESOS = n => "$ " + Math.round(n).toLocaleString("es-AR");
+function pintarCostos(){
+  notaMaquina();
+  const c = costos(), f = [];
+  f.push(["Filamento · "+fmt(c.gr)+" g", PESOS(c.filamento)]);
+  f.push(["Luz · "+fmt(c.pot)+" W con "+c.zonas+(c.zonas===1?" zona":" zonas")+" de cama", PESOS(c.luz)]);
+  f.push(["Máquina · "+fmt(c.horas)+" h por pieza"+(c.tanda>1?", tanda de "+fmt(c.horasTanda)+" h":""), PESOS(c.maquina)]);
+  f.push(["Preparación"+(c.tanda>1?" · repartida entre "+c.tanda:""), PESOS(c.prep)]);
+  f.push(["Mano de obra", PESOS(c.mano)]);
+  f.push(["Caño · "+V.canos+" × "+fmt(c.largoCano*1000)+" mm y planchuela de "+fmt(c.mlPlanch*1000)+
+          " mm, pintados", PESOS(c.herreria)]);
+  f.push(["Acrílico", PESOS(c.acrilico)]);
+  f.push(["Corte del acrílico", PESOS(c.corte)]);
+  f.push(["Tira LED · "+fmt(c.mlTira)+" m"+(dobleTira?" (doble)":""), PESOS(c.led)]);
+  f.push(["Fuentes · "+(c.fuentes.lista.length ? c.fuentes.lista.map(a=>a+"A").join(" + ") : "ninguna")
+          +" para "+fmt(c.amp)+" A", PESOS(c.fuentes.costo)]);
+  let html = f.map(x => '<div class="cost"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
+  html += '<div class="cost sub"><span class="k">Costo</span><span class="v">'+PESOS(c.costo)+'</span></div>';
+  html += '<div class="cost total"><span class="k">Precio de venta</span><span class="v">'+PESOS(c.venta)+'</span></div>';
+  document.getElementById("costos").innerHTML = html;
+}
+function refrescar(){
+  const e = problemas();
+  document.getElementById("error").textContent = e.join(" ");
+  ["dlAro","dlAng","dlGuia","dlDxfFijo","dlDxfAng","dlTodo"].forEach(id => document.getElementById(id).disabled = e.length>0);
+  if (!e.length){
+    document.getElementById("dlDxfFijo").disabled = modoB;
+    document.getElementById("dlGuia").disabled = V.guia <= 0;
+  }
+  document.getElementById("btnSolo").disabled = V.guia <= 0;
+  document.getElementById("btnMarca").disabled = V.guia <= 0;
+  if (V.guia <= 0 && soloGuia){ soloGuia = false; document.getElementById("btnSolo").setAttribute("aria-pressed","false"); }
+  pintarValores(); pintarDatos(); pintarCostos(); encuadrar();
+  // se dibuja igual aunque haya avisos: antes se congelaba y parecía que nada respondía
+  let roto = false;
+  try { reconstruir(); } catch(err){ roto = true; }
+  const av = document.getElementById("aviso3d");
+  av.textContent = roto ? "no se puede dibujar con estas medidas"
+                        : (e.length ? (e.length === 1 ? "1 aviso" : e.length + " avisos") + " · mirá abajo" : "");
+  av.style.display = (roto || e.length) ? "block" : "none";
+}
+medir(); refrescar(); loop();
+})();
+</script>
+</body>
+</html>
