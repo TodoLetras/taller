@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v166</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v167</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -607,14 +607,9 @@
 <div class="modal" id="modalBl">
   <div class="hoja">
     <h2>💡 Cartel backlight</h2>
-    <label>Medida del cartel (ancho × alto en cm) × cantidad</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <input id="blW" type="text" inputmode="decimal" placeholder="ancho" style="flex:1;min-width:0;margin:0">
-      <span style="color:var(--texto2);flex:0 0 auto">×</span>
-      <input id="blH" type="text" inputmode="decimal" placeholder="alto" style="flex:1;min-width:0;margin:0">
-      <span style="color:var(--texto2);flex:0 0 auto">×</span>
-      <input id="blCant" type="text" inputmode="numeric" placeholder="1" style="flex:0 0 62px;width:62px;margin:0">
-    </div>
+    <label>Carteles (ancho × alto en cm × cantidad)</label>
+    <div id="blFilas"></div>
+    <button id="blMasFila" style="width:100%;border-radius:10px;padding:10px;font-size:.74rem;font-weight:700;background:var(--panel2);border:1px dashed var(--ambar);color:var(--ambar);margin-bottom:4px">+ Agregar cartel</button>
 
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
       <span style="font-size:.72rem;color:var(--texto2)">Profundidad</span>
@@ -656,6 +651,7 @@
     </div>
 
     <div id="blResultado" style="margin-top:12px"></div>
+    <div id="blDibujos" style="margin-top:10px"></div>
 
     <label style="margin-top:10px">Texto para el cliente (editable)</label>
     <textarea id="blTexto" rows="3"></textarea>
@@ -1439,6 +1435,79 @@ function blCalcular(Wcm, Hcm, opts){
   r.costo = r.canoCosto + r.herreroCosto + r.pinturaCosto + r.chapaCosto +
             r.zingueriaCosto + r.frenteCosto + (r.fondoCosto||0) + r.luzCosto + r.plotCosto;
   r.m2 = (W/100) * (H/100);
+  return r;
+}
+
+/* ---- varios carteles a la vez ----
+   La gracia es compartir material: las lonjas de todos los carteles se
+   acomodan juntas en las mismas hojas de chapa, y las piezas de caño en las
+   mismas tiras de 6 m. Un cartel chico solo desperdicia media hoja; tres
+   juntos suelen entrar en las mismas. */
+function blEmpaquetar(piezas, largoTira){
+  /* primero las más largas: es lo que menos recorte deja */
+  const orden = piezas.slice().sort((a,b)=> b.largo - a.largo);
+  const tiras = [];
+  for(const pz of orden){
+    let puesta = false;
+    for(const t of tiras)
+      if(t.libre >= pz.largo - 1e-9){ t.piezas.push(pz); t.libre -= pz.largo; puesta = true; break; }
+    if(!puesta) tiras.push({piezas: [pz], libre: largoTira - pz.largo});
+  }
+  return tiras;
+}
+function blCalcularVarios(lista, opts){
+  opts = opts || {};
+  const carteles = [];
+  const lonjas = [], canos = [];
+  const hojaW = ((opts.chapa && opts.chapa.hojaW) || 1.22) * 100;
+  const hojaH = ((opts.chapa && opts.chapa.hojaH) || 2.44) * 100;
+  const tiraCano = ((opts.cano && opts.cano.tiraM) || 6) * 100;
+
+  lista.forEach((c, idx)=>{
+    for(let u = 0; u < c.cant; u++){
+      /* lonjas del marco, con el empalme donde haga falta */
+      for(const l of blLonjas(c.W, c.H, hojaH)) lonjas.push({largo: l, idx});
+      /* caños: dos bastidores completos + los separadores */
+      for(let b = 0; b < 2; b++){
+        canos.push({largo: c.W, idx}, {largo: c.W, idx});
+        canos.push({largo: c.H, idx}, {largo: c.H, idx});
+      }
+      const sep = blSeparadores(c.W, c.H);
+      for(let k = 0; k < sep; k++) canos.push({largo: blCfg.separadorCm, idx, sep: true});
+    }
+    carteles.push({...c, idx, separadores: blSeparadores(c.W, c.H)});
+  });
+
+  const desarrollo = blCfg.dobleces*2 + blCfg.profundidad;
+  const tirasPorHoja = Math.max(1, Math.floor(hojaW / desarrollo));
+  const tirasChapa = blEmpaquetar(lonjas, hojaH);
+  const hojas = [];
+  for(let i = 0; i < tirasChapa.length; i += tirasPorHoja)
+    hojas.push(tirasChapa.slice(i, i + tirasPorHoja));
+  const tirasCano = blEmpaquetar(canos, tiraCano);
+
+  const r = {carteles, hojas, tirasChapa, tirasCano, desarrollo, tirasPorHoja, hojaW, hojaH, tiraCano};
+  r.chapaCosto = hojas.length * ((opts.chapa && opts.chapa.precio) || 0);
+  r.zingueriaCosto = r.chapaCosto * blCfg.zingueria/100;
+  r.canoCosto = tirasCano.length * ((opts.cano && opts.cano.precio) || 0);
+  r.herreroCosto = r.canoCosto * blCfg.herrero/100;
+  r.pinturaCosto = r.canoCosto * blCfg.pintura/100;
+  r.metrosCano = canos.reduce((a,b)=> a + b.largo, 0) / 100;
+
+  /* lo que no se comparte se calcula cartel por cartel */
+  r.frenteCosto = 0; r.fondoCosto = 0; r.luzCosto = 0; r.plotCosto = 0;
+  r.detalle = [];
+  for(const c of carteles){
+    const uno = blCalcular(c.W, c.H, {...opts, cano: null, chapa: null});
+    r.frenteCosto += uno.frenteCosto * c.cant;
+    r.fondoCosto  += (uno.fondoCosto || 0) * c.cant;
+    r.luzCosto    += uno.luzCosto * c.cant;
+    r.plotCosto   += (uno.plotCosto || 0) * c.cant;
+    r.detalle.push({...c, uno});
+  }
+  r.costo = r.canoCosto + r.herreroCosto + r.pinturaCosto + r.chapaCosto +
+            r.zingueriaCosto + r.frenteCosto + r.fondoCosto + r.luzCosto + r.plotCosto;
+  r.unidades = carteles.reduce((a,c)=> a + c.cant, 0);
   return r;
 }
 
@@ -13181,6 +13250,8 @@ function vcRenderConfig(){
 }
 /* ---------- interfaz del backlight ---------- */
 let blPedido = null, blFondo = 'tensada', blUlt = null, blTextoTocado = false;
+let blFilas = [{W:'', H:'', cant:'1'}];
+const BL_COLORES = ['#e0a458','#4cd27d','#5ab8ff','#b48ead','#ff7a7a','#35b8a0','#d4b483','#9aa1b0'];
 
 function blCanos(){ return insumos.filter(x=> x.cat === 'cano'); }
 function blChapas(){ return insumos.filter(x=> x.cat === 'chapa' && !x.aMedida); }
@@ -13199,12 +13270,43 @@ function blLlenar(sel, lista, etiqueta, vacio){
     e.appendChild(o);
   }
 }
+function blRenderFilas(){
+  const cont = document.getElementById('blFilas');
+  cont.innerHTML = '';
+  blFilas.forEach((f, i)=>{
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
+    const punto = document.createElement('span');
+    punto.style.cssText = 'flex:0 0 auto;width:10px;height:10px;border-radius:3px;background:' + BL_COLORES[i % BL_COLORES.length];
+    fila.appendChild(punto);
+    const mk = (val, ph, ancho, campo)=>{
+      const el = document.createElement('input');
+      el.type = 'text'; el.inputMode = 'decimal'; el.placeholder = ph; el.value = val || '';
+      el.style.cssText = ancho + ';min-width:0;margin:0';
+      el.addEventListener('input', ()=>{ blFilas[i][campo] = el.value; blRecalcular(); });
+      return el;
+    };
+    fila.appendChild(mk(f.W, 'ancho', 'flex:1', 'W'));
+    const x1 = document.createElement('span'); x1.textContent = '×';
+    x1.style.cssText = 'color:var(--texto2);flex:0 0 auto'; fila.appendChild(x1);
+    fila.appendChild(mk(f.H, 'alto', 'flex:1', 'H'));
+    const x2 = document.createElement('span'); x2.textContent = '×';
+    x2.style.cssText = 'color:var(--texto2);flex:0 0 auto'; fila.appendChild(x2);
+    fila.appendChild(mk(f.cant, 'cant', 'flex:0 0 56px;width:56px', 'cant'));
+    const bo = document.createElement('button');
+    bo.textContent = '✕';
+    bo.style.cssText = 'flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:1px solid var(--borde);background:var(--panel2);color:var(--texto2);padding:0';
+    bo.onclick = ()=>{ blFilas.splice(i,1); if(!blFilas.length) blFilas.push({W:'',H:'',cant:'1'}); blRenderFilas(); blRecalcular(); };
+    fila.appendChild(bo);
+    cont.appendChild(fila);
+  });
+}
+document.getElementById('blMasFila').onclick = ()=>{ blFilas.push({W:'',H:'',cant:'1'}); blRenderFilas(); };
+
 function abrirBl(p){
   blPedido = p; blTextoTocado = false;
   const b = p.blBorrador || {};
-  document.getElementById('blW').value = b.W || '';
-  document.getElementById('blH').value = b.H || '';
-  document.getElementById('blCant').value = b.cant || '1';
+  blFilas = (b.filas && b.filas.length) ? JSON.parse(JSON.stringify(b.filas)) : [{W:'',H:'',cant:'1'}];
   document.getElementById('blProf').value = b.prof || blCfg.profundidad;
   document.getElementById('blZing').value = b.zing || blCfg.zingueria;
   document.getElementById('blMargen').value = b.margen || 100;
@@ -13221,7 +13323,7 @@ function abrirBl(p){
   if(b.chapaId) document.getElementById('blChapa').value = b.chapaId;
   if(b.lonaId) document.getElementById('blLona').value = b.lonaId;
   if(b.plotId) document.getElementById('blPlot').value = b.plotId;
-  blPintarFondo(); blRecalcular();
+  blRenderFilas(); blPintarFondo(); blRecalcular();
   document.getElementById('modalBl').classList.add('abierto');
 }
 function blPintarFondo(){
@@ -13234,20 +13336,82 @@ function blPintarFondo(){
   document.getElementById('blFondoTensadaCfg').style.display = blFondo === 'tensada' ? '' : 'none';
   document.getElementById('blChapaFondo').style.display = blFondo === 'chapa' ? '' : 'none';
 }
+
+/* dibujo de las hojas de chapa: cada tira es una lonja del desarrollo */
+function blDibujarChapa(r){
+  const cajas = [];
+  r.hojas.forEach((hoja, hi)=>{
+    const esc = 250 / r.hojaH;
+    const anchoPx = r.hojaW * esc, altoPx = r.hojaH * esc;
+    let svg = '<svg viewBox="0 0 ' + altoPx + ' ' + anchoPx + '" style="width:100%;max-width:' + altoPx +
+      'px;border:1px solid var(--borde);border-radius:8px;background:var(--panel2)">';
+    hoja.forEach((tira, ti)=>{
+      let x = 0;
+      for(const pz of tira.piezas){
+        svg += '<rect x="' + (x*esc) + '" y="' + (ti*r.desarrollo*esc) + '" width="' + (pz.largo*esc) +
+          '" height="' + (r.desarrollo*esc) + '" fill="' + BL_COLORES[pz.idx % BL_COLORES.length] +
+          '" opacity=".8" stroke="var(--borde)" stroke-width=".5"/>';
+        if(pz.largo*esc > 26)
+          svg += '<text x="' + ((x + pz.largo/2)*esc) + '" y="' + ((ti*r.desarrollo + r.desarrollo/2 + 3)*esc) +
+            '" font-size="' + Math.min(11, r.desarrollo*esc*0.45) + '" text-anchor="middle" fill="#1a1200">' +
+            pz.largo.toFixed(0) + '</text>';
+        x += pz.largo;
+      }
+      if(x < r.hojaH - 1)
+        svg += '<rect x="' + (x*esc) + '" y="' + (ti*r.desarrollo*esc) + '" width="' + ((r.hojaH-x)*esc) +
+          '" height="' + (r.desarrollo*esc) + '" fill="none" stroke="var(--texto2)" stroke-width=".5" stroke-dasharray="3 3"/>';
+    });
+    svg += '</svg>';
+    cajas.push('<div style="margin-bottom:8px">' + svg +
+      '<div style="font-size:.64rem;color:var(--texto2);margin-top:2px">Hoja ' + (hi+1) + ' de ' + r.hojas.length +
+      ' · ' + r.hojaW + '×' + r.hojaH + ' cm · ' + hoja.length + ' de ' + r.tirasPorHoja + ' tiras usadas</div></div>');
+  });
+  return cajas.join('');
+}
+/* dibujo de las tiras de caño, para el herrero */
+function blDibujarCano(r){
+  const esc = 280 / r.tiraCano;
+  let h = '';
+  r.tirasCano.forEach((t, i)=>{
+    let svg = '<svg viewBox="0 0 ' + (r.tiraCano*esc) + ' 22" style="width:100%;max-width:' + (r.tiraCano*esc) +
+      'px;display:block;margin-bottom:3px">';
+    let x = 0;
+    for(const pz of t.piezas){
+      svg += '<rect x="' + (x*esc) + '" y="2" width="' + (pz.largo*esc) + '" height="16" fill="' +
+        BL_COLORES[pz.idx % BL_COLORES.length] + '" opacity="' + (pz.sep ? '.45' : '.85') +
+        '" stroke="var(--borde)" stroke-width=".5"/>';
+      if(pz.largo*esc > 24)
+        svg += '<text x="' + ((x + pz.largo/2)*esc) + '" y="14" font-size="9" text-anchor="middle" fill="#1a1200">' +
+          pz.largo.toFixed(0) + '</text>';
+      x += pz.largo;
+    }
+    if(x < r.tiraCano - 1)
+      svg += '<rect x="' + (x*esc) + '" y="2" width="' + ((r.tiraCano-x)*esc) + '" height="16" fill="none" stroke="var(--texto2)" stroke-width=".5" stroke-dasharray="3 3"/>';
+    svg += '</svg>';
+    h += svg;
+  });
+  return h + '<div style="font-size:.64rem;color:var(--texto2);margin-top:2px">' + r.tirasCano.length +
+    ' tiras de ' + (r.tiraCano/100) + ' m · los tramos claritos son los separadores de ' + blCfg.separadorCm + ' cm</div>';
+}
+
 function blRecalcular(){
   const num = id=> parseFloat(String(document.getElementById(id).value||'').replace(',','.')) || 0;
   const cont = document.getElementById('blResultado');
+  const dib = document.getElementById('blDibujos');
   blCfg.profundidad = num('blProf') || 22;
   blCfg.zingueria   = num('blZing');
   blCfg.tensadaM2   = num('blTensadaM2') || 5000;
   document.getElementById('blDesarrollo').textContent = (blCfg.profundidad + blCfg.dobleces*2).toFixed(0);
-  const W = num('blW'), H = num('blH');
-  const cant = Math.max(1, parseInt(document.getElementById('blCant').value) || 1);
   const margen = num('blMargen');
-  blUlt = null;
-  if(!(W > 0) || !(H > 0)){
+  blUlt = null; dib.innerHTML = '';
+  const lista = blFilas
+    .map(f=> ({W: parseFloat(String(f.W||'').replace(',','.'))||0,
+               H: parseFloat(String(f.H||'').replace(',','.'))||0,
+               cant: Math.max(1, parseInt(f.cant)||1)}))
+    .filter(c=> c.W > 0 && c.H > 0);
+  if(!lista.length){
     cont.innerHTML = '<div style="background:var(--panel2);border:1px dashed var(--ambar);border-radius:10px;' +
-      'padding:10px;font-size:.74rem;color:var(--ambar)">Poné la medida del cartel.</div>';
+      'padding:10px;font-size:.74rem;color:var(--ambar)">Poné la medida de al menos un cartel.</div>';
     return;
   }
   const gid = id=> document.getElementById(id).value;
@@ -13256,56 +13420,59 @@ function blRecalcular(){
   const lona  = blLonasBack().find(x=> x.id === gid('blLona'));
   const chapaFondo = blChapas().find(x=> x.id === gid('blChapaFondo'));
   const vin   = blVinilos().find(x=> x.id === gid('blPlot'));
-  const r = blCalcular(W, H, {
+  const opts = {
     cano: cano ? {precio: insumoPrecio(cano), tiraM: cano.tiraM || 6} : null,
     chapa: chapa ? {precio: insumoPrecio(chapa), hojaW: chapa.hojaW, hojaH: chapa.hojaH} : null,
     lonaFrente: lona ? lona.costo : 0,
     fondo: blFondo,
     chapaFondo: chapaFondo ? {precio: insumoPrecio(chapaFondo), hojaW: chapaFondo.hojaW, hojaH: chapaFondo.hojaH} : null,
     plot: vin ? {precio: vin.costo, nombre: vin.nombre} : null
-  });
-  if(!r){ cont.innerHTML = ''; return; }
-  const costoTotal = r.costo * cant;
-  const venta = costoTotal * (1 + margen/100);
-  blUlt = {r, cant, costo: costoTotal, venta, W, H};
+  };
+  const r = blCalcularVarios(lista, opts);
+  const venta = r.costo * (1 + margen/100);
+  blUlt = {r, lista, costo: r.costo, venta};
   const fila = (k, v, sub)=>
     '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:.74rem">' +
     '<span style="color:var(--texto2)">' + k + (sub ? '<br><span style="font-size:.62rem">' + sub + '</span>' : '') + '</span>' +
     '<span style="font-weight:700;white-space:nowrap">' + v + '</span></div>';
   let h = '<div style="background:var(--panel2);border:1px solid var(--borde);border-radius:11px;padding:10px 12px">';
   h += fila('Caños ' + (cano ? cano.nombre : ''), plata(r.canoCosto),
-        r.metrosCano.toFixed(2) + ' m · 2 bastidores + ' + r.separadores + ' separadores de ' + blCfg.separadorCm + ' cm');
+        r.metrosCano.toFixed(2) + ' m en ' + r.tirasCano.length + ' tiras de ' + (r.tiraCano/100) + ' m');
   h += fila('Herrero ' + blCfg.herrero + '% + pintura ' + blCfg.pintura + '%', plata(r.herreroCosto + r.pinturaCosto));
-  if(r.chapaDet) h += fila('Chapa del marco', plata(r.chapaCosto),
-        r.chapaDet.hojas + ' hoja(s) · lonjas: ' + r.lonjas.map(x=> x.toFixed(0)).join(' + ') + ' cm');
+  h += fila('Chapa del marco', plata(r.chapaCosto),
+        r.hojas.length + ' hoja(s) · lonjas de ' + r.desarrollo + ' cm · ' + r.tirasChapa.length + ' tiras');
   h += fila('Zinguería ' + blCfg.zingueria + '%', plata(r.zingueriaCosto));
-  h += fila('Frente lona back', plata(r.frenteCosto), r.m2Frente.toFixed(2) + ' m² (con ' + blCfg.demasiaFrente + ' cm por lado)');
-  if(r.fondoTipo === 'tensada')
-    h += fila('Fondo lona tensada', plata(r.fondoCosto), 'rollo de ' + r.fondoAncho + ' cm × ' + (r.fondoLargo/100).toFixed(2) + ' m');
-  else if(r.fondoTipo === 'chapa') h += fila('Fondo de chapa', plata(r.fondoCosto), r.fondoHojas + ' hoja(s)');
-  else h += fila('Fondo', '⚠️ no entra en los rollos');
-  h += fila('Tubos LED', plata(r.luzCosto),
-        r.filas + ' filas × (' + r.tubosFila.n120 + ' de 120' + (r.tubosFila.n60 ? ' + ' + r.tubosFila.n60 + ' de 60' : '') + ') = ' +
-        r.tubos120 + ' de 120' + (r.tubos60 ? ' y ' + r.tubos60 + ' de 60' : ''));
-  if(r.plotCosto) h += fila('Ploteo del marco', plata(r.plotCosto), r.m2Plot.toFixed(2) + ' m² · ' + r.plotNombre);
+  h += fila('Frente lona back', plata(r.frenteCosto));
+  h += fila('Fondo ' + (blFondo === 'chapa' ? 'de chapa' : 'lona tensada'), plata(r.fondoCosto));
+  h += fila('Tubos LED', plata(r.luzCosto));
+  if(r.plotCosto) h += fila('Ploteo del marco', plata(r.plotCosto));
   h += '<div style="border-top:1px dashed var(--borde);margin-top:6px;padding-top:6px">';
-  h += fila('<b>Costo por cartel</b>', '<b>' + plata(r.costo) + '</b>', plata(r.costo / r.m2) + '/m²');
-  if(cant > 1) h += fila('<b>Costo × ' + cant + '</b>', '<b>' + plata(costoTotal) + '</b>');
-  h += fila('<b style="color:#4cd27d">VENTA</b>', '<b style="color:#4cd27d">' + plata(venta) + '</b>',
-        cant > 1 ? plata(venta/cant) + ' cada uno' : '');
+  h += fila('<b>Costo total</b>', '<b>' + plata(r.costo) + '</b>', r.unidades + ' cartel(es)');
+  h += fila('<b style="color:#4cd27d">VENTA</b>', '<b style="color:#4cd27d">' + plata(venta) + '</b>');
   h += '</div></div>';
-  h += '<div style="font-size:.64rem;color:var(--texto2);margin-top:6px;line-height:1.4;font-style:italic">' +
-       'La instalación se cobra aparte.</div>';
+  h += '<div style="font-size:.64rem;color:var(--texto2);margin-top:6px;line-height:1.4;font-style:italic">La instalación se cobra aparte.</div>';
   cont.innerHTML = h;
+
+  /* dibujos */
+  let d = '<div style="font-size:.72rem;color:var(--texto2);margin-bottom:4px">✂️ Corte de la chapa</div>' + blDibujarChapa(r);
+  d += '<div style="font-size:.72rem;color:var(--texto2);margin:10px 0 4px">🔩 Corte de los caños (para el herrero)</div>' + blDibujarCano(r);
+  d += '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:.66rem;color:var(--texto2);margin-top:8px">';
+  r.carteles.forEach((c, i)=>{
+    d += '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:' +
+      BL_COLORES[c.idx % BL_COLORES.length] + ';margin-right:4px"></span>' + c.W + '×' + c.H +
+      (c.cant > 1 ? ' (×' + c.cant + ')' : '') + '</span>';
+  });
+  d += '</div>';
+  dib.innerHTML = d;
+
   if(!blTextoTocado){
     document.getElementById('blTexto').value =
-      'Cartel backlight ' + W + '×' + H + ' cm · profundidad ' + blCfg.profundidad + ' cm' +
-      (cant > 1 ? ' · ' + cant + ' unidades' : '') +
-      ' · frente en lona back iluminado con LED, marco de chapa y fondo ' +
+      lista.map(c=> (c.cant > 1 ? c.cant + ' × ' : '') + 'cartel backlight ' + c.W + '×' + c.H + ' cm').join(' · ') +
+      ' · profundidad ' + blCfg.profundidad + ' cm · frente en lona back iluminado con LED, marco de chapa y fondo ' +
       (blFondo === 'chapa' ? 'de chapa' : 'en lona tensada');
   }
 }
-for(const id of ['blW','blH','blCant','blProf','blZing','blMargen','blTensadaM2'])
+for(const id of ['blProf','blZing','blMargen','blTensadaM2'])
   document.getElementById(id).addEventListener('input', blRecalcular);
 for(const id of ['blCano','blChapa','blLona','blChapaFondo','blPlot'])
   document.getElementById(id).addEventListener('change', blRecalcular);
@@ -13322,17 +13489,18 @@ document.getElementById('btnBl').onclick = ()=>{
   if(p) abrirBl(p);
 };
 document.getElementById('blAgregar').onclick = ()=>{
-  if(!blUlt || !blPedido){ toast('Falta completar la medida'); return; }
+  if(!blUlt || !blPedido){ toast('Falta la medida de algún cartel'); return; }
   const gid = id=> document.getElementById(id).value;
+  const L = blUlt.lista;
   blPedido.items = blPedido.items || [];
   blPedido.items.push({
     prod: null, backlight: true,
-    nombre: 'Backlight ' + blUlt.W + '×' + blUlt.H + ' cm' + (blUlt.cant > 1 ? ' × ' + blUlt.cant : ''),
+    nombre: 'Backlight · ' + L.map(c=> c.W + '×' + c.H + (c.cant>1 ? ' ×'+c.cant : '')).join(' · '),
     nombreCli: document.getElementById('blTexto').value.trim() || null,
     cant: 1, precio: Math.round(blUlt.venta), costoReal: Math.round(blUlt.costo)
   });
   blPedido.blBorrador = {
-    W: gid('blW'), H: gid('blH'), cant: gid('blCant'), prof: gid('blProf'),
+    filas: JSON.parse(JSON.stringify(blFilas)), prof: gid('blProf'),
     zing: gid('blZing'), margen: gid('blMargen'), tensadaM2: gid('blTensadaM2'),
     fondo: blFondo, canoId: gid('blCano'), chapaId: gid('blChapa'),
     lonaId: gid('blLona'), plotId: gid('blPlot')
