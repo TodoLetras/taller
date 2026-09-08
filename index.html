@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v167</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v168</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -5798,14 +5798,20 @@ function renderPedidoItems(p){
         '<input class="cant" type="text" inputmode="decimal">' +
         '<input class="precio" type="number" inputmode="numeric" min="0">' +
         (it.adTr && it.adMeta ? '<button class="adReal" title="Cargar lo cobrado real por AD y la papelera">🧾</button>' : (it.costoU !== undefined && !it.mo ? '<button class="costoReal" title="Costo real del trabajo (lo que te cobra el proveedor). Tocá para corregirlo si te cobró distinto al presupuesto.">🧾</button>' : '')) +
-        (it.adTr && it.adInput ? '<button class="adEditar" title="Volver al presupuestador con estos datos para corregirlo">✏️</button>' : '') +
+        ((it.adTr && it.adInput) || (it.backlight && it.blInput) || (it.corte && it.corteInput)
+          ? '<button class="adEditar" title="Volver al presupuestador con estos datos para corregirlo">✏️</button>' : '') +
         '<button class="mover-item" title="Mover este ítem">⇅</button>' +
         '<button class="dup-item" title="Duplicar este ítem">⧉</button>' +
         '<button class="copiar-item">📋</button>' +
         '<button class="quitar-item">✕</button>';
       d.querySelector('.pi-nombre').textContent = it.nombre;
       const bEd = d.querySelector('.adEditar');
-      if(bEd) bEd.onclick = (ev)=>{ ev.stopPropagation(); editarOffsetAD(p, it); };
+      if(bEd) bEd.onclick = (ev)=>{
+        ev.stopPropagation();
+        if(it.backlight){ modalPedido.classList.remove('abierto'); abrirBl(p, it); }
+        else if(it.corte){ modalPedido.classList.remove('abierto'); abrirCorte(p, it); }
+        else editarOffsetAD(p, it);
+      };
       const inCant = d.querySelector('.cant');
       const inPrecio = d.querySelector('.precio');
       inCant.value = it.cant;
@@ -13303,9 +13309,12 @@ function blRenderFilas(){
 }
 document.getElementById('blMasFila').onclick = ()=>{ blFilas.push({W:'',H:'',cant:'1'}); blRenderFilas(); };
 
-function abrirBl(p){
-  blPedido = p; blTextoTocado = false;
-  const b = p.blBorrador || {};
+let blEditando = null;
+function abrirBl(p, it){
+  blPedido = p;
+  blEditando = it || null;
+  blTextoTocado = !!(it && it.blInput && it.blInput.texto);
+  const b = (it && it.blInput) || p.blBorrador || {};
   blFilas = (b.filas && b.filas.length) ? JSON.parse(JSON.stringify(b.filas)) : [{W:'',H:'',cant:'1'}];
   document.getElementById('blProf').value = b.prof || blCfg.profundidad;
   document.getElementById('blZing').value = b.zing || blCfg.zingueria;
@@ -13324,7 +13333,9 @@ function abrirBl(p){
   if(b.lonaId) document.getElementById('blLona').value = b.lonaId;
   if(b.plotId) document.getElementById('blPlot').value = b.plotId;
   blRenderFilas(); blPintarFondo(); blRecalcular();
+  if(b.texto) document.getElementById('blTexto').value = b.texto;
   document.getElementById('modalBl').classList.add('abierto');
+  if(it) toast('Editando: al agregar reemplaza al ítem anterior');
 }
 function blPintarFondo(){
   for(const [id, v] of [['blFondoTensada','tensada'], ['blFondoChapa','chapa']]){
@@ -13479,44 +13490,63 @@ for(const id of ['blCano','blChapa','blLona','blChapaFondo','blPlot'])
 document.getElementById('blFondoTensada').onclick = ()=>{ blFondo='tensada'; blPintarFondo(); blRecalcular(); };
 document.getElementById('blFondoChapa').onclick   = ()=>{ blFondo='chapa';   blPintarFondo(); blRecalcular(); };
 document.getElementById('blTexto').addEventListener('input', ()=>{ blTextoTocado = true; });
-document.getElementById('blCerrar').onclick = ()=> document.getElementById('modalBl').classList.remove('abierto');
+function blSalir(){
+  document.getElementById('modalBl').classList.remove('abierto');
+  blEditando = null;
+  if(blPedido) abrirPedido(blPedido.id);     // vuelve al pedido, no a la lista
+}
+document.getElementById('blCerrar').onclick = blSalir;
 document.getElementById('modalBl').addEventListener('click', e=>{
-  if(e.target === document.getElementById('modalBl')) document.getElementById('modalBl').classList.remove('abierto');
+  if(e.target === document.getElementById('modalBl')) blSalir();
 });
 document.getElementById('btnBl').onclick = ()=>{
   if(!pedidoAbierto) return;
   const p = pedidos.find(x=> x.id === pedidoAbierto);
-  if(p) abrirBl(p);
+  if(p) abrirBl(p, null);
 };
 document.getElementById('blAgregar').onclick = ()=>{
   if(!blUlt || !blPedido){ toast('Falta la medida de algún cartel'); return; }
   const gid = id=> document.getElementById(id).value;
   const L = blUlt.lista;
-  blPedido.items = blPedido.items || [];
-  blPedido.items.push({
-    prod: null, backlight: true,
-    nombre: 'Backlight · ' + L.map(c=> c.W + '×' + c.H + (c.cant>1 ? ' ×'+c.cant : '')).join(' · '),
-    nombreCli: document.getElementById('blTexto').value.trim() || null,
-    cant: 1, precio: Math.round(blUlt.venta), costoReal: Math.round(blUlt.costo)
-  });
-  blPedido.blBorrador = {
+  /* los datos del cálculo viajan EN EL ÍTEM: así se puede volver a abrir y
+     corregir, y dos backlights del mismo pedido no se pisan entre sí */
+  const blInput = {
     filas: JSON.parse(JSON.stringify(blFilas)), prof: gid('blProf'),
     zing: gid('blZing'), margen: gid('blMargen'), tensadaM2: gid('blTensadaM2'),
     fondo: blFondo, canoId: gid('blCano'), chapaId: gid('blChapa'),
-    lonaId: gid('blLona'), plotId: gid('blPlot')
+    lonaId: gid('blLona'), plotId: gid('blPlot'),
+    texto: document.getElementById('blTexto').value
   };
+  const nuevoIt = {
+    prod: null, backlight: true, blInput,
+    nombre: 'Backlight · ' + L.map(c=> c.W + '×' + c.H + (c.cant>1 ? ' ×'+c.cant : '')).join(' · '),
+    nombreCli: document.getElementById('blTexto').value.trim() || null,
+    cant: 1, precio: Math.round(blUlt.venta), costoReal: Math.round(blUlt.costo)
+  };
+  blPedido.items = blPedido.items || [];
+  const iEd = blEditando ? blPedido.items.indexOf(blEditando) : -1;
+  if(iEd >= 0){
+    nuevoIt.conf = blEditando.conf;
+    nuevoIt.detalle = blEditando.detalle;
+    blPedido.items[iEd] = nuevoIt;
+    blEditando = null;
+  }else{
+    blPedido.items.push(nuevoIt);
+  }
   guardarDatos(); renderPedidoItems(blPedido); renderPedidos();
   document.getElementById('modalBl').classList.remove('abierto');
-  toast('Agregado al pedido ✓');
+  toast(iEd >= 0 ? 'Corregido ✓' : 'Agregado al pedido ✓');
 };
 
 /* ---------- calculadora de corte ---------- */
 let cortePedido = null, corteTab = 'pliego', corteUlt = null, corteTextoTocado = false;
 
-function abrirCorte(p){
+let corteEditando = null;
+function abrirCorte(p, it){
   cortePedido = p;
-  corteTextoTocado = false;
-  const b = p.corteBorrador || {};
+  corteEditando = it || null;
+  corteTextoTocado = !!(it && it.corteInput && it.corteInput.texto);
+  const b = (it && it.corteInput) || p.corteBorrador || {};
   corteTab = b.tab || 'pliego';
   document.getElementById('corteCalle').value  = b.calle !== undefined ? b.calle : corteCfg.calle;
   document.getElementById('corteMargen').value = b.margen !== undefined ? b.margen : corteCfg.margen;
@@ -13536,7 +13566,10 @@ function abrirCorte(p){
   corteLlenarMats();
   cortePintarTabs();
   corteCalcular();
+  if(b.mat) document.getElementById('corteMat').value = b.mat;
+  if(b.texto) document.getElementById('corteTexto').value = b.texto;
   document.getElementById('modalCorte').classList.add('abierto');
+  if(it) toast('Editando: al agregar reemplaza al ítem anterior');
 }
 
 function corteLlenarMats(){
@@ -13873,23 +13906,51 @@ for(const id of ['cortePlW','cortePlH','cortePlCosto','corteRoAncho','corteRoCos
                  'cortePzW','cortePzH','cortePzC','corteCalle','corteMargen'])
   document.getElementById(id).addEventListener('input', corteCalcular);
 
-document.getElementById('corteCerrar').onclick = ()=> document.getElementById('modalCorte').classList.remove('abierto');
+function corteSalir(){
+  document.getElementById('modalCorte').classList.remove('abierto');
+  corteEditando = null;
+  if(cortePedido) abrirPedido(cortePedido.id);     // vuelve al pedido, no a la lista
+}
+document.getElementById('corteCerrar').onclick = corteSalir;
 document.getElementById('modalCorte').addEventListener('click', e=>{
-  if(e.target === document.getElementById('modalCorte')) document.getElementById('modalCorte').classList.remove('abierto');
+  if(e.target === document.getElementById('modalCorte')) corteSalir();
 });
 document.getElementById('corteAgregar').onclick = ()=>{
   if(!corteUlt || !cortePedido){ toast('Falta completar el cálculo'); return; }
   const c = corteUlt;
   const p = cortePedido;
   p.items = p.items || [];
-  p.items.push({
-    prod: null,
+  const corteInput = {
+    tab: corteTab, calle: document.getElementById('corteCalle').value,
+    margen: document.getElementById('corteMargen').value, rotar: corteCfg.rotar,
+    redondear: corteCfg.redondear,
+    filas: JSON.parse(JSON.stringify(corteFilas)),
+    pzW: document.getElementById('cortePzW').value, pzH: document.getElementById('cortePzH').value,
+    pzC: document.getElementById('cortePzC').value,
+    plW: document.getElementById('cortePlW').value, plH: document.getElementById('cortePlH').value,
+    plCosto: document.getElementById('cortePlCosto').value,
+    roAncho: document.getElementById('corteRoAncho').value,
+    roCosto: document.getElementById('corteRoCosto').value,
+    roMin: document.getElementById('corteRoMin').value,
+    mat: document.getElementById('corteMat').value,
+    texto: document.getElementById('corteTexto').value
+  };
+  const nuevoCorte = {
+    prod: null, corte: true, corteInput,
     nombre: document.getElementById('corteTexto').value.trim() || 'Corte a medida',
     cant: 1,
     precio: Math.round(c.venta),
-    costoReal: Math.round(c.costo),
-    corte: true
-  });
+    costoReal: Math.round(c.costo)
+  };
+  const iEdC = corteEditando ? p.items.indexOf(corteEditando) : -1;
+  if(iEdC >= 0){
+    nuevoCorte.conf = corteEditando.conf;
+    nuevoCorte.detalle = corteEditando.detalle;
+    p.items[iEdC] = nuevoCorte;
+    corteEditando = null;
+  }else{
+    p.items.push(nuevoCorte);
+  }
   // se guarda el borrador para poder volver y retocar
   p.corteBorrador = {
     tab: corteTab, calle: document.getElementById('corteCalle').value,
@@ -13906,12 +13967,12 @@ document.getElementById('corteAgregar').onclick = ()=>{
   };
   guardarDatos(); renderPedidoItems(p); renderPedidos();
   document.getElementById('modalCorte').classList.remove('abierto');
-  toast('Agregado al pedido ✓');
+  toast(iEdC >= 0 ? 'Corregido ✓' : 'Agregado al pedido ✓');
 };
 document.getElementById('btnCorte').onclick = ()=>{
   if(!pedidoAbierto) return;
   const p = pedidos.find(x=> x.id === pedidoAbierto);
-  if(p) abrirCorte(p);
+  if(p) abrirCorte(p, null);
 };
 
 document.getElementById('btnViniloCorte').onclick = ()=>{ if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirViniloCorte(p); } };
