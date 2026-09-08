@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v172</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v173</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -650,6 +650,9 @@
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px">
       <span style="font-size:.72rem;color:var(--texto2)">Zinguería</span>
       <input id="blZing" type="text" inputmode="decimal" style="flex:0 0 56px;width:56px;margin:0;padding:8px">
+      <span style="font-size:.72rem;color:var(--texto2)">%</span>
+      <span style="font-size:.72rem;color:var(--texto2)">Sobrante al cliente</span>
+      <input id="blSobrante" type="text" inputmode="decimal" style="flex:0 0 56px;width:56px;margin:0;padding:8px">
       <span style="font-size:.72rem;color:var(--texto2)">%</span>
       <span style="font-size:.72rem;color:var(--texto2);margin-left:auto">Ganancia</span>
       <input id="blMargen" type="text" inputmode="decimal" style="flex:0 0 62px;width:62px;margin:0;padding:8px">
@@ -1505,6 +1508,14 @@ function blCalcularVarios(lista, opts){
   const tirasCano = blEmpaquetar(canos, tiraCano);
 
   const r = {carteles, hojas, tirasChapa, tirasCano, desarrollo, tirasPorHoja, hojaW, hojaH, tiraCano};
+  /* cuánto del material comprado se usa de verdad: sirve para decidir
+     qué parte del sobrante se le carga al trabajo */
+  r.cm2Lonjas = lonjas.reduce((a,l)=> a + l.largo, 0) * desarrollo;
+  r.cm2Hojas  = hojas.length * hojaW * hojaH;
+  r.usoChapa  = r.cm2Hojas > 0 ? r.cm2Lonjas / r.cm2Hojas : 1;
+  r.cmCanoUsado = canos.reduce((a,b)=> a + b.largo, 0);
+  r.cmCanoTotal = tirasCano.length * tiraCano;
+  r.usoCano   = r.cmCanoTotal > 0 ? r.cmCanoUsado / r.cmCanoTotal : 1;
   r.chapaCosto = hojas.length * ((opts.chapa && opts.chapa.precio) || 0);
   r.zingueriaCosto = r.chapaCosto * blCfg.zingueria/100;
   r.canoCosto = tirasCano.length * ((opts.cano && opts.cano.precio) || 0);
@@ -1529,7 +1540,13 @@ function blCalcularVarios(lista, opts){
     r.tubos120    += uno.tubos120 * c.cant;
     r.tubos60     += uno.tubos60 * c.cant;
     r.filasTotal  += uno.filas * c.cant;
-    if(uno.fondoTipo === 'chapa') r.fondoHojas += (uno.fondoHojas||0) * c.cant;
+    if(uno.fondoTipo === 'chapa'){
+      r.fondoHojas += (uno.fondoHojas||0) * c.cant;
+      r.cm2FondoUsado = (r.cm2FondoUsado||0) + c.W * c.H * c.cant;
+      const cf = opts.chapaFondo || {};
+      r.cm2FondoHojas = (r.cm2FondoHojas||0) +
+        (uno.fondoHojas||0) * c.cant * ((cf.hojaW||1.22)*100) * ((cf.hojaH||2.44)*100);
+    }
     else if(uno.fondoTipo === 'tensada'){
       r.fondoM2 += (uno.fondoAncho/100) * (uno.fondoLargo/100) * c.cant;
       r.fondoMl += (uno.fondoLargo/100) * c.cant;
@@ -1539,8 +1556,19 @@ function blCalcularVarios(lista, opts){
     r.detalle.push({...c, uno});
   }
   r.fondoTipo = opts.fondo === 'chapa' ? 'chapa' : 'tensada';
-  r.costo = r.canoCosto + r.herreroCosto + r.pinturaCosto + r.chapaCosto +
-            r.zingueriaCosto + r.frenteCosto + r.fondoCosto + r.luzCosto + r.plotCosto;
+  r.usoFondo = (r.cm2FondoHojas > 0) ? (r.cm2FondoUsado / r.cm2FondoHojas) : 1;
+
+  /* Costo comprado = lo que pagás entero (hojas y barras completas).
+     Costo útil = la parte que realmente se va en este trabajo.
+     La diferencia es sobrante: queda en el taller como stock. */
+  r.costoComprado = r.canoCosto + r.herreroCosto + r.pinturaCosto + r.chapaCosto +
+                    r.zingueriaCosto + r.frenteCosto + r.fondoCosto + r.luzCosto + r.plotCosto;
+  const canoUtil  = (r.canoCosto + r.herreroCosto + r.pinturaCosto) * r.usoCano;
+  const chapaUtil = (r.chapaCosto + r.zingueriaCosto) * r.usoChapa;
+  const fondoUtil = (r.fondoTipo === 'chapa') ? r.fondoCosto * r.usoFondo : r.fondoCosto;
+  r.costoUtil = canoUtil + chapaUtil + fondoUtil + r.frenteCosto + r.luzCosto + r.plotCosto;
+  r.sobrante  = Math.max(0, r.costoComprado - r.costoUtil);
+  r.costo = r.costoComprado;
   r.unidades = carteles.reduce((a,c)=> a + c.cant, 0);
   return r;
 }
@@ -13447,6 +13475,7 @@ function abrirBl(p, it){
   document.getElementById('blProf').value = b.prof || blCfg.profundidad;
   document.getElementById('blZing').value = b.zing || blCfg.zingueria;
   document.getElementById('blMargen').value = b.margen || 100;
+  document.getElementById('blSobrante').value = (b.sobrante !== undefined ? b.sobrante : 100);
   document.getElementById('blTensadaM2').value = b.tensadaM2 || blCfg.tensadaM2;
   blFondo = b.fondo || 'tensada';
   blCorte = b.corte || '90';
@@ -13491,31 +13520,53 @@ function blDibujarChapa(r){
   r.hojas.forEach((hoja, hi)=>{
     const esc = 250 / r.hojaH;
     const anchoPx = r.hojaW * esc, altoPx = r.hojaH * esc;
+    /* la hoja ENTERA de fondo: lo que no se pinta es desperdicio */
     let svg = '<svg viewBox="0 0 ' + altoPx + ' ' + anchoPx + '" style="width:100%;max-width:' + altoPx +
       'px;border:1px solid var(--borde);border-radius:8px;background:var(--panel2)">';
+    svg += '<rect x="0" y="0" width="' + altoPx + '" height="' + anchoPx +
+      '" fill="var(--texto2)" opacity=".08"/>';
     hoja.forEach((tira, ti)=>{
       let x = 0;
       for(const pz of tira.piezas){
         svg += '<rect x="' + (x*esc) + '" y="' + (ti*r.desarrollo*esc) + '" width="' + (pz.largo*esc) +
           '" height="' + (r.desarrollo*esc) + '" fill="' + BL_COLORES[pz.idx % BL_COLORES.length] +
-          '" opacity=".8" stroke="var(--borde)" stroke-width=".5"/>';
+          '" opacity=".85" stroke="var(--borde)" stroke-width=".5"/>';
         if(pz.largo*esc > 26)
           svg += '<text x="' + ((x + pz.largo/2)*esc) + '" y="' + ((ti*r.desarrollo + r.desarrollo/2 + 3)*esc) +
             '" font-size="' + Math.min(11, r.desarrollo*esc*0.45) + '" text-anchor="middle" fill="#1a1200">' +
             pz.largo.toFixed(0) + '</text>';
         x += pz.largo;
       }
-      if(x < r.hojaH - 1)
+      /* lo que sobra al final de la tira */
+      if(x < r.hojaH - 1){
         svg += '<rect x="' + (x*esc) + '" y="' + (ti*r.desarrollo*esc) + '" width="' + ((r.hojaH-x)*esc) +
-          '" height="' + (r.desarrollo*esc) + '" fill="none" stroke="var(--texto2)" stroke-width=".5" stroke-dasharray="3 3"/>';
+          '" height="' + (r.desarrollo*esc) + '" fill="var(--texto2)" opacity=".13" stroke="var(--texto2)" stroke-width=".5" stroke-dasharray="3 3"/>';
+        if((r.hojaH-x)*esc > 30)
+          svg += '<text x="' + ((x + (r.hojaH-x)/2)*esc) + '" y="' + ((ti*r.desarrollo + r.desarrollo/2 + 3)*esc) +
+            '" font-size="8" text-anchor="middle" fill="var(--texto2)">' + (r.hojaH-x).toFixed(0) + '</text>';
+      }
+      svg += '<line x1="0" y1="' + ((ti+1)*r.desarrollo*esc) + '" x2="' + altoPx + '" y2="' + ((ti+1)*r.desarrollo*esc) +
+        '" stroke="var(--borde)" stroke-width=".8"/>';
     });
+    /* tiras que quedaron sin usar y la franja del borde */
+    const usadas = hoja.length;
+    for(let ti = usadas; ti < r.tirasPorHoja; ti++)
+      svg += '<rect x="0" y="' + (ti*r.desarrollo*esc) + '" width="' + altoPx + '" height="' + (r.desarrollo*esc) +
+        '" fill="var(--texto2)" opacity=".13" stroke="var(--texto2)" stroke-width=".5" stroke-dasharray="3 3"/>';
+    const borde = r.hojaW - r.tirasPorHoja*r.desarrollo;
+    if(borde > 0.5)
+      svg += '<rect x="0" y="' + (r.tirasPorHoja*r.desarrollo*esc) + '" width="' + altoPx + '" height="' + (borde*esc) +
+        '" fill="var(--texto2)" opacity=".18" stroke="var(--texto2)" stroke-width=".5" stroke-dasharray="2 2"/>';
     svg += '</svg>';
+    const usoHoja = hoja.reduce((a,t)=> a + t.piezas.reduce((b,z)=> b + z.largo, 0), 0) * r.desarrollo;
     cajas.push('<div style="margin-bottom:8px">' + svg +
       '<div style="font-size:.64rem;color:var(--texto2);margin-top:2px">Hoja ' + (hi+1) + ' de ' + r.hojas.length +
-      ' · ' + r.hojaW + '×' + r.hojaH + ' cm · ' + hoja.length + ' de ' + r.tirasPorHoja + ' tiras usadas</div></div>');
+      ' · ' + r.hojaW + '×' + r.hojaH + ' cm · aprovecha ' + Math.round(100*usoHoja/(r.hojaW*r.hojaH)) + '%' +
+      (borde > 0.5 ? ' · sobra una franja de ' + borde.toFixed(0) + ' cm en el borde' : '') + '</div></div>');
   });
   return cajas.join('');
 }
+
 /* Corte del fondo cuando va de chapa: el panel de cada cartel con la grilla
    de hojas encima, para ver dónde caen las juntas. */
 function blDibujarFondo(r, chapaFondo){
@@ -13531,8 +13582,13 @@ function blDibujarFondo(r, chapaFondo){
     const pw = giradas ? hh : hw, ph = giradas ? hw : hh;
     const cols = Math.ceil(c.W/pw), fils = Math.ceil(c.H/ph);
     const w = c.W*esc, h = c.H*esc;
-    let g = '<svg viewBox="0 0 ' + (w+2) + ' ' + (h+2) + '" style="width:100%;max-width:' + (w+2) +
-      'px;border:1px solid var(--borde);border-radius:6px;background:var(--panel2)">';
+    /* se dibujan las hojas ENTERAS y encima el panel: lo que asoma es recorte */
+    const totW = cols*pw, totH = fils*ph;
+    let g = '<svg viewBox="0 0 ' + (totW*esc+2) + ' ' + (totH*esc+2) + '" style="width:100%;max-width:' +
+      (totW*esc+2) + 'px;border:1px solid var(--borde);border-radius:6px;background:var(--panel2)">';
+    for(let i=0;i<cols;i++) for(let j=0;j<fils;j++)
+      g += '<rect x="' + (i*pw*esc+1) + '" y="' + (j*ph*esc+1) + '" width="' + (pw*esc) + '" height="' + (ph*esc) +
+        '" fill="var(--texto2)" opacity=".13" stroke="var(--texto2)" stroke-width=".6" stroke-dasharray="3 3"/>';
     for(let i=0;i<cols;i++) for(let j=0;j<fils;j++){
       /* cada hoja se recorta a lo que queda del panel */
       const x = i*pw, yy = j*ph;
@@ -13544,11 +13600,14 @@ function blDibujarFondo(r, chapaFondo){
         g += '<text x="' + ((x+aw/2)*esc+1) + '" y="' + ((yy+ah/2)*esc+5) +
           '" font-size="9" text-anchor="middle" fill="#1a1200">' + aw.toFixed(0) + '×' + ah.toFixed(0) + '</text>';
     }
+    g += '<rect x="1" y="1" width="' + (c.W*esc) + '" height="' + (c.H*esc) +
+      '" fill="none" stroke="var(--texto)" stroke-width="1.4"/>';
     g += '</svg>';
     out += '<div style="flex:0 1 auto">' + g +
       '<div style="font-size:.64rem;color:var(--texto2);margin-top:2px">' + c.W + '×' + c.H +
       ' → ' + (cols*fils) + ' hoja(s)' + (giradas ? ' giradas' : '') +
-      (c.cant > 1 ? ' · ×' + c.cant : '') + '</div></div>';
+      (c.cant > 1 ? ' · ×' + c.cant : '') + ' · aprovecha ' +
+      Math.round(100 * (c.W*c.H) / (cols*pw * fils*ph)) + '%</div></div>';
   }
   return '<div style="font-size:.72rem;color:var(--texto2);margin:10px 0 4px">🔲 Corte del fondo de chapa</div>' +
     '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">' + out + '</div>' +
@@ -13624,8 +13683,13 @@ function blRecalcular(){
     anchoCano: cano ? (parseFloat((cano.nombre||'').match(/(\d+)\s*[×x]/)?.[1]) || 2) : 2
   };
   const r = blCalcularVarios(lista, opts);
-  const venta = r.costo * (1 + margen/100);
-  blUlt = {r, lista, costo: r.costo, venta};
+  /* La parte usada lleva ganancia. El sobrante que se le carga al cliente va
+     AL COSTO, sin multiplicar: es material, no trabajo. Lo que no se cobra
+     queda como stock del taller. */
+  const sobPct = Math.max(0, Math.min(100, num('blSobrante')));
+  const sobCobrado = r.sobrante * sobPct/100;
+  const venta = r.costoUtil * (1 + margen/100) + sobCobrado;
+  blUlt = {r, lista, costo: r.costo, venta, sobPct, sobCobrado};
   const fila = (k, v, sub)=>
     '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:.74rem">' +
     '<span style="color:var(--texto2)">' + k + (sub ? '<br><span style="font-size:.62rem">' + sub + '</span>' : '') + '</span>' +
@@ -13660,8 +13724,17 @@ function blRecalcular(){
   if(r.plotCosto) h += fila('Ploteo del marco' + (vin ? ' · ' + vin.nombre : ''), plata(r.plotCosto),
         r.m2Plot.toFixed(2) + ' m² (desarrollo de ' + r.desarrollo + ' cm)');
   h += '<div style="border-top:1px dashed var(--borde);margin-top:6px;padding-top:6px">';
-  h += fila('<b>Costo total</b>', '<b>' + plata(r.costo) + '</b>', r.unidades + ' cartel(es)');
-  h += fila('<b style="color:#4cd27d">VENTA</b>', '<b style="color:#4cd27d">' + plata(venta) + '</b>');
+  h += fila('<b>Costo comprado</b>', '<b>' + plata(r.costoComprado) + '</b>',
+        r.unidades + ' cartel(es) · hojas y barras enteras');
+  h += fila('Se va en el trabajo', plata(r.costoUtil),
+        'chapa ' + Math.round(r.usoChapa*100) + '% · caño ' + Math.round(r.usoCano*100) + '%' +
+        (r.fondoTipo === 'chapa' ? ' · fondo ' + Math.round(r.usoFondo*100) + '%' : ''));
+  h += fila('Sobrante', plata(r.sobrante),
+        sobPct >= 100 ? 'se cobra entero, sin ganancia'
+        : (sobPct <= 0 ? 'queda como stock del taller, no se cobra'
+        : 'se cobra el ' + sobPct + '% (' + plata(sobCobrado) + '), el resto queda como stock'));
+  h += fila('<b style="color:#4cd27d">VENTA</b>', '<b style="color:#4cd27d">' + plata(venta) + '</b>',
+        plata(r.costoUtil) + ' + ' + margen + '%' + (sobCobrado > 0 ? ' + ' + plata(sobCobrado) + ' de sobrante' : ''));
   h += '</div></div>';
   h += '<div style="font-size:.64rem;color:var(--texto2);margin-top:6px;line-height:1.4;font-style:italic">La instalación se cobra aparte.</div>';
   cont.innerHTML = h;
@@ -13697,7 +13770,7 @@ function blRecalcular(){
       (blFondo === 'chapa' ? 'de chapa' : 'en lona tensada');
   }
 }
-for(const id of ['blProf','blZing','blMargen','blTensadaM2'])
+for(const id of ['blProf','blZing','blMargen','blSobrante','blTensadaM2'])
   document.getElementById(id).addEventListener('input', blRecalcular);
 for(const id of ['blCano','blChapa','blLona','blChapaFondo','blPlot'])
   document.getElementById(id).addEventListener('change', blRecalcular);
@@ -13728,7 +13801,7 @@ document.getElementById('blAgregar').onclick = ()=>{
      corregir, y dos backlights del mismo pedido no se pisan entre sí */
   const blInput = {
     filas: JSON.parse(JSON.stringify(blFilas)), prof: gid('blProf'),
-    zing: gid('blZing'), margen: gid('blMargen'), tensadaM2: gid('blTensadaM2'),
+    zing: gid('blZing'), margen: gid('blMargen'), sobrante: gid('blSobrante'), tensadaM2: gid('blTensadaM2'),
     fondo: blFondo, corte: blCorte, canoId: gid('blCano'), chapaId: gid('blChapa'),
     lonaId: gid('blLona'), plotId: gid('blPlot'),
     texto: document.getElementById('blTexto').value
