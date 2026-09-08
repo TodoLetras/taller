@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v171</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v172</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -11726,9 +11726,13 @@ async function generarPDFPedido(p, version){
         doc.setFont('Fira','bold'); doc.setFontSize(11); doc.setTextColor(30,30,30);
         doc.text('Medidas', margen, y);
         y += 20;
+        /* una sola escala para todo el grupo, así los de igual alto se ven iguales */
+        const mW = Math.max(...carteles.map(c=> c.W));
+        const mH = Math.max(...carteles.map(c=> c.H));
+        const escG = Math.min(200 / mW, 110 / mH);
         for(const c of carteles){
-          const maxW = 200, esc = Math.min(maxW / c.W, 120 / c.H);
-          const w = c.W*esc, h = c.H*esc, d = Math.max(8, Math.min(26, prof*0.9));
+          const esc = escG;
+          const w = c.W*esc, h = c.H*esc, d = Math.max(6, Math.min(14, prof*0.42));
           if(y + h + 44 > 760){ doc.addPage(); y = 60; }
           const X = margen + 22, Y = y + d;
           doc.setDrawColor(150,150,150); doc.setLineWidth(0.7);
@@ -13337,12 +13341,13 @@ function vcRenderConfig(){
 /* Esquema del cartel para el cliente: el frente en verdadero tamaño y la
    profundidad insinuada en perspectiva, con las tres cotas. Sin caños ni
    estructura: eso va en el plano del herrero. */
-function blEsquemaSVG(W, H, prof, ancho){
-  ancho = ancho || 300;
-  const dz = Math.max(10, Math.min(38, prof * 1.1));   // cuánto se "acuesta" el fondo
+/* `esc` es la escala en píxeles por cm. Se pasa la MISMA para todos los
+   carteles del grupo, así dos de 1 m de alto se dibujan igual de altos. */
+function blEsquemaSVG(W, H, prof, esc, anchoMax){
+  const d = Math.max(6, Math.min(16, prof * 0.42));    // la profundidad solo se insinúa
   const margen = 34, cota = 20;
-  const esc = (ancho - margen*2 - dz) / W;
-  const w = W*esc, h = H*esc, d = dz;
+  const w = W*esc, h = H*esc;
+  const ancho = Math.max(anchoMax || 0, margen*2 + w + d);
   const X = margen, Y = cota + d;
   const c = 'var(--texto)', c2 = 'var(--texto2)';
   const alto = Y + h + cota + 14;
@@ -13511,6 +13516,46 @@ function blDibujarChapa(r){
   });
   return cajas.join('');
 }
+/* Corte del fondo cuando va de chapa: el panel de cada cartel con la grilla
+   de hojas encima, para ver dónde caen las juntas. */
+function blDibujarFondo(r, chapaFondo){
+  if(r.fondoTipo !== 'chapa' || !chapaFondo) return '';
+  const hw = (chapaFondo.hojaW || 1.22)*100, hh = (chapaFondo.hojaH || 2.44)*100;
+  const maxW = Math.max(...r.carteles.map(c=> c.W));
+  const esc = Math.min(230 / maxW, 120 / Math.max(...r.carteles.map(c=> c.H)));
+  let out = '';
+  for(const c of r.carteles){
+    const opA = Math.ceil(c.W/hw) * Math.ceil(c.H/hh);
+    const opB = Math.ceil(c.W/hh) * Math.ceil(c.H/hw);
+    const giradas = opB < opA;
+    const pw = giradas ? hh : hw, ph = giradas ? hw : hh;
+    const cols = Math.ceil(c.W/pw), fils = Math.ceil(c.H/ph);
+    const w = c.W*esc, h = c.H*esc;
+    let g = '<svg viewBox="0 0 ' + (w+2) + ' ' + (h+2) + '" style="width:100%;max-width:' + (w+2) +
+      'px;border:1px solid var(--borde);border-radius:6px;background:var(--panel2)">';
+    for(let i=0;i<cols;i++) for(let j=0;j<fils;j++){
+      /* cada hoja se recorta a lo que queda del panel */
+      const x = i*pw, yy = j*ph;
+      const aw = Math.min(pw, c.W - x), ah = Math.min(ph, c.H - yy);
+      if(aw <= 0 || ah <= 0) continue;
+      g += '<rect x="' + (x*esc+1) + '" y="' + (yy*esc+1) + '" width="' + (aw*esc) + '" height="' + (ah*esc) +
+        '" fill="' + BL_COLORES[c.idx % BL_COLORES.length] + '" opacity=".55" stroke="var(--texto2)" stroke-width="1"/>';
+      if(aw*esc > 30 && ah*esc > 14)
+        g += '<text x="' + ((x+aw/2)*esc+1) + '" y="' + ((yy+ah/2)*esc+5) +
+          '" font-size="9" text-anchor="middle" fill="#1a1200">' + aw.toFixed(0) + '×' + ah.toFixed(0) + '</text>';
+    }
+    g += '</svg>';
+    out += '<div style="flex:0 1 auto">' + g +
+      '<div style="font-size:.64rem;color:var(--texto2);margin-top:2px">' + c.W + '×' + c.H +
+      ' → ' + (cols*fils) + ' hoja(s)' + (giradas ? ' giradas' : '') +
+      (c.cant > 1 ? ' · ×' + c.cant : '') + '</div></div>';
+  }
+  return '<div style="font-size:.72rem;color:var(--texto2);margin:10px 0 4px">🔲 Corte del fondo de chapa</div>' +
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">' + out + '</div>' +
+    '<div style="font-size:.64rem;color:var(--texto2);margin-top:4px">Hoja de ' + hw + '×' + hh +
+    ' cm · las medidas son lo que hay que cortar de cada una.</div>';
+}
+
 /* dibujo de las tiras de caño, para el herrero */
 function blDibujarCano(r){
   const esc = 280 / r.tiraCano;
@@ -13623,13 +13668,18 @@ function blRecalcular(){
 
   /* dibujos */
   let d = '<div style="font-size:.72rem;color:var(--texto2);margin-bottom:4px">📐 Esquema para el cliente</div>';
-  d += '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">';
+  /* una sola escala para todo el grupo: así se comparan entre sí */
+  const maxW = Math.max(...r.carteles.map(c=> c.W));
+  const maxH = Math.max(...r.carteles.map(c=> c.H));
+  const escCom = Math.min(230 / maxW, 120 / maxH);
+  d += '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">';
   for(const c of r.carteles)
-    d += '<div style="flex:0 1 auto">' + blEsquemaSVG(c.W, c.H, blCfg.profundidad, 240) +
+    d += '<div style="flex:0 1 auto">' + blEsquemaSVG(c.W, c.H, blCfg.profundidad, escCom) +
          '<div style="font-size:.64rem;color:var(--texto2);text-align:center">' +
          (c.cant > 1 ? c.cant + ' unidades' : '1 unidad') + '</div></div>';
   d += '</div>';
   d += '<div style="font-size:.72rem;color:var(--texto2);margin-bottom:4px">✂️ Corte de la chapa</div>' + blDibujarChapa(r);
+  d += blDibujarFondo(r, chapaFondo ? {hojaW: chapaFondo.hojaW, hojaH: chapaFondo.hojaH} : null);
   d += '<div style="font-size:.72rem;color:var(--texto2);margin:10px 0 4px">🔩 Corte de los caños (para el herrero)</div>' + blDibujarCano(r);
   d += '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:.66rem;color:var(--texto2);margin-top:8px">';
   r.carteles.forEach((c, i)=>{
