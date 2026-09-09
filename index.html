@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v173</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v174</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -12260,6 +12260,27 @@ function adEncajeDet(pw, ph, W, H){
   if(!B) return A;
   return B.n > A.n ? B : A;
 }
+/* Posado válido para GIRO MARIPOSA.
+   Al girar el pliego sobre el eje vertical, cada pose tiene que caer sobre su
+   pareja: la 1 con la última, la 2 con la anteúltima, y así. Eso obliga a que
+   la grilla sea simétrica, o sea COLUMNAS PARES, y que no haya franja
+   sobrante de un solo lado (esa franja rompe la simetría).
+   Por eso el giro suele dar MENOS poses que el posado libre: hay que
+   comparar si compensa contra usar chapas separadas. */
+function adEncajeGiro(pw, ph, W, H){
+  function o(a, b, rot){
+    let c = Math.floor(W/a);
+    const f = Math.floor(H/b);
+    if(c < 2 || f < 1) return null;
+    c = c - (c % 2);                 // columnas pares
+    if(c < 2) return null;
+    return {n: c*f, rot, a, b, cols: c, rows: f, extra: null, giroOk: true};
+  }
+  const A = o(pw, ph, false), B = o(ph, pw, true);
+  if(!A) return B;
+  if(!B) return A;
+  return B.n > A.n ? B : A;
+}
 function adEncaje(pw, ph, W, H){
   const d = adEncajeDet(pw, ph, W, H);
   return d ? d.n : 0;
@@ -12375,6 +12396,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
   const utilW = plLargo - 2*marg;    // márgenes en las puntas del lado largo
   const utilH = plCorto - pinza;     // la pinza recorre el lado largo: come del lado corto
   const layoutDet = adEncajeDet(pzW, pzH, utilW, utilH);
+  const layoutGiro = adEncajeGiro(pzW, pzH, utilW, utilH);
   const poses = posesManual > 0 ? posesManual : (layoutDet ? layoutDet.n : 0);
   if(poses < 1) return null;
   const pliegosPorHoja = cortePl.n;
@@ -12388,13 +12410,17 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     pasadas: dorso
       ? (cf===cd ? [{t: tar.millar[cf]||0, n:2, cambios:2}] : [{t: tar.millar[cf]||0, n:1, cambios:1}, {t: tar.millar[cd]||0, n:1, cambios:1}])
       : [{t: tar.millar[cf]||0, n:1, cambios:1}]});
-  if(dorso && cf===cd && poses>=2){
-    // giro mariposa: mitad frentes, mitad dorsos en la MISMA chapa; tras las dos
-    // pasadas cada pliego rinde TODAS las poses como piezas terminadas
-    const posesPar = poses - (poses % 2);
-    if(!adSinGiro) variantes.push({giro:true, poses: posesPar, posturas:1, chapas: cf,
-      postCosto: tar.post[cf]||0,
-      pasadas: [{t: tar.millar[cf]||0, n:2, cambios:1}]});
+  if(dorso && cf===cd){
+    /* Giro mariposa: la misma chapa hace frente y dorso, así que tras las dos
+       pasadas cada pliego rinde TODAS sus poses como piezas terminadas.
+       PERO el posado tiene que ser simétrico (columnas pares y sin franja
+       suelta), y eso normalmente da menos poses que el posado libre. */
+    const posesGiro = posesManual > 0 ? (posesManual - posesManual % 2)
+                                      : (layoutGiro ? layoutGiro.n : 0);
+    if(!adSinGiro && posesGiro >= 2)
+      variantes.push({giro:true, poses: posesGiro, posturas:1, chapas: cf,
+        postCosto: tar.post[cf]||0, layout: layoutGiro,
+        pasadas: [{t: tar.millar[cf]||0, n:2, cambios:1}]});
   }
   let mejor = null;
   // MODO LIBRO (orig = HOJAS del libro; cada hoja = frente y dorso).
@@ -12536,12 +12562,14 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     const paqDec = Math.round((hojas / papel.hojas) * 100) / 100;
     const op = {maquina: maq.nombre, plW: plLargo, plH: plCorto, giro: v.giro, poses: v.poses, pliegos, hojas, paquetes, paqDec,
       piezas, costo, margen, venta, unitario: piezas>0 ? venta/piezas : 0, nota, millares, pasadasN, pliegosNetos,
-      layout: posesManual > 0 ? null : layoutDet, pinza, marg, pzW, pzH,
+      layout: posesManual > 0 ? null : (v.layout || layoutDet), pinza, marg, pzW, pzH,
       postCosto: v.postCosto, millarCosto, chapasCosto, corteCosto, troqCosto, troqNombre, troqMillares, troqPliegos, troqCortes, plastCosto, plastNombre, intercaladoCosto, binderCosto, millares, millarUnit,
       posturas: v.posturas, chapas: v.chapas, pliegosPorHoja, papelCosto,
       desglose: des.concat(['📈 Margen: +' + margen + '% → VENTA ' + plata(venta) + (piezas>0 ? ' (' + plata(Math.round(venta/piezas*100)/100) + ' por ' + (v.libro ? 'ejemplar' : 'pieza') + ')' : '')]),
       detalle: (v.libro ? '📖 LIBRO: ' + v.libro.hojas + ' hojas (' + (v.libro.hojas*2) + ' páginas) · ' + v.juegos + ' pliegos tipo (' + v.libro.plColor + ' a ' + v.libro.colN + '/' + v.libro.colN + ' + ' + v.libro.plBN + ' a 1/1) · cantidad = ejemplares · ' : '') + (v.giro
-        ? 'GIRO mariposa: 1 juego de ' + v.chapas + ' chapas · ' + v.poses + ' poses/pliego (' + (v.poses/2) + ' frentes + ' + (v.poses/2) + ' dorsos)'
+        ? 'GIRO mariposa: 1 juego de ' + v.chapas + ' chapas · ' + v.poses + ' poses/pliego (' + (v.poses/2) + ' frentes + ' + (v.poses/2) + ' dorsos)' +
+          (v.layout ? ' · ' + v.layout.cols + '×' + v.layout.rows + ' simétrico' : '') +
+          (layoutDet && layoutDet.n > v.poses ? ' · el posado libre daría ' + layoutDet.n + ', pero no cierra la simetría' : '')
         : v.posturas + ' juego(s) de chapas (' + v.chapas + ' en total) · ' + v.poses + ' poses/pliego') +
         ' · hoja ' + papel.W + '×' + papel.H + ' cortada en ' + pliegosPorHoja + ' → pliego máquina ' + plLargo + '×' + plCorto + ' cm' + (cortePl.refi ? ' (refilado de ' + cortePl.origW + '×' + cortePl.origH + ')' : '') + ' (útil ' + (Math.round(utilW*10)/10) + '×' + (Math.round(utilH*10)/10) + ')'};
     if(!mejor || op.venta < mejor.venta) mejor = op;
