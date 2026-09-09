@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v174</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v175</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -12240,6 +12240,8 @@ let adUltimasOD = [];
 let adOdPapelOver = null, adOdMargenOver = null;
 let adOdTerm = {plastF:false, plastD:false, mc:false, cc:false, corte:'no'};
 let adPdfConPosado = false, adUltimasOpciones = null, adUltimoCtx = null, adSinGiro = false;
+/* null = elige la más barata · 'gto' o 'komori' = forzada (ej: la Komori llena de trabajo) */
+let adMaqForzada = null;
 const AD_COLORES = [['1/0',1,0],['1/1',1,1],['2/0',2,0],['2/2',2,2],['4/0',4,0],['4/1',4,1],['4/4',4,4]];
 function adEncajeDet(pw, ph, W, H){
   function o(a, b, rot){
@@ -12648,7 +12650,11 @@ function adMejorOpcion(papel, cf, cd, pzW, pzH, modo, orig, plastOver){
   /* OPP, sobres y Pantone: AD los hace en GTO. En Komori no tienen tarifa de lista,
      así que no se propone sola; si el trabajo es grande, hay que consultarle. */
   if(adSoloGto(papel) && a) return a;
+  /* máquina forzada: sirve cuando una está cargada de trabajo aunque salga
+     más barata. Si en la forzada no entra la pieza, se avisa y se usa la otra. */
+  if(adMaqForzada === 'gto') return a || adCalcular('komori', papel, cf, cd, pzW, pzH, modo, orig, plastOver);
   const b = adCalcular('komori', papel, cf, cd, pzW, pzH, modo, orig, plastOver);
+  if(adMaqForzada === 'komori') return b || a;
   if(a && b) return a.venta <= b.venta ? a : b;
   return a || b;
 }
@@ -12876,8 +12882,32 @@ function calcularAd(){
     '<button id="adBtnPdf" style="background:var(--panel2);border:1px dashed #4cd27d;color:#4cd27d;border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem">📄 PDF para el cliente</button>' +
     '<button id="adTogglePosado" style="background:var(--panel2);border:1px dashed var(--borde);border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;color:' + (adPdfConPosado ? '#4cd27d' : 'var(--texto2)') + '">' + (adPdfConPosado ? '☑' : '☐') + ' incluir esquema de posado</button>' +
     '<button id="adToggleGiro" style="background:var(--panel2);border:1px dashed ' + (adSinGiro ? '#ff7a7a' : 'var(--borde)') + ';border-radius:10px;padding:9px 12px;font-weight:700;font-size:.74rem;color:' + (adSinGiro ? '#ff7a7a' : 'var(--texto2)') + '">' + (adSinGiro ? '🚫 sin giro mariposa (chapas separadas)' : '🦋 giro mariposa permitido') + '</button>' +
+    '<span style="font-size:.7rem;color:var(--texto2);margin-left:4px">Máquina:</span>' +
+    ['', 'gto', 'komori'].map(m=>{
+      const on = (adMaqForzada || '') === m;
+      const txt = m === '' ? '⚖️ la más barata' : (m === 'gto' ? '🖨 GTO' : '🖨 Komori');
+      return '<button class="adMaqBtn" data-maq="' + m + '" style="background:' +
+        (on ? 'rgba(199,146,234,.18)' : 'var(--panel2)') + ';border:1px ' + (on ? 'solid #c792ea' : 'dashed var(--borde)') +
+        ';border-radius:10px;padding:9px 11px;font-weight:700;font-size:.72rem;color:' +
+        (on ? '#c792ea' : 'var(--texto2)') + '">' + txt + '</button>';
+    }).join('') +
     '<span style="font-size:.62rem;color:var(--texto2)">El PDF muestra solo cantidades, unitario y total (sin costos internos).</span></div>';
   // sugerencia: mismo gramaje en otros formatos de hoja, ¿alguno da mejor unitario?
+  /* si forzaste una máquina, avisar cuánto cuesta esa decisión */
+  if(adMaqForzada && q > 0 && opciones.length){
+    const forz = opciones[0] ? opciones[0].op : null;
+    const otra = adMaqForzada === 'gto' ? 'komori' : 'gto';
+    const alt = adCalcular(otra, papel, cf, cd, pzW, pzH,
+      {tipo:'cantidad', q, inter: interL[0], bind: bindL[0]}, adOrig);
+    if(forz && alt && alt.venta < forz.venta){
+      h += '<div style="margin-top:8px;padding:9px 11px;border-radius:10px;background:rgba(255,209,102,.10);' +
+        'border:1px dashed #ffd166;font-size:.72rem;color:var(--texto2);line-height:1.5">' +
+        '🔒 Forzaste la <b>' + (adMaqForzada === 'gto' ? 'GTO' : 'Komori') + '</b>. En la ' +
+        (otra === 'gto' ? 'GTO' : 'Komori') + ' saldría <b>' + plata(alt.venta) + '</b> (' +
+        plata(forz.venta - alt.venta) + ' menos), con ' + alt.poses + ' poses y ' +
+        alt.pliegos.toLocaleString('es-AR') + ' pliegos.</div>';
+    }
+  }
   if(q > 0 && opciones.length){
     const base = opciones[0].op;
     const alts = adPapeles.filter(x=> x.id !== papel.id && (x.precio||0) > 0 && x.gramaje === papel.gramaje);
@@ -13029,6 +13059,9 @@ function calcularAd(){
   if(tpos) tpos.onclick = ()=>{ adPdfConPosado = !adPdfConPosado; calcularAd(); };
   const tgiro = document.getElementById('adToggleGiro');
   if(tgiro) tgiro.onclick = ()=>{ adSinGiro = !adSinGiro; calcularAd(); };
+  res.querySelectorAll('.adMaqBtn').forEach(b=>{
+    b.onclick = ()=>{ adMaqForzada = b.dataset.maq || null; calcularAd(); };
+  });
   const lista = opciones;
   res.querySelectorAll('.adVer').forEach((btn)=>{
     btn.onclick = ()=>{
