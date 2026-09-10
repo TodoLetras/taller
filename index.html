@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v176</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v178</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -2405,10 +2405,32 @@ function migrarSoldadoRuis(){
       if(adPapeles.find(x=> x.cod === cod)) continue;      // no duplicar
       adPapeles.push({id: uid()+Math.random().toString(36).slice(2,4),
         cod, nombre, gramaje: gr || 90, W, H, hojas, precio,
-        sobre: tipo, prov: 'Boixados'});
+        sobre: tipo, prov: 'Boixados', sinIva: true});
     }
     adCfg.sobres0626 = true;
   }
+  /* Sobres Papelera Cumbre · presupuesto 0001-00377286 del 07/09/2026, SIN IVA.
+     Cajas de 250. Se cargan aparte de los de Boixados para poder comparar
+     proveedor por proveedor en la misma medida. */
+  if(Array.isArray(adPapeles) && !adCfg.sobresCumbre0926){
+    const CUMBRE = [
+      ['251112','Bolsa manila 80g 229×324', 22.9, 32.4, 250, 20046.30, 80, 'bolsa'],
+      ['251108','Bolsa manila 80g 250×353', 25.0, 35.3, 250, 22766.20, 80, 'bolsa'],
+      ['251109','Bolsa manila 80g 270×370', 27.0, 37.0, 250, 25135.30, 80, 'bolsa'],
+      ['251292','Bolsa obra 90g 229×324',   22.9, 32.4, 250, 30928.70, 90, 'bolsa'],
+      ['251288','Bolsa obra 90g 250×353',   25.0, 35.3, 250, 34849.20, 90, 'bolsa'],
+      ['251289','Bolsa obra 90g 270×370',   27.0, 37.0, 250, 38911.20, 90, 'bolsa'],
+    ];
+    for(const [cod, nombre, W, H, hojas, precio, gr, tipo] of CUMBRE){
+      if(adPapeles.find(x=> x.cod === cod)) continue;
+      adPapeles.push({id: uid()+Math.random().toString(36).slice(2,4),
+        cod, nombre, gramaje: gr, W, H, hojas, precio, sobre: tipo, prov: 'Cumbre', sinIva: true});
+    }
+    adCfg.sobresCumbre0926 = true;
+  }
+  /* Somos monotributistas: el IVA que nos cobra el proveedor NO se recupera,
+     así que es costo. Los papeles marcados `sinIva` se cargan con este % arriba. */
+  if(typeof adCfg === 'object' && adCfg && adCfg.ivaCosto === undefined) adCfg.ivaCosto = 21;
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
   if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
     adCfg.plastificados = [
@@ -12372,6 +12394,12 @@ function adMargen(paquetes){
 }
 /* El autoadhesivo va SIEMPRE en el tramo caro, aunque pese 90 gramos:
    la lista dice "desde 180 gr hasta 300 gr Y AUTOADHESIVO". */
+/* precio del paquete tal como lo pagamos: si la lista viene sin IVA, se suma */
+function papelPrecio(papel){
+  if(!papel) return 0;
+  const base = papel.precio || 0;
+  return papel.sinIva ? base * (1 + (adCfg.ivaCosto || 0)/100) : base;
+}
 function adEsAutoadhesivo(papel){
   if(!papel) return false;
   if(papel.autoadh === true) return true;
@@ -12493,7 +12521,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
       pliegos = hojas * pliegosPorHoja;
       const netos = Math.max(0, pliegos - adCfg.demasia * v.posturas);
       piezas = netos * v.poses;
-      papelCosto = paquetes * (papel.precio||0);
+      papelCosto = paquetes * papelPrecio(papel);
     }else{
       const pliegosNec = ((v.juegos||1) > 1 ? modo.q * v.juegos : Math.ceil(modo.q / v.poses)) + adCfg.demasia * v.posturas;
       hojas = Math.ceil(pliegosNec / pliegosPorHoja);
@@ -12503,12 +12531,12 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
       paquetes = Math.ceil(paqExactos);
       const cobrarRecargo = (document.getElementById('adRecargoChk')||{checked:true}).checked;
       if(Number.isInteger(paqExactos)){
-        papelCosto = paqExactos * (papel.precio||0);
+        papelCosto = paqExactos * papelPrecio(papel);
       }else if(cobrarRecargo){
-        papelCosto = hojas * ((papel.precio||0) / papel.hojas) * (1 + adCfg.recargoParcial/100);
+        papelCosto = hojas * (papelPrecio(papel) / papel.hojas) * (1 + adCfg.recargoParcial/100);
         nota = '+' + adCfg.recargoParcial + '% papel abierto';
       }else{
-        papelCosto = hojas * ((papel.precio||0) / papel.hojas);
+        papelCosto = hojas * (papelPrecio(papel) / papel.hojas);
         nota = 'papel abierto sin recargo';
       }
     }
@@ -12578,7 +12606,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     }else{
       des.push('📄 Pliegos máquina: ' + (modo.tipo==='paquetes' ? pliegos.toLocaleString('es-AR') + ' (por papel)' : Math.ceil(modo.q / v.poses).toLocaleString('es-AR') + ' netos (' + modo.q.toLocaleString('es-AR') + ' piezas ÷ ' + v.poses + ' poses) + demasía ' + (adCfg.demasia*v.posturas) + ' = ' + pliegos.toLocaleString('es-AR') + ' totales'));
     }
-    des.push('🧻 Papel: ' + pliegos.toLocaleString('es-AR') + ' pliegos ÷ ' + pliegosPorHoja + ' por hoja = ' + hojas.toLocaleString('es-AR') + ' hojas (' + (Math.round(hojas/papel.hojas*100)/100) + ' paq de ' + papel.hojas + 'h a ' + plata(papel.precio||0) + ') → ' + plata(papelCosto) + (nota.includes('papel abierto') ? ' (' + (nota.split(' · ')[0]) + ')' : ''));
+    des.push('🧻 Papel: ' + pliegos.toLocaleString('es-AR') + ' pliegos ÷ ' + pliegosPorHoja + ' por hoja = ' + hojas.toLocaleString('es-AR') + ' hojas (' + (Math.round(hojas/papel.hojas*100)/100) + ' paq de ' + papel.hojas + 'h a ' + plata(papelPrecio(papel)) + (papel.sinIva ? ' c/IVA' : '') + ') → ' + plata(papelCosto) + (nota.includes('papel abierto') ? ' (' + (nota.split(' · ')[0]) + ')' : ''));
     if(v.libro){
       des.push('🔩 Chapas: ' + v.libro.plColor + ' pliegos color × 2 caras × ' + v.libro.colN + ' = ' + (v.libro.plColor*2*v.libro.colN) + ' a color + ' + v.libro.plBN + ' × 2 × 1 = ' + (v.libro.plBN*2) + ' a negro → ' + v.chapas + ' chapas × ' + plata(maq.ctp) + ' = ' + plata(chapasCosto));
       des.push('⚙️ Posturas: ' + (v.libro.plColor*2) + ' a color × ' + plata(tar.post[v.libro.colN]||0) + ' + ' + (v.libro.plBN*2) + ' a negro × ' + plata(tar.post[1]||0) + ' = ' + plata(v.postCosto));
@@ -12715,7 +12743,9 @@ function renderAd(){
   for(const p of adPapeles){
     const o = document.createElement('option');
     o.value = p.id;
-    o.textContent = p.nombre + ' · ' + p.W + '×' + p.H + ' · paq ' + p.hojas + 'h · ' + (p.precio ? plata(p.precio) : '⚠️ sin precio');
+    o.textContent = p.nombre + ' · ' + p.W + '×' + p.H + ' · paq ' + p.hojas + 'h · ' +
+      (p.precio ? plata(papelPrecio(p)) + (p.sinIva ? ' c/IVA' : '') : '⚠️ sin precio') +
+      (p.prov ? ' · ' + p.prov : '');
     sel.appendChild(o);
   }
   if(prev && adPapeles.find(x=>x.id===prev)) sel.value = prev;
@@ -12932,6 +12962,30 @@ function calcularAd(){
     }).join('') +
     '<span style="font-size:.62rem;color:var(--texto2)">El PDF muestra solo cantidades, unitario y total (sin costos internos).</span></div>';
   // sugerencia: mismo gramaje en otros formatos de hoja, ¿alguno da mejor unitario?
+  /* ¿el mismo sobre sale más barato en otro proveedor? Se comparan por
+     medida y tipo de papel, llevando todo a precio por unidad. */
+  if(papel && papel.sobre && papel.precio > 0){
+    const unit = papelPrecio(papel) / papel.hojas;
+    const mismos = adPapeles.filter(x=> x.sobre && x.precio > 0 && x.id !== papel.id &&
+      Math.abs(x.W - papel.W) < 0.3 && Math.abs(x.H - papel.H) < 0.3 &&
+      /obra|manila/i.test(x.nombre) === /obra|manila/i.test(papel.nombre) &&
+      (/obra/i.test(x.nombre) === /obra/i.test(papel.nombre)));
+    let mejor = null;
+    for(const x of mismos){
+      const u = papelPrecio(x) / x.hojas;
+      if(u < unit && (!mejor || u < mejor.u)) mejor = {p: x, u};
+    }
+    if(mejor){
+      const dif = (unit - mejor.u) / unit * 100;
+      h += '<div style="margin-top:8px;padding:9px 11px;border-radius:10px;background:rgba(76,210,125,.10);' +
+        'border:1px dashed #4cd27d;font-size:.72rem;color:var(--texto2);line-height:1.5">' +
+        '💰 El mismo sobre en <b style="color:#4cd27d">' + (mejor.p.prov||'otro proveedor') + '</b> sale <b>' +
+        plataUnit(mejor.u) + '</b> por unidad contra ' + plataUnit(unit) + ' de ' + (papel.prov||'este') +
+        ' · <b>' + dif.toFixed(0) + '% más barato</b> (' + mejor.p.nombre + ', paq ' + mejor.p.hojas + ' = ' +
+        plata(papelPrecio(mejor.p)) + ')</div>';
+    }
+  }
+
   /* si forzaste una máquina, avisar cuánto cuesta esa decisión */
   if(adMaqForzada && q > 0 && opciones.length){
     const forz = opciones[0] ? opciones[0].op : null;
