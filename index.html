@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v175</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v176</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -2369,6 +2369,45 @@ function migrarSoldadoRuis(){
       };
     }
     adCfg.tarifas0826 = true;
+  }
+  /* Sobres Boixados Industrial · lista 02/06/2026, precios SIN IVA.
+     Van al catálogo de papeles del offset AD: el "pliego" es el sobre mismo.
+     El campo `sobre` rutea a la tarifa de AD (oficio o bolsa), sin depender
+     de cómo esté escrito el nombre. */
+  if(Array.isArray(adPapeles) && !adCfg.sobres0626){
+    const SOBRES = [
+      ['005610M','Sobre comercial 70g c/fondo 114×235', 11.4, 16.0, 500, 23663.54, 70,  'oficio'],
+      ['005611M','Sobre comercial 80g c/fondo 114×160', 11.4, 16.0, 500, 24132.13, 80,  'oficio'],
+      ['005604M','Sobre oficio inglés c/ventana 80g 120×235', 12.0, 23.5, 500, 39361.14, 80, 'oficio'],
+      ['005605M','Sobre oficio inglés 90g 120×235', 12.0, 23.5, 500, 31733.62, 90, 'oficio'],
+      ['005615M','Bolsa manila 140×210', 14.0, 21.0, 250, 20836.80, 0, 'bolsa'],
+      ['005632M','Bolsa manila 162×229', 16.2, 22.9, 250, 22560.81, 0, 'bolsa'],
+      ['005616M','Bolsa manila 190×240', 19.0, 24.0, 250, 24483.57, 0, 'bolsa'],
+      ['005617M','Bolsa manila 205×280', 20.5, 28.0, 250, 29578.13, 0, 'bolsa'],
+      ['005614M','Bolsa manila 229×324', 22.9, 32.4, 250, 35496.80, 0, 'bolsa'],
+      ['005618M','Bolsa manila 240×300', 24.0, 30.0, 250, 35685.35, 0, 'bolsa'],
+      ['005619M','Bolsa manila 250×353', 25.0, 35.3, 250, 40283.73, 0, 'bolsa'],
+      ['005620M','Bolsa manila 270×370', 27.0, 37.0, 250, 44546.81, 0, 'bolsa'],
+      ['005621M','Bolsa manila 300×400', 30.0, 40.0, 250, 54121.57, 0, 'bolsa'],
+      ['005633M','Bolsa obra 162×229', 16.2, 22.9, 250, 24860.00, 0, 'bolsa'],
+      ['005623M','Bolsa obra 190×240', 19.0, 24.0, 250, 28428.53, 0, 'bolsa'],
+      ['005624M','Bolsa obra 205×280', 20.5, 28.0, 250, 38679.09, 0, 'bolsa'],
+      ['005630M','Bolsa obra 229×324', 22.9, 32.4, 250, 48019.55, 0, 'bolsa'],
+      ['005625M','Bolsa obra 240×300', 24.0, 30.0, 250, 45025.81, 0, 'bolsa'],
+      ['005626M','Bolsa obra 250×353', 25.0, 35.3, 250, 54007.02, 0, 'bolsa'],
+      ['005627M','Bolsa obra 270×370', 27.0, 37.0, 250, 60353.75, 0, 'bolsa'],
+      ['005628M','Bolsa obra 300×400', 30.0, 40.0, 250, 71224.92, 0, 'bolsa'],
+      ['005629M','Bolsa obra 370×450', 37.0, 45.0, 250, 99496.22, 0, 'bolsa'],
+      ['005643M','Bolsa obra póliza 130×255', 13.0, 25.5, 250, 28141.13, 0, 'bolsa'],
+      ['005631M','Bolsa obra póliza 140×265', 14.0, 26.5, 250, 29482.33, 0, 'bolsa'],
+    ];
+    for(const [cod, nombre, W, H, hojas, precio, gr, tipo] of SOBRES){
+      if(adPapeles.find(x=> x.cod === cod)) continue;      // no duplicar
+      adPapeles.push({id: uid()+Math.random().toString(36).slice(2,4),
+        cod, nombre, gramaje: gr || 90, W, H, hojas, precio,
+        sobre: tipo, prov: 'Boixados'});
+    }
+    adCfg.sobres0626 = true;
   }
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
   if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
