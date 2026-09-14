@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v185</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v187</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -6957,7 +6957,9 @@ function vinilosImpresos(){
          queda en $/m² y `unidad` lo aclara. */
       precio: m.costo || 0,
       unidad: 'm2', uvId: m.id,
-      minM2: 1
+      /* LMK no nos cobra mínimo de impresión: se pagan los m² que salen.
+         (La lista impresa dice 1 m², pero es para quien compra suelto.) */
+      minM2: 0
     }));
 }
 function vinilosDisponibles(){
@@ -6997,7 +6999,9 @@ function vinCalcular(){
        y ahí las uniones agregan la superposición. */
     m2 = anchoCubrir * altoCubrir * cant;
     if(tiras > 1) m2 += union * largo * (tiras - 1) * cant;   // el solape se imprime igual
-    m2 = Math.max(m2, (m.minM2 || 0) * cant);
+    /* Si algún proveedor sí cobrara mínimo, se respeta por TRABAJO, no por
+       pieza. Con LMK queda en cero: se pagan los m² que salen. */
+    if(m.minM2 > 0) m2 = Math.max(m2, m.minM2);
     costo = m2 * pu;
   }else{
     /* COLOR: se compra el rollo entero a lo ancho, se paga por metro lineal */
