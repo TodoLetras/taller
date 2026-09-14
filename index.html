@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v188</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v189</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -5399,8 +5399,16 @@ function renderPedidos(){
     return;
   }
   renderFiltrosPedidos();
+  let cortePuesto = false;
+  const hayFijados = pedidos.some(x=> x.fijado);
   const buscado = normalizarTexto((document.getElementById('buscarPedidos')||{}).value||'');
-  let ordenados = pedidos.slice().sort((a,b)=> (b.creado||0)-(a.creado||0));
+  /* Los fijados van primero, entre ellos por fecha. El resto, como siempre.
+     Sirve para que un trabajo viejo que sigue vivo no se pierda al fondo. */
+  let ordenados = pedidos.slice().sort((a,b)=>{
+    const fa = a.fijado ? 1 : 0, fb = b.fijado ? 1 : 0;
+    if(fa !== fb) return fb - fa;
+    return (b.creado||0) - (a.creado||0);
+  });
   if(filtroPedidos === 'cobrar') ordenados = ordenados.filter(faltaCobrar);
   else if(filtroPedidos.startsWith('etapa:')) ordenados = ordenados.filter(p=> etapaDe(p) === filtroPedidos.slice(6));
   else if(filtroPedidos.startsWith('tag:')) ordenados = ordenados.filter(p=> (p.etiquetas||[]).includes(filtroPedidos.slice(4)));
@@ -5421,6 +5429,15 @@ function renderPedidos(){
   for(const p of ordenados){
     const f = document.createElement('div');
     f.className = 'pedido-fila';
+    /* línea divisoria donde terminan los fijados */
+    if(!p.fijado && hayFijados && !cortePuesto){
+      cortePuesto = true;
+      const sep = document.createElement('div');
+      sep.style.cssText = 'border-top:1px dashed var(--borde);margin:10px 2px 6px;padding-top:4px;' +
+        'font-size:.62rem;color:var(--texto2);letter-spacing:.06em';
+      sep.textContent = 'RESTO DE LOS PEDIDOS';
+      cont.appendChild(sep);
+    }
     const ec = ESTADOS_COBRO.find(e=>e[0]===p.cobro) || ESTADOS_COBRO[0];
     const ev = ESTADOS_VENTA.find(e=>e[0]===(p.estadoVenta||'confirmado')) || ESTADOS_VENTA[2];
     const ef0 = estadoFact(p);
@@ -5428,7 +5445,11 @@ function renderPedidos(){
     f.style.borderLeftColor = (p.estadoVenta==='presupuesto') ? ev[2] : ec[2];
     if(p.estadoVenta==='presupuesto') f.style.opacity = '.75';
     f.innerHTML =
-      '<div class="ped-cab"><span class="ped-cli"></span><span class="ped-monto">'+plata(totalPedido(p))+'</span></div>' +
+      '<div class="ped-cab"><span class="ped-cli"></span>' +
+        '<button class="pedFijar" title="' + (p.fijado ? 'Está fijado arriba. Tocá para soltarlo.' : 'Fijar arriba de la lista para no perderlo de vista') + '" ' +
+        'style="background:none;border:none;padding:0 6px;font-size:.9rem;line-height:1;opacity:' +
+        (p.fijado ? '1' : '.28') + '">📌</button>' +
+        '<span class="ped-monto">'+plata(totalPedido(p))+'</span></div>' +
       '<div class="ped-det">'+p.items.length+' ítem(s) · '+horaLinda(p.creado).replace(/^(..):(..)$/,'hoy $1:$2')+'</div>' +
       '<div class="meta">' +
         (p.estadoVenta!=='confirmado' ? '<span class="chip" style="background:'+ev[2]+'26;color:'+ev[2]+'">'+ev[1]+'</span> ' : '') +
@@ -5442,6 +5463,17 @@ function renderPedidos(){
         })() +
       '</div>';
     f.querySelector('.ped-cli').textContent = nombreClienteId(p.cliente) + (p.nombre ? ' · ' + p.nombre : '');
+    if(p.fijado){
+      f.style.background = 'rgba(224,164,88,.07)';
+      f.style.borderTop = '1px solid rgba(224,164,88,.35)';
+    }
+    const bf = f.querySelector('.pedFijar');
+    if(bf) bf.onclick = (ev)=>{
+      ev.stopPropagation();                 // no abrir el pedido al fijarlo
+      p.fijado = !p.fijado;
+      guardarDatos(); renderPedidos();
+      toast(p.fijado ? '📌 Fijado arriba' : 'Soltado');
+    };
     f.onclick = ()=> abrirPedido(p.id);
     cont.appendChild(f);
   }
