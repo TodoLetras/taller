@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v181</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v182</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -574,11 +574,13 @@
       Un cartel se arma por capas: <b>cara</b>, <b>estructura</b>, <b>aplicaciones</b> y <b>montaje</b>.
       Primero cargá acá los precios de los insumos; después se van sumando las capas.
     </div>
-    <label>Medida del cartel (cm)</label>
+    <label>Medida del cartel (cm) × cantidad</label>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <input id="cartW" type="text" inputmode="decimal" placeholder="Ancho" style="flex:1 1 90px;min-width:80px;margin:0">
       <span style="color:var(--texto2)">×</span>
       <input id="cartH" type="text" inputmode="decimal" placeholder="Alto" style="flex:1 1 90px;min-width:80px;margin:0">
+      <span style="color:var(--texto2)">×</span>
+      <input id="cartCant" type="text" inputmode="numeric" placeholder="1" title="Cuántos carteles iguales: el material se aprovecha entre todos" style="flex:0 0 62px;width:62px;margin:0">
     </div>
     <div style="font-size:.72rem;font-weight:800;color:#b48ead;margin:10px 0 4px">CARA</div>
     <div id="cartCara"></div>
@@ -6443,7 +6445,8 @@ function renderBastidor(){
    Hojas (galvanizada, aluco, MDF): cuántas entran y cuánto sobra.
    Rollo a medida (trapezoidal, acanalada): ancho fijo, largo exacto, flete si pasa los 5 m. */
 
-let cara = {matId:null, orient:'auto', zing:false, pestana:null, margen:null, color:null};
+let cara = {
+  cant: 1,matId:null, orient:'auto', zing:false, pestana:null, margen:null, color:null};
 
 /* Color por defecto según el material, para el esquema del cliente */
 function caraColor(m){
@@ -6492,7 +6495,31 @@ function carasDisponibles(){
 }
 
 /* Cuántas hojas hacen falta y cuánto se desperdicia */
-function caraEnHojas(W, H, hojaW, hojaH){
+/* Cuántas hojas para `cant` carteles de W×H.
+   Si el cartel es MÁS CHICO que la hoja, entran varios por hoja y hay que
+   repartirlos; si es más grande, cada cartel se arma con varias hojas.
+   Antes esto calculaba siempre para UNO solo, así que 15 carteles chicos
+   pedían 15 hojas en vez de 2. */
+function caraEnHojas(W, H, hojaW, hojaH, cant){
+  cant = Math.max(1, cant || 1);
+  /* caso A: el cartel entra en la hoja → varios carteles por hoja */
+  const porHoja = (hw, hh)=>{
+    const a = Math.floor(hw / W) * Math.floor(hh / H);
+    const b = Math.floor(hw / H) * Math.floor(hh / W);
+    return Math.max(a, b, 0);
+  };
+  const cabenD = porHoja(hojaW, hojaH);
+  if(cabenD >= 1){
+    const hojas = Math.ceil(cant / cabenD);
+    const areaHoja = hojaW * hojaH;
+    const rotada = (Math.floor(hojaW/H) * Math.floor(hojaH/W)) >
+                   (Math.floor(hojaW/W) * Math.floor(hojaH/H));
+    return {hojas, porHoja: cabenD, cant, cols: null, filas: null,
+            hw: hojaW, hh: hojaH, rotada, varios: true,
+            m2Comprado: hojas * areaHoja, m2Util: W * H * cant,
+            aprov: (W * H * cant) / (hojas * areaHoja)};
+  }
+  /* caso B: el cartel es más grande que la hoja → varias hojas por cartel */
   const opcion = (hw, hh)=>{
     const cols = Math.max(1, Math.ceil(W / hw));
     const filas = Math.max(1, Math.ceil(H / hh));
@@ -6501,10 +6528,12 @@ function caraEnHojas(W, H, hojaW, hojaH){
   const a = opcion(hojaW, hojaH), b = opcion(hojaH, hojaW);
   const mej = (b.hojas < a.hojas) ? b : a;
   const areaHoja = hojaW * hojaH;
-  return Object.assign(mej, {
-    m2Comprado: mej.hojas * areaHoja,
-    m2Util: W * H,
-    aprov: (W * H) / (mej.hojas * areaHoja),
+  const hojasTot = mej.hojas * cant;
+  return Object.assign({}, mej, {
+    hojas: hojasTot, porHoja: 0, cant, varios: false,
+    m2Comprado: hojasTot * areaHoja,
+    m2Util: W * H * cant,
+    aprov: (W * H * cant) / (hojasTot * areaHoja),
     rotada: mej === b
   });
 }
@@ -6517,7 +6546,8 @@ function caraCalcular(){
             carasDisponibles().find(x=> x.id === cara.matId);
   if(!m) return null;
   const pu = m.porM2 ? (m.precio || 0) : insumoPrecio(m);
-  const r = {W, H, mat:m, m2:W*H};
+  const cant = Math.max(1, parseInt(cara.cant) || 1);
+  const r = {W, H, mat:m, cant, m2: W*H*cant};
 
   /* OJO: el precio cargado NO es por m².
      En hojas es el precio de LA HOJA ENTERA.
@@ -6537,9 +6567,9 @@ function caraCalcular(){
     r.uniones = paños - 1;
     r.acostada = (corto === H && W > ancho) || (H > W && W <= ancho);
     r.corto = corto; r.largo = largo;
-    r.m2Comprado = W * H;              // se paga la superficie del cartel
+    r.m2Comprado = W * H * cant;       // se paga la superficie de todos
     r.aprov = 1;
-    r.costoMat = r.m2 * pu;
+    r.costoMat = r.m2 * pu;            // r.m2 ya incluye la cantidad
     precioM2 = pu;
     r.avisoUnion = paños > 1;
   }else if(m.aMedida){
@@ -6552,9 +6582,9 @@ function caraCalcular(){
     const tiras  = Math.max(1, Math.ceil(cubrir / ancho));
     const largoReal = Math.max(m.largoMin || 1, largo);
     r.tiras = tiras; r.largoReal = largoReal; r.vertical = vertical;
-    r.m2Comprado = tiras * ancho * largoReal;
+    r.m2Comprado = tiras * ancho * largoReal * cant;
     r.aprov = r.m2 / r.m2Comprado;
-    r.metrosLineales = tiras * largoReal;
+    r.metrosLineales = tiras * largoReal * cant;
     r.costoMat = r.metrosLineales * pu;      // pu = $ por metro lineal
     precioM2 = ancho > 0 ? pu / ancho : 0;
     r.flete = (largoReal > (cartCfg.fleteDesdeM || 5)) ? (cartCfg.fleteLargo || 0) : 0;
@@ -6565,7 +6595,7 @@ function caraCalcular(){
     const pest = cara.zing ? (pestanaCm() / 100) : 0;
     const utilW = Math.max(0.1, m.hojaW - pest);
     const utilH = Math.max(0.1, m.hojaH - pest);
-    const h = caraEnHojas(W, H, utilW, utilH);
+    const h = caraEnHojas(W, H, utilW, utilH, cara.cant || 1);
     Object.assign(r, h);
     r.pest = pest;
     r.hojaW = m.hojaW; r.hojaH = m.hojaH;
@@ -6576,8 +6606,8 @@ function caraCalcular(){
     precioM2 = areaHoja > 0 ? pu / areaHoja : 0;
     r.flete = 0;
   }else{
-    r.costoMat = pu; r.aprov = 1; r.flete = 0;
-    precioM2 = r.m2 > 0 ? pu / r.m2 : 0;
+    r.costoMat = pu * cant; r.aprov = 1; r.flete = 0;
+    precioM2 = r.m2 > 0 ? (pu * cant) / r.m2 : 0;
   }
 
   r.precioM2 = precioM2;
@@ -14557,9 +14587,13 @@ function cartGuardarItem(nuevo, tipo){
   guardarDatos(); renderPedidos(); renderPedidoItems(cartPedido);
   renderVariante();
 }
-['cartW','cartH'].forEach(id=>{
+['cartW','cartH','cartCant'].forEach(id=>{
   const el = document.getElementById(id);
-  if(el) el.addEventListener('input', ()=>{ bast.vert = null; bast.horiz = null; renderCara(); renderBastidor(); renderVinilo(); renderCorporeas(); renderPerchas(); });
+  if(el) el.addEventListener('input', ()=>{
+    if(id === 'cartCant') cara.cant = Math.max(1, parseInt(el.value) || 1);
+    bast.vert = null; bast.horiz = null;
+    renderCara(); renderBastidor(); renderVinilo(); renderCorporeas(); renderPerchas();
+  });
 });
 document.getElementById('btnCarteleria').onclick = ()=>{
   if(pedidoAbierto){ const p = pedidos.find(x=>x.id===pedidoAbierto); if(p) abrirCarteleria(p); }
