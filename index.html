@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v180</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v181</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -15306,9 +15306,17 @@ function acercoCargado(){
 /* Plásticos rígidos para caras: alto impacto y corrugado. Normalmente van
    ploteados y SIN estructura de caño (el bastidor se deja apagado).
    Se venden por hoja entera, igual que la chapa. */
+const PLASTICO_TESTIGO = 'Corrugado plástico blanco 2,5 mm · 200×100';
+function plasticosCargados(){
+  return Array.isArray(insumos) && insumos.some(x=> x.nombre === PLASTICO_TESTIGO);
+}
 function cargarPlasticos(){
+  /* Igual que con Acerco: NO alcanza con mirar el flag. Al arrancar, `insumos`
+     se siembra con el catálogo por defecto y un rato después cargar() lo
+     reemplaza por el de localStorage; si nos guiamos por el flag, los
+     plásticos se cargan sobre la semilla temporal y se pierden en el cambio. */
   if(!Array.isArray(insumos) || !insumos.length || !cartCfg) return;
-  if(cartCfg.plasticos1126) return;
+  if(plasticosCargados()) return;
   const PL = [
     ['Alto impacto blanco brillante 0,5 mm', 0.5, 0.60, 1.00,  4410.45],
     ['Alto impacto blanco brillante 0,8 mm', 0.8, 0.60, 1.00,  7042.20],
@@ -15335,7 +15343,11 @@ function cargarPlasticos(){
 function correrAcerco(){
   if(!Array.isArray(insumos) || !insumos.length) return;   // todavía no hay catálogo
   if(!cartCfg) return;
-  if(acercoCargado()){ cargarPlasticos(); guardarDatos(); return; }   // Acerco ya está; los plásticos pueden faltar
+  if(acercoCargado()){
+    if(!plasticosCargados()){ cargarPlasticos(); guardarDatos();
+      if(typeof renderInsumos === 'function') renderInsumos(); }
+    return;                                   // Acerco ya está
+  }
   cartCfg.acerco0826 = false;                              // pudo quedar prendido en falso
   cargarAcerco0826();
   cargarPlasticos();
