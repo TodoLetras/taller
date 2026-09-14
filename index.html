@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v182</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v185</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -6512,10 +6512,14 @@ function caraEnHojas(W, H, hojaW, hojaH, cant){
   if(cabenD >= 1){
     const hojas = Math.ceil(cant / cabenD);
     const areaHoja = hojaW * hojaH;
-    const rotada = (Math.floor(hojaW/H) * Math.floor(hojaH/W)) >
-                   (Math.floor(hojaW/W) * Math.floor(hojaH/H));
-    return {hojas, porHoja: cabenD, cant, cols: null, filas: null,
-            hw: hojaW, hh: hojaH, rotada, varios: true,
+    const der = Math.floor(hojaW/W) * Math.floor(hojaH/H);
+    const rot = Math.floor(hojaW/H) * Math.floor(hojaH/W);
+    const rotada = rot > der;
+    /* pieza tal como cae en la hoja, para poder dibujarla */
+    const pw = rotada ? H : W, ph = rotada ? W : H;
+    return {hojas, porHoja: cabenD, cant,
+            cols: Math.floor(hojaW/pw), filas: Math.floor(hojaH/ph),
+            pw, ph, hw: hojaW, hh: hojaH, rotada, varios: true,
             m2Comprado: hojas * areaHoja, m2Util: W * H * cant,
             aprov: (W * H * cant) / (hojas * areaHoja)};
   }
@@ -6536,6 +6540,55 @@ function caraEnHojas(W, H, hojaW, hojaH, cant){
     aprov: (W * H * cant) / (hojasTot * areaHoja),
     rotada: mej === b
   });
+}
+
+/* Dibujo del corte de la hoja: en color lo que se usa, punteado el recorte.
+   Sirve para ver de una si conviene otro formato o mover la cantidad. */
+function caraDibujoSVG(r){
+  if(!r || !r.mat || !r.mat.hojaW || !r.varios) return '';
+  const hw = r.hw, hh = r.hh;
+  const esc = 250 / Math.max(hw, hh);
+  const W = hw*esc, H = hh*esc;
+  const col = cara.color || '#b48ead';
+  let out = '';
+  const hojas = Math.min(r.hojas, 4);        // no llenar la pantalla
+  let puestas = 0;
+  for(let k = 0; k < hojas; k++){
+    let g = '<svg viewBox="0 0 ' + (W+2) + ' ' + (H+2) + '" style="width:100%;max-width:' + (W+2) +
+      'px;border:1px solid var(--borde);border-radius:7px;background:var(--panel2)">';
+    g += '<rect x="1" y="1" width="' + W + '" height="' + H + '" fill="var(--texto2)" opacity=".10"/>';
+    let enEsta = 0;
+    for(let f = 0; f < r.filas; f++) for(let c = 0; c < r.cols; c++){
+      if(puestas >= r.cant) break;
+      g += '<rect x="' + (c*r.pw*esc+1) + '" y="' + (f*r.ph*esc+1) + '" width="' + (r.pw*esc) +
+        '" height="' + (r.ph*esc) + '" fill="' + col + '" opacity=".75" stroke="var(--borde)" stroke-width=".6"/>';
+      puestas++; enEsta++;
+    }
+    /* franjas de recorte */
+    const sobraX = hw - r.cols*r.pw, sobraY = hh - r.filas*r.ph;
+    if(sobraX > 0.01)
+      g += '<rect x="' + (r.cols*r.pw*esc+1) + '" y="1" width="' + (sobraX*esc) + '" height="' + H +
+        '" fill="none" stroke="var(--texto2)" stroke-width=".6" stroke-dasharray="3 3"/>';
+    if(sobraY > 0.01)
+      g += '<rect x="1" y="' + (r.filas*r.ph*esc+1) + '" width="' + W + '" height="' + (sobraY*esc) +
+        '" fill="none" stroke="var(--texto2)" stroke-width=".6" stroke-dasharray="3 3"/>';
+    g += '</svg>';
+    out += '<div style="flex:0 1 auto">' + g +
+      '<div style="font-size:.62rem;color:var(--texto2);margin-top:2px">Hoja ' + (k+1) +
+      ' · ' + enEsta + ' pieza' + (enEsta===1?'':'s') + '</div></div>';
+  }
+  const sobraX = hw - r.cols*r.pw, sobraY = hh - r.filas*r.ph;
+  return '<div style="margin-top:8px">' +
+    '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:4px">✂️ Corte de la hoja de ' +
+    Math.round(hw*100) + '×' + Math.round(hh*100) + ' cm' + (r.rotada ? ' · piezas giradas' : '') + '</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">' + out + '</div>' +
+    (r.hojas > 4 ? '<div style="font-size:.62rem;color:var(--texto2);margin-top:3px">se muestran 4 de ' + r.hojas + ' hojas</div>' : '') +
+    '<div style="font-size:.62rem;color:var(--texto2);margin-top:3px">Recorte: ' +
+    (sobraX > 0.01 ? 'franja de ' + Math.round(sobraX*100) + ' cm a lo ancho' : '') +
+    (sobraX > 0.01 && sobraY > 0.01 ? ' y ' : '') +
+    (sobraY > 0.01 ? 'franja de ' + Math.round(sobraY*100) + ' cm a lo largo' : '') +
+    (sobraX <= 0.01 && sobraY <= 0.01 ? 'ninguno, la hoja se aprovecha entera' : '') +
+    ' · aprovecha ' + Math.round(r.aprov*100) + '%</div></div>';
 }
 
 function caraCalcular(){
@@ -6810,7 +6863,8 @@ function renderCara(){
           (r.vertical ? ' (paradas)' : ' (acostadas)');
   }else if(r.hojas){
     cab = r.hojas + ' hoja' + (r.hojas===1?'':'s') + (r.rotada ? ' (girada)' : '') +
-          ' · ' + r.cols + '×' + r.filas +
+          (r.varios ? ' · ' + r.porHoja + ' por hoja (' + r.cols + '×' + r.filas + ')'
+                    : ' · ' + r.cols + '×' + r.filas) +
           (r.pest ? ' · pestaña ' + Math.round(r.pest*100) + ' cm' : '');
   }else cab = 'por unidad';
   d.innerHTML =
@@ -6831,6 +6885,12 @@ function renderCara(){
     '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
     linea('TOTAL', plata(r.total), true);
   cont.appendChild(d);
+  const dib = caraDibujoSVG(r);
+  if(dib){
+    const cd = document.createElement('div');
+    cd.innerHTML = dib;
+    cont.appendChild(cd);
+  }
   const phZ = d.querySelector('.phZing');
   if(phZ) lineaPct(phZ, 'Zinguería (plegados y corte)', 'zingueria', r.zing, ()=> renderCara());
   const phSC = d.querySelector('.phSobraC');
@@ -6892,7 +6952,12 @@ function vinilosImpresos(){
       prov: m.prov || 'LMK',
       porM2: true, precioM2: m.costo || 0,
       ancho: (m.anchoMax || 1.37),
-      unidad: 'm2', uvId: m.id
+      /* El impreso se cobra por METRO CUADRADO usado, no por el ancho entero
+         del rollo: LMK factura la superficie del trabajo. Por eso `precio`
+         queda en $/m² y `unidad` lo aclara. */
+      precio: m.costo || 0,
+      unidad: 'm2', uvId: m.id,
+      minM2: 1
     }));
 }
 function vinilosDisponibles(){
@@ -6908,8 +6973,8 @@ function vinCalcular(){
   if(!lista.length) return null;
   const m = insumos.find(x=> x.id === vin.matId) ||
             lista.find(x=> x.id === vin.matId) || lista[0];
-  /* el de color se paga por metro lineal del rollo; el impreso, por m² */
-  const pu = m.porM2 ? (m.precioM2 || 0) * (m.ancho || 1) : insumoPrecio(m);
+  const pu = insumoPrecio(m);   // color: $/metro lineal · impreso: $/m²
+  const cant = Math.max(1, parseInt(cara.cant) || 1);
 
   /* el vinilo tapa el doblez de la chapa, si la cara lo tiene */
   const dob = cara.zing ? (pestanaCm()/100) : 0;
@@ -6923,12 +6988,25 @@ function vinCalcular(){
   const cubrir = vertical ? anchoCubrir : altoCubrir;
   const largo  = vertical ? altoCubrir : anchoCubrir;
   const tiras = Math.max(1, Math.ceil(cubrir / anchoUtil));
-  const ml = tiras * largo;
+  const ml = tiras * largo * cant;
 
-  const costo = ml * pu;
+  let costo, m2 = 0;
+  if(m.porM2){
+    /* IMPRESO: se pagan los metros cuadrados del trabajo, no el ancho del
+       rollo. Igual necesita tiras si el cartel es más ancho que la máquina,
+       y ahí las uniones agregan la superposición. */
+    m2 = anchoCubrir * altoCubrir * cant;
+    if(tiras > 1) m2 += union * largo * (tiras - 1) * cant;   // el solape se imprime igual
+    m2 = Math.max(m2, (m.minM2 || 0) * cant);
+    costo = m2 * pu;
+  }else{
+    /* COLOR: se compra el rollo entero a lo ancho, se paga por metro lineal */
+    costo = ml * pu;
+  }
   const mrg = (vin.margen == null) ? (cartCfg.margen||0) : vin.margen;
   const venta = costo * (1 + mrg/100);
-  return {W, H, mat:m, tiras, largo, ml, anchoUtil, union, dob, vertical,
+  return {W, H, mat:m, tiras, largo, ml, m2, porM2: !!m.porM2, cant,
+          anchoUtil, union, dob, vertical,
           costo, venta, mrg, total: venta, uniones: tiras - 1};
 }
 
@@ -7056,8 +7134,12 @@ function renderVinilo(){
     '<span style="color:var(--texto2)">' + a2 + '</span><b style="' +
     (f ? 'color:var(--ambar)' : 'color:var(--texto)') + '">' + b2 + '</b></div>';
   d.innerHTML =
-    linea(r.tiras + ' tira' + (r.tiras===1?'':'s') + ' de ' + r.largo.toFixed(2) + ' m · ' +
-          r.ml.toFixed(2) + ' m lineales', plata(r.costo)) +
+    linea(r.porM2
+            ? (r.m2.toFixed(2) + ' m² impresos' +
+               (r.tiras > 1 ? ' · ' + r.tiras + ' tiras con ' + r.uniones + ' unión' + (r.uniones===1?'':'es') : '') +
+               (r.cant > 1 ? ' · ' + r.cant + ' unidades' : ''))
+            : (r.tiras + ' tira' + (r.tiras===1?'':'s') + ' de ' + r.largo.toFixed(2) + ' m · ' +
+               r.ml.toFixed(2) + ' m lineales'), plata(r.costo)) +
     (r.uniones > 0 ? '<div style="font-size:.62rem;color:var(--texto2);margin-top:-3px">' +
       r.uniones + ' unión' + (r.uniones===1?'':'es') + ' · cada una come ' +
       (r.union*100).toFixed(0) + ' cm</div>' : '') +
@@ -15340,7 +15422,7 @@ function acercoCargado(){
 /* Plásticos rígidos para caras: alto impacto y corrugado. Normalmente van
    ploteados y SIN estructura de caño (el bastidor se deja apagado).
    Se venden por hoja entera, igual que la chapa. */
-const PLASTICO_TESTIGO = 'Corrugado plástico blanco 2,5 mm · 200×100';
+const PLASTICO_TESTIGO = 'PVC expandido blanco 5 mm · 122×244';
 function plasticosCargados(){
   return Array.isArray(insumos) && insumos.some(x=> x.nombre === PLASTICO_TESTIGO);
 }
@@ -15362,6 +15444,7 @@ function cargarPlasticos(){
     ['Alto impacto blanco satinado 2 mm tricapa',   2.0, 2.00, 1.00, 52816.50],
     ['Corrugado plástico blanco 2,5 mm', 2.5, 0.68, 1.00,  3521.10],
     ['Corrugado plástico blanco 2,5 mm', 2.5, 2.00, 1.00, 10399.95],
+    ['PVC expandido blanco 5 mm', 5.0, 1.22, 2.44, 29000.00],
   ];
   const hoy = new Date().toISOString().slice(0,10);
   for(const [nombre, esp, W, H, precio] of PL){
