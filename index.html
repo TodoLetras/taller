@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v187</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v188</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -7007,9 +7007,14 @@ function vinCalcular(){
     /* COLOR: se compra el rollo entero a lo ancho, se paga por metro lineal */
     costo = ml * pu;
   }
-  const mrg = (vin.margen == null) ? (cartCfg.margen||0) : vin.margen;
+  /* El vinilo NO se vende con el margen general del cartel: el ploteo es
+     mano de obra y va con los multiplicadores del módulo de vinilo de corte
+     (×2 plotear, ×3 ploteado e instalado). `vin.margen` guarda el % sobre el
+     costo, así que ×3 son 200%. */
+  const multDef = (typeof uv === 'object' && uv && uv.multCon) ? uv.multCon : 3;
+  const mrg = (vin.margen == null) ? (multDef - 1) * 100 : vin.margen;
   const venta = costo * (1 + mrg/100);
-  return {W, H, mat:m, tiras, largo, ml, m2, porM2: !!m.porM2, cant,
+  return {W, H, mat:m, tiras, largo, ml, m2, porM2: !!m.porM2, cant, mult: 1 + mrg/100,
           anchoUtil, union, dob, vertical,
           costo, venta, mrg, total: venta, uniones: tiras - 1};
 }
@@ -7150,10 +7155,47 @@ function renderVinilo(){
     (r.dob > 0 ? '<div style="font-size:.62rem;color:var(--texto2)">incluye ' +
       (r.dob*100).toFixed(0) + ' cm por lado para tapar el doblez</div>' : '') +
     '<div style="border-top:1px dashed var(--borde);margin:5px 0"></div>' +
-    linea('Venta con +' + r.mrg + '%', plata(r.venta)) +
+    linea('Venta · ×' + r.mult.toFixed(2).replace(/\.00$/,'') + ' (+' + Math.round(r.mrg) + '%)', plata(r.venta)) +
     '<div style="border-top:1px solid var(--borde);margin:5px 0"></div>' +
     linea('TOTAL', plata(r.total), true);
   cont.appendChild(d);
+
+  /* multiplicador del ploteo: los mismos que el módulo de vinilo de corte */
+  const filaMult = document.createElement('div');
+  filaMult.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0';
+  const etMult = document.createElement('span');
+  etMult.style.cssText = 'font-size:.7rem;color:var(--texto2)';
+  etMult.textContent = 'Venta del ploteo';
+  filaMult.appendChild(etMult);
+  const mSin = (typeof uv === 'object' && uv && uv.multSin) ? uv.multSin : 2;
+  const mCon = (typeof uv === 'object' && uv && uv.multCon) ? uv.multCon : 3;
+  for(const [mult, txt] of [[mSin, 'plotear'], [mCon, 'ploteado e instalado']]){
+    const b = document.createElement('button');
+    const pct = Math.round((mult - 1) * 100);
+    const on = Math.abs(r.mrg - pct) < 0.5;
+    b.textContent = '×' + mult + ' · ' + txt;
+    b.title = 'Vende a ' + mult + ' veces el costo (+' + pct + '%)';
+    b.style.cssText = 'border-radius:9px;padding:7px 10px;font-size:.7rem;font-weight:700;' +
+      (on ? 'background:rgba(180,142,173,.22);border:1px solid #b48ead;color:#b48ead'
+          : 'background:var(--panel2);border:1px dashed var(--borde);color:var(--texto2)');
+    b.onclick = ()=>{ vin.margen = pct; renderVinilo(); };
+    filaMult.appendChild(b);
+  }
+  const inMult = document.createElement('input');
+  inMult.type = 'text'; inMult.setAttribute('inputmode','decimal');
+  inMult.value = Math.round(r.mrg);
+  inMult.style.cssText = 'width:64px;margin:0;padding:6px;font-size:13px;text-align:right;' +
+    'background:var(--fondo);border:1px dashed var(--borde);border-radius:8px;color:var(--texto)';
+  inMult.addEventListener('change', ()=>{
+    const v = parseFloat(String(inMult.value).replace(',','.'));
+    vin.margen = isFinite(v) ? v : null;
+    renderVinilo();
+  });
+  filaMult.appendChild(inMult);
+  const pcMult = document.createElement('span');
+  pcMult.style.cssText = 'font-size:.7rem;color:var(--texto2)'; pcMult.textContent = '% sobre el costo';
+  filaMult.appendChild(pcMult);
+  cont.appendChild(filaMult);
 
   const bAdd = document.createElement('button');
   const edV = cartEditando && cartEditando.cart && cartEditando.cart.tipo === 'vinilo';
