@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v178</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v179</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -6487,7 +6487,7 @@ function lonasComoCara(){
     }));
 }
 function carasDisponibles(){
-  return insumos.filter(x=> ['chapa','aluco','mdf'].includes(x.cat)).concat(lonasComoCara());
+  return insumos.filter(x=> ['chapa','aluco','mdf','plastico'].includes(x.cat)).concat(lonasComoCara());
 }
 
 /* Cuántas hojas hacen falta y cuánto se desperdicia */
@@ -6849,7 +6849,24 @@ function renderCara(){
 let vin = {on:false, matId:null, modo:'color', color:'#c0392b', img:null,
            orient:'vertical', margen:null};
 
-function vinilosDisponibles(){ return insumos.filter(x=> x.cat === 'vinilo'); }
+/* Vinilos para plotear una cara: los de color del catálogo (se venden por
+   metro lineal) más los impresos de LMK y Soldado Ruiz, que vienen del módulo
+   UV con precio por m². Los impresos se ofrecen como si fueran un rollo del
+   ancho de impresión, para que el cálculo de uniones siga sirviendo. */
+function vinilosImpresos(){
+  return ((typeof uv === 'object' && uv && uv.mats) || [])
+    .filter(m=> /vinilo/i.test(m.nombre || ''))
+    .map(m=> ({
+      id: 'uv:' + m.id, cat: 'vinilo', nombre: m.nombre + ' (impreso)',
+      prov: m.prov || 'LMK',
+      porM2: true, precioM2: m.costo || 0,
+      ancho: (m.anchoMax || 1.37),
+      unidad: 'm2', uvId: m.id
+    }));
+}
+function vinilosDisponibles(){
+  return insumos.filter(x=> x.cat === 'vinilo').concat(vinilosImpresos());
+}
 
 function vinCalcular(){
   if(!vin.on) return null;
@@ -6858,8 +6875,10 @@ function vinCalcular(){
   if(W <= 0 || H <= 0) return null;
   const lista = vinilosDisponibles();
   if(!lista.length) return null;
-  const m = insumos.find(x=> x.id === vin.matId) || lista[0];
-  const pu = insumoPrecio(m);                     // $ por metro lineal
+  const m = insumos.find(x=> x.id === vin.matId) ||
+            lista.find(x=> x.id === vin.matId) || lista[0];
+  /* el de color se paga por metro lineal del rollo; el impreso, por m² */
+  const pu = m.porM2 ? (m.precioM2 || 0) * (m.ancho || 1) : insumoPrecio(m);
 
   /* el vinilo tapa el doblez de la chapa, si la cara lo tiene */
   const dob = cara.zing ? (pestanaCm()/100) : 0;
@@ -15242,12 +15261,42 @@ const ACERCO_TESTIGO = 'Caño estructural 50×50×1,2 · Acerco';
 function acercoCargado(){
   return Array.isArray(insumos) && insumos.some(x=> x.nombre === ACERCO_TESTIGO);
 }
+/* Plásticos rígidos para caras: alto impacto y corrugado. Normalmente van
+   ploteados y SIN estructura de caño (el bastidor se deja apagado).
+   Se venden por hoja entera, igual que la chapa. */
+function cargarPlasticos(){
+  if(!Array.isArray(insumos) || !insumos.length || !cartCfg) return;
+  if(cartCfg.plasticos1126) return;
+  const PL = [
+    ['Alto impacto blanco brillante 0,5 mm', 0.5, 0.60, 1.00,  4410.45],
+    ['Alto impacto blanco brillante 0,8 mm', 0.8, 0.60, 1.00,  7042.20],
+    ['Alto impacto blanco satinado 1 mm tricapa',   1.0, 0.60, 1.00,  7949.70],
+    ['Alto impacto blanco satinado 1,5 mm tricapa', 1.5, 0.60, 1.00, 11870.10],
+    ['Alto impacto blanco satinado 2 mm tricapa',   2.0, 0.60, 1.00, 15826.80],
+    ['Alto impacto blanco satinado 1 mm tricapa',   1.0, 2.00, 1.00, 26390.10],
+    ['Alto impacto blanco satinado 1,5 mm tricapa', 1.5, 2.00, 1.00, 39603.30],
+    ['Alto impacto blanco satinado 2 mm tricapa',   2.0, 2.00, 1.00, 52816.50],
+    ['Corrugado plástico blanco 2,5 mm', 2.5, 0.68, 1.00,  3521.10],
+    ['Corrugado plástico blanco 2,5 mm', 2.5, 2.00, 1.00, 10399.95],
+  ];
+  const hoy = new Date().toISOString().slice(0,10);
+  for(const [nombre, esp, W, H, precio] of PL){
+    const etq = nombre + ' · ' + Math.round(W*100) + '×' + Math.round(H*100);
+    if(insumos.find(x=> x.nombre === etq)) continue;
+    insumos.push({id: uid()+Math.random().toString(36).slice(2,4),
+      cat:'plastico', nombre: etq, unidad:'m2', espesor: esp,
+      hojaW: W, hojaH: H, precio, precioAnt: null, fecha: hoy});
+  }
+  cartCfg.plasticos1126 = true;
+}
+
 function correrAcerco(){
   if(!Array.isArray(insumos) || !insumos.length) return;   // todavía no hay catálogo
   if(!cartCfg) return;
-  if(acercoCargado()) return;                              // ya están: nada que hacer
+  if(acercoCargado()){ cargarPlasticos(); guardarDatos(); return; }   // Acerco ya está; los plásticos pueden faltar
   cartCfg.acerco0826 = false;                              // pudo quedar prendido en falso
   cargarAcerco0826();
+  cargarPlasticos();
   guardarDatos();
   if(typeof renderInsumos === 'function') renderInsumos();
 }
