@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v189</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v192</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -5266,8 +5266,12 @@ function gananciaPedido(p){
   for(const i of p.items){
     if(i.conf===false || i.titulo) continue;
     const c = costoItem(i);
-    if(c===null){ sinCosto++; continue; }
-    ganancia += subtotalItem(i) - c;
+    /* Sin costo cargado NO significa ignorar el ítem: su venta cuenta igual,
+       con costo cero. Salteándolo se perdía la venta pero se seguía restando
+       el gasto asignado, así que la ganancia salía muy por debajo.
+       El aviso de "sin costo" queda, para saber que falta cargarlo. */
+    if(c === null) sinCosto++;
+    ganancia += subtotalItem(i) - (c || 0);
   }
   // los pagos a proveedores integrados (Pablo, Tamara) NO restan: su costo ya está dentro del ítem
   const provIntegrados = [];
@@ -11400,6 +11404,21 @@ document.getElementById('btnOffDig').onclick = ()=>{
 };
 
 /* ---------- ventana de compras (dos puertas: pedido o caja) ---------- */
+/* Lee un número escrito como lo escribimos acá: el punto separa miles y la
+   coma decimales. parseFloat("470.000") devuelve 470, que es un error caro
+   cuando ese número es el precio de venta de un ítem. */
+function numAR(txt){
+  let t = String(txt == null ? '' : txt).trim().replace(/\s/g, '').replace(/^\$/, '');
+  if(!t) return 0;
+  if(t.includes(',')){
+    t = t.replace(/\./g, '').replace(',', '.');      // 1.234,56 → 1234.56
+  }else if(/^\d{1,3}(\.\d{3})+$/.test(t)){
+    t = t.replace(/\./g, '');                        // 470.000 → 470000
+  }
+  const n = parseFloat(t);
+  return isFinite(n) ? n : 0;
+}
+
 function abrirCompra(pedidoId){
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:998;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
@@ -11466,9 +11485,9 @@ function abrirCompra(pedidoId){
       '<div style="display:flex;gap:6px;align-items:center">' +
         '<input class="lCant" type="text" inputmode="decimal" value="1" style="width:64px;margin:0;padding:8px;text-align:right">' +
         '<span style="font-size:.7rem;color:var(--texto2)">×</span>' +
-        '<input class="lUnit" type="number" inputmode="numeric" placeholder="$ unit" style="width:92px;margin:0;padding:8px;text-align:right">' +
+        '<input class="lUnit" type="text" inputmode="decimal" placeholder="$ unit" style="width:92px;margin:0;padding:8px;text-align:right">' +
         '<span style="font-size:.7rem;color:var(--texto2)">=</span>' +
-        '<input class="lTot" type="number" inputmode="numeric" placeholder="$ total" style="flex:1;margin:0;padding:8px;text-align:right;font-weight:700">' +
+        '<input class="lTot" type="text" inputmode="decimal" placeholder="$ total" style="flex:1;margin:0;padding:8px;text-align:right;font-weight:700">' +
       '</div>' +
       '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">' +
         '<select class="lAsig" style="flex:1;margin:0;padding:8px;background:var(--panel2);border:1px solid var(--borde);border-radius:8px;color:var(--texto);font-size:.74rem">' +
@@ -11479,12 +11498,12 @@ function abrirCompra(pedidoId){
         '</select>' +
         '<label style="display:flex;align-items:center;gap:4px;font-size:.64rem;color:var(--texto2);margin:0;white-space:nowrap"><input type="checkbox" class="lCat" style="width:auto;margin:0">catálogo</label>' +
       '</div>' +
-      '<input class="lVenta" type="number" inputmode="numeric" placeholder="$ venta al cliente (opcional: crea el ítem en el trabajo)" style="width:100%;margin:6px 0 0;padding:8px;text-align:right;background:var(--fondo);border:1px dashed var(--ambar);border-radius:8px;color:var(--ambar);font-size:.78rem;display:' + (pedCtx?'block':'none') + '">';
+      '<input class="lVenta" type="text" inputmode="decimal" placeholder="$ venta al cliente (opcional: crea el ítem en el trabajo)" style="width:100%;margin:6px 0 0;padding:8px;text-align:right;background:var(--fondo);border:1px dashed var(--ambar);border-radius:8px;color:var(--ambar);font-size:.78rem;display:' + (pedCtx?'block':'none') + '">';
     const iC = f.querySelector('.lCant'), iU = f.querySelector('.lUnit'), iT = f.querySelector('.lTot');
     const recalc = (desde)=>{
-      const c = parseFloat(String(iC.value).replace(',','.'))||0;
-      const u = parseFloat(iU.value)||0;
-      if(desde==='tot'){ ln.total = parseFloat(iT.value)||0; if(c>0){ ln.unit = ln.total/c; iU.value = Math.round(ln.unit*100)/100; } }
+      const c = numAR(iC.value);
+      const u = numAR(iU.value);
+      if(desde==='tot'){ ln.total = numAR(iT.value); if(c>0){ ln.unit = ln.total/c; iU.value = Math.round(ln.unit*100)/100; } }
       else { ln.total = Math.round(c*u); iT.value = ln.total||''; ln.unit = u; }
       ln.cant = c;
       refrescarSaldo();
@@ -11495,7 +11514,7 @@ function abrirCompra(pedidoId){
     f.querySelector('.lNom').addEventListener('input', e=>{ ln.nombre = e.target.value; });
     f.querySelector('.lAsig').addEventListener('change', e=>{ ln.asignado = e.target.value || null; });
     f.querySelector('.lCat').addEventListener('change', e=>{ ln.catalogar = e.target.checked; });
-    f.querySelector('.lVenta').addEventListener('input', e=>{ ln.venta = parseFloat(e.target.value)||0; });
+    f.querySelector('.lVenta').addEventListener('input', e=>{ ln.venta = numAR(e.target.value); });
     contL.appendChild(f);
   }
   agregarLinea();
@@ -15497,6 +15516,41 @@ const ACERCO_TESTIGO = 'Caño estructural 50×50×1,2 · Acerco';
 function acercoCargado(){
   return Array.isArray(insumos) && insumos.some(x=> x.nombre === ACERCO_TESTIGO);
 }
+/* Bases de sombrilla adaptadas con buje impreso en 3D.
+   Compra de 9 bases a $360.000 y un kilo de filamento a $18.000. El buje se
+   imprime recién cuando se vende, así que el filamento y la media hora de
+   máquina van en la receta, no en la compra de la base. */
+const BASES3D_TESTIGO = 'Base de sombrilla adaptada (buje 3D)';
+function cargarBases3D(){
+  if(!Array.isArray(lotes) || !Array.isArray(recetas)) return;
+  if(recetas.some(r=> r.nombre === BASES3D_TESTIGO)) return;
+  let baseL = lotes.find(l=> /base de sombrilla/i.test(l.nombre||''));
+  if(!baseL){
+    baseL = {id: uid(), nombre:'Base de sombrilla', prov:'', cant:9, unidad:'u',
+             total:360000, fecha:null};
+    lotes.push(baseL);
+  }
+  let filaL = lotes.find(l=> /filamento/i.test(l.nombre||''));
+  if(!filaL){
+    /* en GRAMOS, para que la receta pueda pedir 60 y no 0,06 */
+    filaL = {id: uid(), nombre:'Filamento 3D', prov:'', cant:1000, unidad:'g',
+             total:18000, fecha:null};
+    lotes.push(filaL);
+  }
+  const horaCosto = (typeof mo === 'object' && mo && mo.costo) ? mo.costo : 7500;
+  recetas.push({
+    id: uid(),
+    nombre: BASES3D_TESTIGO,
+    lineas: [
+      {tipo:'insumo',   lote: baseL.id, cant: 1,  grupo:'base'},
+      {tipo:'insumo',   lote: filaL.id, cant: 60, grupo:'adaptación'},
+      {tipo:'servicio', nombre:'Impresión 3D · 30 min de máquina',
+       costo: Math.round(horaCosto * 0.5), grupo:'adaptación'},
+    ],
+    venta: 67000     // $62.000 la base + $5.000 la adaptación
+  });
+}
+
 /* Plásticos rígidos para caras: alto impacto y corrugado. Normalmente van
    ploteados y SIN estructura de caño (el bastidor se deja apagado).
    Se venden por hoja entera, igual que la chapa. */
@@ -15541,11 +15595,13 @@ function correrAcerco(){
   if(acercoCargado()){
     if(!plasticosCargados()){ cargarPlasticos(); guardarDatos();
       if(typeof renderInsumos === 'function') renderInsumos(); }
+    cargarBases3D(); guardarDatos();
     return;                                   // Acerco ya está
   }
   cartCfg.acerco0826 = false;                              // pudo quedar prendido en falso
   cargarAcerco0826();
   cargarPlasticos();
+  cargarBases3D();
   guardarDatos();
   if(typeof renderInsumos === 'function') renderInsumos();
 }
