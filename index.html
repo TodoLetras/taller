@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v192</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v195</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -5484,6 +5484,21 @@ function renderPedidos(){
 }
 const _bp = document.getElementById('buscarPedidos');
 if(_bp) _bp.addEventListener('input', renderPedidos);
+/* Reabre el cotizador de corpóreas con lo que se había cargado. Los datos
+   van por window.storage porque no entran en la URL. */
+async function editarCorporeas(p, it){
+  if(!it.corpInput){ toast('Este ítem es anterior: no guardó los datos del cálculo'); return; }
+  if(!it.corpId){ it.corpId = uid(); }
+  try{
+    await window.storage.set('corp-editar', JSON.stringify({
+      item: it.corpId, entrada: it.corpInput, desc: it.corpDesc || ''
+    }));
+    await guardarDatos();
+    if(dbxTokens && dbxBajoOk){ clearTimeout(dbxTimerSubida); await dbxSubir(); }
+  }catch(_){}
+  location.href = 'cotizador.html?pedido=' + p.id + '&item=' + it.corpId;
+}
+
 document.getElementById('btnCotizador').onclick = async ()=>{
   try{ await guardarDatos(); }catch(_){}
   try{ if(dbxTokens && dbxBajoOk){ clearTimeout(dbxTimerSubida); await dbxSubir(); } }catch(_){}
@@ -5499,10 +5514,21 @@ async function procesarBandejaCotizador(){
     for(const e of bandeja){
       const item = {prod:null, nombre: e.nombreCompleto || ('Letras corpóreas' + (e.desc ? ' — ' + e.desc : '')),
         cant: 1, precio: e.venta||0, costoU: e.costo||0,
-        tecnica: e.tecnica || null, muestra: e.muestra || null};
+        tecnica: e.tecnica || null, muestra: e.muestra || null,
+        corp: true, corpInput: e.entrada || null, corpDesc: e.desc || null};
       const destino = e.pedidoDestino ? pedidos.find(x=>x.id===e.pedidoDestino) : null;
       if(destino){
-        destino.items.push(item);
+        /* si el cotizador venía editando un ítem, lo reemplaza en su lugar */
+        const iEd = e.editaItem ? destino.items.findIndex(x=> x.corpId === e.editaItem) : -1;
+        if(iEd >= 0){
+          item.corpId = e.editaItem;
+          item.conf = destino.items[iEd].conf;
+          item.detalle = destino.items[iEd].detalle;
+          destino.items[iEd] = item;
+        }else{
+          item.corpId = uid();
+          destino.items.push(item);
+        }
         abrirDestino = destino.id;
         registrar('agregó corpóreas cotizadas al pedido de ' + nombreClienteId(destino.cliente) + ' (' + plata(e.venta||0) + ')');
       }else{
@@ -5960,7 +5986,8 @@ function renderPedidoItems(p){
         '<input class="cant" type="text" inputmode="decimal">' +
         '<input class="precio" type="number" inputmode="numeric" min="0">' +
         (it.adTr && it.adMeta ? '<button class="adReal" title="Cargar lo cobrado real por AD y la papelera">🧾</button>' : (it.costoU !== undefined && !it.mo ? '<button class="costoReal" title="Costo real del trabajo (lo que te cobra el proveedor). Tocá para corregirlo si te cobró distinto al presupuesto.">🧾</button>' : '')) +
-        ((it.adTr && it.adInput) || (it.backlight && it.blInput) || (it.corte && it.corteInput)
+        ((it.adTr && it.adInput) || (it.backlight && it.blInput) || (it.corte && it.corteInput) ||
+         (it.corp && it.corpInput)
           ? '<button class="adEditar" title="Volver al presupuestador con estos datos para corregirlo">✏️</button>' : '') +
         '<button class="mover-item" title="Mover este ítem">⇅</button>' +
         '<button class="dup-item" title="Duplicar este ítem">⧉</button>' +
@@ -5970,7 +5997,8 @@ function renderPedidoItems(p){
       const bEd = d.querySelector('.adEditar');
       if(bEd) bEd.onclick = (ev)=>{
         ev.stopPropagation();
-        if(it.backlight){ modalPedido.classList.remove('abierto'); abrirBl(p, it); }
+        if(it.corp){ editarCorporeas(p, it); }
+        else if(it.backlight){ modalPedido.classList.remove('abierto'); abrirBl(p, it); }
         else if(it.corte){ modalPedido.classList.remove('abierto'); abrirCorte(p, it); }
         else editarOffsetAD(p, it);
       };
@@ -6117,6 +6145,32 @@ function renderPedidoItems(p){
   renderBuscadorItems(p);
   renderPedidoMO(p);
 }
+/* Detalle de los gastos asignados a un pedido: de dónde sale cada peso.
+   Usa exactamente los mismos filtros que gananciaPedido(), para que la suma
+   del detalle no pueda diferir del número que se muestra arriba. */
+function gastosDetalle(p){
+  const provIntegrados = [];
+  if(typeof od !== 'undefined' && od && od.proveedor) provIntegrados.push(od.proveedor);
+  if(typeof offset !== 'undefined' && offset && offset.proveedor) provIntegrados.push(offset.proveedor);
+  if(typeof adCfg !== 'undefined' && adCfg && adCfg.proveedor) provIntegrados.push(adCfg.proveedor);
+  const out = [];
+  for(const m of movimientos){
+    if(m.tipo!=='egreso' || m.pedido!==p.id || m.auto || m.anulado || m.esAnulacion ||
+       m.costoIntegrado || provIntegrados.includes(m.quien)) continue;
+    out.push({concepto: m.concepto || 'Pago', monto: m.monto||0,
+              quien: nombreClienteId(m.quien), fecha: m.fecha, origen:'caja'});
+  }
+  for(const c of compras){
+    for(const l of (c.lineas||[])){
+      if(l.asignado !== p.id) continue;
+      out.push({concepto: l.nombre || 'Compra', monto: l.total||0,
+                quien: c.esStock ? 'stock propio' : nombreClienteId(c.prov),
+                fecha: c.fecha, origen:'compra'});
+    }
+  }
+  return out.sort((a,b)=> (b.monto||0)-(a.monto||0));
+}
+
 function actualizarTotal(p){
   const g = gananciaPedido(p);
   let extra = '';
@@ -6124,7 +6178,7 @@ function actualizarTotal(p){
     const total = totalPedido(p);
     const pct = total ? Math.round(g.ganancia/total*100) : 0;
     extra = '<div style="font-size:.74rem;color:#4cd27d;font-weight:700">Ganancia: ' + plata(g.ganancia) + ' (' + pct + '%)' +
-      (g.gastos ? ' <span style="color:#ff7a7a">· gastos asignados −' + plata(g.gastos) + '</span>' : '') +
+      (g.gastos ? ' <span class="verGastos" style="color:#ff7a7a;text-decoration:underline dotted;cursor:pointer" title="Tocá para ver de dónde salen">· gastos asignados −' + plata(g.gastos) + ' ▾</span>' : '') +
       (g.sinCosto ? ' <span style="color:var(--texto2)">· ' + g.sinCosto + ' ítem(s) sin costo</span>' : '') + '</div>';
   }
   const totConf = totalPedido(p), totPres = totalPresupuestado(p);
@@ -6132,7 +6186,31 @@ function actualizarTotal(p){
   if(totPres > totConf){
     lineaTotal = 'Confirmado: ' + plata(totConf) + ' <span style="font-size:.72rem;color:var(--texto2);font-weight:400">(presupuestado ' + plata(totPres) + ')</span>';
   }
-  document.getElementById('pedTotal').innerHTML = extra + lineaTotal;
+  const elTot = document.getElementById('pedTotal');
+  elTot.innerHTML = extra + lineaTotal;
+  const vg = elTot.querySelector('.verGastos');
+  if(vg) vg.onclick = (ev)=>{
+    ev.stopPropagation();
+    const det = gastosDetalle(p);
+    const caja = document.createElement('div');
+    caja.style.cssText = 'margin-top:6px;background:var(--panel2);border:1px dashed #ff7a7a;' +
+      'border-radius:10px;padding:8px 10px;font-size:.7rem;font-weight:400;color:var(--texto2);text-align:left';
+    let h2 = '<div style="font-weight:800;color:#ff7a7a;margin-bottom:4px">Gastos asignados a este trabajo</div>';
+    for(const d of det)
+      h2 += '<div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0">' +
+        '<span>' + (d.origen==='compra' ? '🛒 ' : '💸 ') + d.concepto +
+        '<span style="color:var(--texto2);font-size:.62rem"> · ' + d.quien +
+        (d.fecha ? ' · ' + d.fecha.slice(8,10) + '/' + d.fecha.slice(5,7) : '') + '</span></span>' +
+        '<b style="white-space:nowrap">' + plata(d.monto) + '</b></div>';
+    h2 += '<div style="border-top:1px dashed var(--borde);margin-top:4px;padding-top:4px;' +
+      'display:flex;justify-content:space-between"><b>Total</b><b>' +
+      plata(det.reduce((s2,d)=> s2 + d.monto, 0)) + '</b></div>';
+    caja.innerHTML = h2;
+    const previo = elTot.querySelector('.gastosDet');
+    if(previo){ previo.remove(); return; }      // segundo toque: se cierra
+    caja.className = 'gastosDet';
+    elTot.appendChild(caja);
+  };
 }
 let timerPedido = null;
 function sincronizarPedido(){
@@ -11538,7 +11616,20 @@ function abrirCompra(pedidoId){
     const lineasOk = lineas.filter(l=> l.nombre.trim() && l.total>0);
     if(!lineasOk.length){ toast('Cargá al menos una línea con nombre y monto'); return; }
     const esStock = selProv.value === '__stock__';
-    if(!esStock && !selProv.value){ toast('Elegí el proveedor (o "stock propio")'); return; }
+    if(!esStock && !selProv.value){
+      /* El toast solo se pierde de vista: se marca el campo que falta y se
+         lleva la pantalla hasta él, si no parece que el botón no hiciera nada. */
+      toast('⚠️ Falta elegir el proveedor (o marcar "stock propio")');
+      selProv.style.border = '2px solid #ff7a7a';
+      selProv.style.background = 'rgba(255,122,122,.10)';
+      selProv.scrollIntoView({block:'center', behavior:'smooth'});
+      selProv.focus();
+      selProv.addEventListener('change', ()=>{
+        selProv.style.border = '1px solid var(--borde)';
+        selProv.style.background = 'var(--panel2)';
+      }, {once:true});
+      return;
+    }
     const provId = esStock ? null : selProv.value;
     const pago = parseFloat(inPago.value)||0;
 

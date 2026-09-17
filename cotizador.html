@@ -3334,6 +3334,49 @@ function aplicarConfigGuardada(cfg){
 }
 
 const pedidoDestino = new URLSearchParams(location.search).get('pedido') || null;
+
+/* Volver a abrir una cotización ya cargada en un pedido: la app deja los
+   datos en `corp-editar` y acá se restauran, sin necesidad del DXF original.
+   Las medidas ya vienen calculadas, que es lo único que usan las cuentas. */
+(async function restaurarCotizacion(){
+  const idItem = new URLSearchParams(location.search).get('item');
+  if(!idItem || !window.storage) return;
+  try{
+    const g = await window.storage.get('corp-editar').catch(()=>null);
+    if(!g || !g.value) return;
+    const e = JSON.parse(g.value);
+    if(!e || e.item !== idItem || !e.entrada) return;
+    const d = e.entrada;
+    Object.assign(state, {
+      totalPerimeter: d.totalPerimeter||0, totalRectArea: d.totalRectArea||0,
+      globalArea: d.globalArea||0,
+      globalBBoxWidth: d.globalBBoxWidth||0, globalBBoxHeight: d.globalBBoxHeight||0,
+      letters: new Array(d.letterCount||0).fill({}),
+      manualLetterCount: d.manualLetterCount,
+      ledMode: d.ledMode||'1tira', baseMaterial: d.baseMaterial||'pvc',
+      baseBastidor: !!d.baseBastidor, incluirBase: !!d.incluirBase,
+      baseAnchoManual: d.baseAnchoManual, baseAltoManual: d.baseAltoManual,
+      vinilo_m2_manual: d.vinilo_m2_manual,
+      porcentajeVenta: d.porcentajeVenta != null ? d.porcentajeVenta : 100
+    });
+    for(const k in (d.insumos||{})){
+      const el = document.getElementById(k);
+      if(el) el.value = d.insumos[k];
+    }
+    const pv = document.getElementById('porcentajeVenta');
+    if(pv) pv.value = state.porcentajeVenta;
+    const dsc = document.getElementById('pedidoDesc');
+    if(dsc && e.desc) dsc.value = e.desc;
+    if(typeof renderInsumosManuales === 'function') renderInsumosManuales();
+    if(typeof renderLettersList === 'function') renderLettersList();
+    if(typeof recalculate === 'function') recalculate();
+    const av = document.createElement('div');
+    av.textContent = '✏️ Editando una cotización ya cargada. Al guardar reemplaza al ítem del pedido.';
+    av.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ffa730;color:#1a1200;' +
+      'padding:9px 12px;font-weight:700;font-size:.78rem;text-align:center';
+    document.body.appendChild(av);
+  }catch(err){}
+})();
 if(pedidoDestino){
   const aviso = document.createElement('div');
   aviso.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#ffa730;color:#1a1200;font-weight:800;font-size:.78rem;text-align:center;padding:8px;z-index:99';
@@ -3377,12 +3420,15 @@ document.getElementById('guardarPedidoBtn').addEventListener('click', async ()=>
     const bandeja = (g && g.value) ? JSON.parse(g.value) : [];
     bandeja.push({
       desc,
+      nombreCompleto: nombreCortoLetras() + (desc ? ' — ' + desc : ''),
       venta: Math.round(state.lastReceipt.venta),
       costo: Math.round(state.lastReceipt.total),
       fecha: Date.now(),
       pedidoDestino,
       tecnica,
-      muestra
+      muestra,
+      entrada: entradaParaEditar(),
+      editaItem: (new URLSearchParams(location.search)).get('item') || null
     });
     await window.storage.set('pedidos-entrantes', JSON.stringify(bandeja));
     btn.textContent = '✓ Guardado — abrí el Seguimiento';
@@ -3848,6 +3894,49 @@ document.addEventListener("keydown", (e)=>{
 
 
 /* ===== Lo que viaja al presupuesto junto con el precio ===== */
+/* Nombre corto para el ítem del pedido. "Letras corpóreas" a secas no dice
+   nada cuando hay tres cotizaciones distintas en el mismo trabajo: acá van
+   las piezas, la altura y si lleva base. */
+function nombreCortoLetras(){
+  try{
+    const n = state.manualLetterCount !== null ? state.manualLetterCount : state.letters.length;
+    const alto = state.globalBBoxHeight ? Math.round(state.globalBBoxHeight) : 0;
+    const p = [];
+    p.push('Letras corpóreas');
+    if(n) p.push(n + ' pieza' + (n===1?'':'s'));
+    if(alto) p.push(alto + ' cm de alto');
+    if(state.incluirBase) p.push('con base');
+    return p.join(' · ');
+  }catch(e){ return 'Letras corpóreas'; }
+}
+
+/* Todo lo que hace falta para volver a abrir esta cotización y corregirla.
+   No guarda el DXF (pesa y no se puede reinyectar): guarda las medidas ya
+   calculadas, que es lo que usan las cuentas. */
+function entradaParaEditar(){
+  try{
+    const ins = {};
+    for(const d of INSUMOS_DEF){
+      const el = document.getElementById(d.key);
+      if(el) ins[d.key] = el.value;
+    }
+    return {
+      totalPerimeter: state.totalPerimeter, totalRectArea: state.totalRectArea,
+      globalArea: state.globalArea,
+      globalBBoxWidth: state.globalBBoxWidth, globalBBoxHeight: state.globalBBoxHeight,
+      letterCount: state.letters ? state.letters.length : 0,
+      manualLetterCount: state.manualLetterCount,
+      ledMode: state.ledMode, baseMaterial: state.baseMaterial,
+      baseBastidor: state.baseBastidor, incluirBase: state.incluirBase,
+      baseAnchoManual: state.baseAnchoManual, baseAltoManual: state.baseAltoManual,
+      vinilo_m2_manual: state.vinilo_m2_manual,
+      porcentajeVenta: state.porcentajeVenta,
+      insumos: ins,
+      v: 1
+    };
+  }catch(e){ return null; }
+}
+
 function descripcionTecnica(){
   try{
     if(!state || !state.letters) return '';
