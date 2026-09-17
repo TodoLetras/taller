@@ -52,6 +52,24 @@
   .error{color:var(--rojo);font-size:13px;margin-top:10px;line-height:1.5}
   .aviso{font-size:13px;color:var(--tenue);line-height:1.6;margin-top:14px}
   .aviso b{color:var(--texto)}
+  .tglb{padding:9px 13px;font-size:13px;font-weight:600;border-radius:9px;
+    border:1px solid var(--linea);background:var(--panel);color:var(--texto);cursor:pointer}
+  .tglb[aria-pressed=true]{background:var(--ambar);color:#1a1204;border-color:var(--ambar)}
+  .precio{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0}
+  .precio label{font-size:13px;color:var(--tenue);flex:1;cursor:pointer}
+  .precio input{width:100px;padding:5px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.16);
+    background:rgba(255,255,255,.05);color:var(--texto);font-family:'IBM Plex Mono',monospace;
+    font-size:13px;text-align:right}
+  .precio .un{font-size:11px;color:var(--tenue);width:26px}
+  .campoP{margin:0}
+  .campoP .ayuda{margin:2px 0 8px}
+  #costos{margin-top:14px}
+  .cost{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:13px}
+  .cost .k{color:var(--tenue)}
+  .cost .v{font-family:'IBM Plex Mono',monospace}
+  .cost.sub{border-top:1px solid rgba(255,255,255,.12);margin-top:6px;padding-top:8px}
+  .cost.total{border-top:2px solid var(--ambar);margin-top:8px;padding-top:10px;font-size:16px}
+  .cost.total .k,.cost.total .v{color:var(--ambar);font-weight:600}
 </style>
 </head>
 <body>
@@ -63,6 +81,16 @@
   </header>
 
   <div class="caja"><svg class="plano" id="plano" viewBox="0 0 1000 260"></svg></div>
+
+  <div class="barra" style="display:flex;gap:8px;margin-bottom:10px">
+    <button class="tglb" id="btnCliente">Modo cliente</button>
+  </div>
+
+  <div id="bloqueCosto">
+    <h2>Costo</h2>
+    <div id="precios"></div>
+    <div id="costos"></div>
+  </div>
 
   <h2>Medidas</h2>
   <div id="controles"></div>
@@ -179,6 +207,7 @@ function problemas(){
     }
   }
   if (V.pliegue > 0 && V.pliegue < 6) e.push("Una pestaña de menos de 6 mm no se pliega bien en chapa.");
+
   return [...new Set(e)];
 }
 
@@ -363,6 +392,125 @@ function guiaChapa(){
   return cerrar(b);
 }
 
+// ---------------- costo ----------------
+const PRECIOS = [
+  {k:"hoja",    l:"Chapa galvanizada, la hoja",  v:35486, u:"$",   a:"Lo que pagás la hoja entera. La C-22 de 0,70 en 1 × 2 m está 35.486."},
+  {k:"hojaA",   l:"Ancho de la hoja",            v:1000,  u:"mm",  a:"De acá sale cuántas tiras entran a lo ancho."},
+  {k:"hojaL",   l:"Largo de la hoja",            v:2000,  u:"mm",  a:"De acá sale cuántos carteles salen de cada tira. Ojo si el desarrollo pasa el largo de la hoja: ahí hay que empalmar."},
+  {k:"corte_ch",l:"Corte de la chapa, el metro", v:0,     u:"$",   a:"Si lo mandás a cortar con láser, poné el precio del metro lineal. En 0 se asume que lo cortás vos con guillotina y ya está contado en la mano de obra."},
+  {k:"acr_m2",  l:"Acrílico, el m²",             v:50000, u:"$",   a:"El metro cuadrado del espesor que uses."},
+  {k:"acr_ml",  l:"Corte del acrílico, el metro",v:1500,  u:"$",   a:"Se cobra sobre el perímetro de cada tapa."},
+  {k:"led_ml",  l:"Tira LED, el metro",          v:7000,  u:"$",   a:"Precio de una sola tira: la cantidad ya se duplica porque va doble."},
+  {k:"led_paso",l:"Separación entre tiras",      v:100,   u:"mm",  a:"Cada cuántos milímetros va un recorrido de tira. La regla es parecida a la profundidad del cartel."},
+  {k:"vuelo",   l:"Vuelo del caño",              v:300,   u:"mm",  a:"Cuánto separa el cartel de la pared."},
+  {k:"cano_ml", l:"Caño, el metro",              v:3470,  u:"$",   a:"La barra de 6 m de 30×30 a 20.822 da 3.470 el metro."},
+  {k:"planchL", l:"Largo de la planchuela",      v:300,   u:"mm",  a:"El alto de la base contra la pared. Cuanto más larga, menos fuerza hace cada tarugo."},
+  {k:"planch_ml",l:"Planchuela, el metro",       v:17650, u:"$",   a:"La de 101,6 × 6,4 de 6 m a 105.900 da 17.650 el metro."},
+  {k:"pintura", l:"Pintura de la herrería",      v:50,    u:"%",   a:"Antióxido y esmalte, como porcentaje sobre el hierro."},
+  {k:"sold_u",  l:"Soldadura, cada una",         v:1200,  u:"$",   a:"Se cuentan dos por caño."},
+  {k:"fil_kg",  l:"Filamento, el kilo",          v:28000, u:"$",   a:"Para las guías del caño, que son lo único impreso que queda en el cartel."},
+  {k:"gxh",     l:"Lo que imprime tu máquina",   v:125,   u:"g/h", a:"Un kilo en 8 horas son 125 g/h."},
+  {k:"maq_h",   l:"Hora de máquina",             v:1958,  u:"$/h", a:"Amortización más mantenimiento. En la Giga, 1,35 dólares la hora."},
+  {k:"kwh",     l:"Precio del kWh",              v:120,   u:"$",   a:"Con impuestos."},
+  {k:"watt",    l:"Consumo de la impresora",     v:320,   u:"W",   a:"Cabezal más una zona de cama, que es lo que se enciende para una pieza chica."},
+  {k:"mo_h",    l:"Mano de obra",                v:6000,  u:"$/h", a:"Tu hora de taller."},
+  {k:"mo_hs",   l:"Horas de armado",             v:5,     u:"h",   a:"Cortar, agujerear, plegar, rolar, remachar y armar. Con chapa lleva más que con el aro impreso."},
+  {k:"margen",  l:"Margen sobre el costo",       v:100,   u:"%",   a:"En 100 vendés al doble."}
+];
+const FUENTES = [[5,12600],[10,18400],[15,25000],[20,28000],[25,31000],[30,36000],[40,45000]];
+const PR = {}; PRECIOS.forEach(p => PR[p.k] = p.v);
+(function(){
+  const c = document.getElementById("precios");
+  PRECIOS.forEach(p => {
+    const d = document.createElement("div");
+    d.className = "campo campoP";
+    d.innerHTML = '<div class="precio"><label for="p_'+p.k+'">'+p.l+'</label>'+
+      '<button class="ayudabtn" id="qp_'+p.k+'">?</button>'+
+      '<input type="number" id="p_'+p.k+'" value="'+p.v+'" step="any" inputmode="decimal">'+
+      '<span class="un">'+p.u+'</span></div><div class="ayuda">'+p.a+'</div>';
+    c.appendChild(d);
+    const abrir = () => d.classList.toggle("abierta");
+    d.querySelector("#qp_"+p.k).addEventListener("click", abrir);
+    d.querySelector("label").addEventListener("click", e => { e.preventDefault(); abrir(); });
+    d.querySelector("input").addEventListener("input", e => {
+      const n = parseFloat(e.target.value);
+      PR[p.k] = isNaN(n) ? 0 : n;
+      pintarCostos();
+    });
+  });
+})();
+function fuentesPara(amp){
+  const N = Math.max(1, Math.ceil(amp)), mejor = new Array(N+1).fill(null);
+  mejor[0] = {costo:0, lista:[]};
+  for (let a=1;a<=N;a++) FUENTES.forEach(([am,co]) => {
+    const prev = mejor[Math.max(0, a-am)];
+    if (prev && (!mejor[a] || prev.costo + co < mejor[a].costo))
+      mejor[a] = {costo: prev.costo + co, lista: prev.lista.concat([am])};
+  });
+  let r = mejor[N];
+  FUENTES.forEach(([am,co]) => { if (am >= amp && (!r || co < r.costo)) r = {costo:co, lista:[am]}; });
+  return r || {costo:0, lista:[]};
+}
+function costos(){
+  const tiraL = L() + V.solape, tiraA = V.alto + 2*V.pliegue;
+  const tiras = Math.max(0, Math.floor(PR.hojaA / tiraA));
+  const porTira = Math.max(0, Math.floor(PR.hojaL / tiraL));
+  const porHoja = tiras * porTira;
+  let chapa = 0, empalmes = 0;
+  if (porHoja > 0) chapa = PR.hoja/porHoja;
+  else if (tiras > 0 && PR.hojaL > 0){          // el desarrollo no entra: va empalmado
+    empalmes = Math.max(1, Math.ceil(tiraL/PR.hojaL) - 1);
+    const largoTotal = tiraL + empalmes*V.solape;
+    chapa = PR.hoja * (largoTotal/PR.hojaL) / tiras;
+  }
+  const corteCh = PR.corte_ch * (2*(tiraL + tiraA)/1000);
+  // acrílicos: dos tapas del diámetro del cartel
+  const Rm = V.diam/2/1000, area = Math.PI*Rm*Rm, per = 2*Math.PI*Rm;
+  const acr = 2*area*PR.acr_m2, corteAcr = 2*per*PR.acr_ml;
+  // leds
+  const mlTira = (area/(Math.max(20,PR.led_paso)/1000))*2;
+  const led = mlTira*PR.led_ml, amp = mlTira*1.1, f = fuentesPara(amp);
+  // herrería
+  const largoCano = (V.diam/2 + V.diam/2 + PR.vuelo)/1000;
+  const mlCano = largoCano*V.canos;
+  const mlPlanch = PR.planchL/1000;
+  const herr = (mlCano*PR.cano_ml + mlPlanch*PR.planch_ml)*(1 + PR.pintura/100) + V.canos*2*PR.sold_u;
+  // guías impresas: dos mitades por caño
+  const gr = Math.abs(volumen(guiaChapa()))/1000*1.24*0.62*2*V.canos;
+  const horas = PR.gxh > 0 ? gr/PR.gxh : 0;
+  const impreso = gr/1000*PR.fil_kg + horas*PR.maq_h + horas*PR.watt/1000*PR.kwh;
+  const mano = PR.mo_hs*PR.mo_h;
+  const costo = chapa + corteCh + acr + corteAcr + led + f.costo + herr + impreso + mano;
+  return {tiras, porTira, porHoja, empalmes, chapa, corteCh, acr, corteAcr, led, mlTira, amp, fuentes:f,
+          herr, mlCano, gr, horas, impreso, mano, costo, venta: costo*(1+PR.margen/100)};
+}
+const PESOS = n => "$ " + Math.round(n).toLocaleString("es-AR");
+function pintarCostos(){
+  const c = costos(), f = [];
+  f.push([c.empalmes
+    ? "Chapa · con "+c.empalmes+" empalme"+(c.empalmes>1?"s":"")+", no entra de una pieza"
+    : "Chapa · "+c.porHoja+" cartel"+(c.porHoja===1?"":"es")+" por hoja ("+c.tiras+" tiras × "+c.porTira+")",
+    PESOS(c.chapa)]);
+  if (c.corteCh > 0) f.push(["Corte de la chapa", PESOS(c.corteCh)]);
+  f.push(["Acrílicos", PESOS(c.acr)]);
+  f.push(["Corte del acrílico", PESOS(c.corteAcr)]);
+  f.push(["Tira LED · "+fmt(c.mlTira)+" m, doble", PESOS(c.led)]);
+  f.push(["Fuentes · "+(c.fuentes.lista.join("A + ")+"A")+" para "+fmt(c.amp)+" A", PESOS(c.fuentes.costo)]);
+  f.push(["Herrería · "+fmt(c.mlCano*1000)+" mm de caño, pintada", PESOS(c.herr)]);
+  f.push(["Guías impresas · "+fmt(c.gr)+" g en "+fmt(c.horas)+" h", PESOS(c.impreso)]);
+  f.push(["Mano de obra", PESOS(c.mano)]);
+  let html = f.map(x => '<div class="cost"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
+  html += '<div class="cost sub"><span class="k">Costo</span><span class="v">'+PESOS(c.costo)+'</span></div>';
+  html += '<div class="cost total"><span class="k">Precio de venta</span><span class="v">'+PESOS(c.venta)+'</span></div>';
+  document.getElementById("costos").innerHTML = html;
+}
+let modoCliente = false;
+document.getElementById("btnCliente").addEventListener("click", e => {
+  modoCliente = !modoCliente;
+  e.target.setAttribute("aria-pressed", String(modoCliente));
+  document.getElementById("bloqueCosto").style.display = modoCliente ? "none" : "";
+});
+
 // ---------------- exportar ----------------
 function stlBuf(tris){
   const n = tris.length/9, b = new ArrayBuffer(84 + n*50), d = new DataView(b);
@@ -528,12 +676,26 @@ function pintarDatos(){
   document.getElementById("datos").innerHTML = f.map(x =>
     '<div class="dato'+(x[2]?' fuerte':'')+'"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
 }
+function avisos(){                          // no impiden nada, solo informan
+  const a = [];
+  if (typeof PR === "undefined") return a;
+  const tl = L() + V.solape;
+  if (PR.hojaL > 0 && tl > PR.hojaL)
+    a.push("El desarrollo mide "+fmt(tl)+" mm y la hoja "+fmt(PR.hojaL)+": la tira va empalmada en "+
+           Math.ceil(tl/PR.hojaL)+" tramos, o conseguí chapa más larga.");
+  if (PR.hojaA > 0 && V.alto + 2*V.pliegue > PR.hojaA)
+    a.push("La tira es más ancha que la hoja: no sale de ahí.");
+  return a;
+}
 function refrescar(){
   const e = problemas();
-  document.getElementById("error").textContent = e.join(" ");
+  const av = avisos();
+  const err = document.getElementById("error");
+  err.innerHTML = e.map(x => '<div>'+x+'</div>').join("") +
+    av.map(x => '<div style="color:var(--ambar)">'+x+'</div>').join("");
   ["dlDesa","dlPlant","dlHorma","dlCuna","dlGuia","dlTodo"].forEach(id =>
     document.getElementById(id).disabled = e.length > 0);
-  pintarValores(); pintarDatos();
+  pintarValores(); pintarDatos(); pintarCostos();
   try { dibujarPlano(); } catch(err){}
 }
 
