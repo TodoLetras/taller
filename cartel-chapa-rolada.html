@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cartel saliente con canto de chapa</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --fondo:#0e1526; --panel:#152036; --linea:#243149; --texto:#e8eef8;
+    --tenue:#8fa3c0; --ambar:#f5b638; --rojo:#dc503c; --verde:#3fbf95;
+    --radio:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--texto)}
+  .wrap{background:var(--fondo);min-height:100vh;padding:18px 16px 60px}
+  header{margin-bottom:16px}
+  h1{font-size:21px;margin:0;letter-spacing:-.01em}
+  .sub{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--tenue);
+    letter-spacing:.12em;text-transform:uppercase}
+  .ver{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ambar);
+    border:1px solid var(--ambar);border-radius:5px;padding:1px 6px;margin-left:8px;opacity:.8}
+  h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--tenue);
+    margin:26px 0 10px;font-weight:600}
+  .caja{background:var(--panel);border:1px solid var(--linea);border-radius:var(--radio);padding:12px}
+  svg.plano{width:100%;height:auto;display:block}
+  .campo{margin-bottom:12px}
+  .fila{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .campo label{font-size:14px;color:var(--texto);cursor:pointer}
+  .val{font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--ambar)}
+  .val span{font-size:11px;color:var(--tenue);margin-left:2px}
+  input[type=range]{width:100%;margin:7px 0 0;accent-color:var(--ambar)}
+  .ayudabtn{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;
+    border-radius:50%;border:1px solid var(--tenue);color:var(--tenue);background:none;
+    font-size:11px;line-height:1;padding:0;margin-left:6px;cursor:pointer;flex:none}
+  .ayuda{display:none;margin:6px 0 2px;padding:9px 11px;border-left:2px solid var(--ambar);
+    background:rgba(255,255,255,.04);border-radius:0 6px 6px 0;font-size:13px;line-height:1.45;color:var(--tenue)}
+  .campo.abierta .ayuda{display:block}
+  .campo.abierta .ayudabtn{border-color:var(--ambar);color:var(--ambar)}
+  .datos{font-size:14px}
+  .dato{display:flex;justify-content:space-between;gap:10px;padding:6px 0;
+    border-bottom:1px solid rgba(255,255,255,.06)}
+  .dato:last-child{border:none}
+  .dato .k{color:var(--tenue)}
+  .dato .v{font-family:'IBM Plex Mono',monospace}
+  .dato.fuerte .v{color:var(--ambar);font-weight:600}
+  .descargas{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .descargas button{padding:12px 10px;font-size:13px;font-weight:600;border-radius:9px;
+    border:1px solid var(--linea);background:var(--panel);color:var(--texto);cursor:pointer}
+  .descargas button:disabled{opacity:.4}
+  .descargas #dlTodo{grid-column:1 / -1;background:var(--ambar);color:#1a1204;border-color:var(--ambar)}
+  .error{color:var(--rojo);font-size:13px;margin-top:10px;line-height:1.5}
+  .aviso{font-size:13px;color:var(--tenue);line-height:1.6;margin-top:14px}
+  .aviso b{color:var(--texto)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>CANTO DE CHAPA ROLADA</h1>
+    <span class="sub" id="modoTxt">plantillas de armado</span><span class="ver">v1</span>
+  </header>
+
+  <div class="caja"><svg class="plano" id="plano" viewBox="0 0 1000 260"></svg></div>
+
+  <h2>Medidas</h2>
+  <div id="controles"></div>
+
+  <h2>Para el taller</h2>
+  <div class="caja datos" id="datos"></div>
+  <div class="error" id="error"></div>
+
+  <h2>Archivos</h2>
+  <div class="descargas">
+    <button id="dlDesa">DXF · desarrollo</button>
+    <button id="dlPlant">STL · plantilla</button>
+    <button id="dlHorma">STL · horma</button>
+    <button id="dlCuna">STL · cuna del caño</button>
+    <button id="dlTodo">Bajar todo · zip</button>
+  </div>
+
+  <p class="aviso">
+    Las piezas impresas son <b>plantillas de armado</b>: se usan y se guardan, no quedan en el cartel.
+    El agujero del caño en la chapa plana <b>no es redondo</b>: el caño entra en cuerda y cruza una
+    superficie curva, así que al desenrollar queda un óvalo. Por eso el DXF trae la forma real y no
+    un círculo.
+  </p>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const P = [
+  {id:"diam", label:"Diámetro exterior del cartel", min:200, max:1200, step:10, val:600, u:"mm",
+   ayuda:"El diámetro terminado, o sea la cara de afuera de la chapa. El desarrollo se calcula sobre la fibra neutra, a mitad del espesor."},
+  {id:"alto", label:"Ancho de la chapa", min:40, max:300, step:5, val:100, u:"mm",
+   ayuda:"La profundidad del cartel. Si vas a plegar pestañas para los acrílicos, acordate de sumarle el pliegue a la tira que cortás."},
+  {id:"esp",  label:"Espesor de la chapa", min:0.4, max:2, step:.05, val:.7, u:"mm",
+   ayuda:"Cambia el desarrollo: la chapa se estira por afuera y se comprime por adentro, y la medida real sale de la mitad del espesor."},
+  {id:"pliegue", label:"Pestaña plegada para el acrílico", min:0, max:40, step:1, val:10, u:"mm",
+   ayuda:"Lo que plegás hacia adentro en cada canto para que apoye el acrílico. Se suma al ancho de la tira a cortar. En 0 no se pliega."},
+  {id:"cano", label:"Diámetro del caño", min:12, max:80, step:.05, val:25.4, u:"mm",
+   ayuda:"Medidas comerciales de caño estructural redondo: 19,05 · 25,4 · 31,75 · 38,1 · 50,8 mm, o sea de 3/4 a 2 pulgadas."},
+  {id:"holg", label:"Holgura del agujero", min:0, max:4, step:.1, val:1, u:"mm",
+   ayuda:"Cuánto más grande que el caño se hace el agujero. Con chapa conviene ser generoso: 1 mm, porque el agujero se hace con sacabocados o con amoladora y nunca sale exacto."},
+  {id:"canos",label:"Cantidad de caños", min:1, max:3, step:1, val:2, u:"",
+   ayuda:"Con uno solo el cartel puede girar sobre el caño; con dos queda firme."},
+  {id:"sep",  label:"Separación entre ejes", min:0, max:500, step:5, val:140, u:"mm",
+   ayuda:"Distancia entre los ejes de los caños, medida sobre el diámetro del cartel."},
+  {id:"solape",label:"Solape de la costura", min:0, max:60, step:5, val:25, u:"mm",
+   ayuda:"Cuánto se monta una punta sobre la otra para remachar o soldar por puntos. Se suma al largo de la tira. En 0 la unís a tope."},
+  {id:"remache", label:"Diámetro del remache pop", min:2.4, max:6.4, step:.2, val:4, u:"mm",
+   ayuda:"El agujero se hace 0,1 mm más grande que el remache. Los pop más usados en chapa son de 4 y de 4,8 mm. Para chapa de 0,7 alcanza con el de 4."},
+  {id:"remaches", label:"Cantidad de remaches", min:2, max:8, step:1, val:3, u:"",
+   ayuda:"Se reparten a lo alto de la costura, con los de las puntas separados dos diámetros del canto. Para 100 mm de chapa, tres alcanzan."},
+  {id:"horma", label:"Partes de la horma", min:2, max:8, step:1, val:4, u:"",
+   ayuda:"La horma es un anillo hembra partido: la chapa rolada de más se abre contra él y te queda el círculo redondo. Elegí las partes según lo que entre en tu cama."},
+  {id:"hormaAlto", label:"Alto de la horma", min:15, max:80, step:5, val:40, u:"mm",
+   ayuda:"Cuánto abraza la horma a la chapa. Con 40 alcanza para que no se tuerza mientras remachás."}
+];
+
+const V = {};
+P.forEach(p => V[p.id] = p.val);
+
+// ---------------- geometría ----------------
+const R  = () => (V.diam - V.esp)/2;              // radio de la fibra neutra
+const L  = () => 2*Math.PI*R();                   // desarrollo
+const zc = () => V.alto/2;
+
+function offsets(){
+  const o = [];
+  for (let k=0;k<V.canos;k++) o.push((k - (V.canos-1)/2) * V.sep);
+  return o;
+}
+// el agujero desenrollado: se recorre el contorno del caño y se proyecta sobre la chapa
+function ovalo(o, n){
+  const r = (V.cano + V.holg)/2, Rm = R(), p = [];
+  const ref = Math.atan2(o, -Math.sqrt(Math.max(1, Rm*Rm - o*o)));   // ángulo del centro del agujero
+  n = n || 160;
+  for (let i=0;i<n;i++){
+    const t = 2*Math.PI*i/n;
+    const y = o + r*Math.cos(t), z = zc() + r*Math.sin(t);
+    if (Math.abs(y) >= Rm - 0.5) return null;      // el caño se sale del cartel
+    const x = -Math.sqrt(Rm*Rm - y*y);
+    let th = Math.atan2(y, x) - ref;                 // sin saltos al cruzar los 180°
+    th = th - 2*Math.PI*Math.round(th/(2*Math.PI));
+    p.push([Rm*(ref + th), z]);
+  }
+  return p;
+}
+function medidaOvalo(o){
+  const p = ovalo(o);
+  if (!p) return null;
+  const s = p.map(q=>q[0]), z = p.map(q=>q[1]);
+  return {p, s0:Math.min(...s), s1:Math.max(...s), z0:Math.min(...z), z1:Math.max(...z),
+          sc:(Math.min(...s)+Math.max(...s))/2, largo:Math.max(...s)-Math.min(...s),
+          alto:Math.max(...z)-Math.min(...z)};
+}
+// s medido desde la costura, que va abajo de todo: lejos de los caños y a la vista de nadie
+function sDesdeCostura(s){ const l = L(), c = R()*Math.PI/2; return ((s + c) % l + l) % l; }
+
+function remachesZ(){                       // alturas de los remaches sobre la costura
+  const d = V.remache, m = Math.max(2*d, 8), out = [];
+  const n = Math.max(2, V.remaches|0);
+  for (let i=0;i<n;i++) out.push(m + (V.alto - 2*m)*i/(n-1));
+  return out;
+}
+function problemas(){
+  const e = [];
+  if (V.solape > 0 && V.solape < 3*V.remache)
+    e.push("El solape es corto para remaches de "+fmt(V.remache)+": poné al menos "+Math.ceil(3*V.remache)+" mm.");
+  if (V.solape === 0)
+    e.push("Con remaches pop necesitás solape: subilo a 20 mm o más.");
+  if (V.alto < 4*V.remache + 10)
+    e.push("La chapa es muy angosta para esos remaches.");
+  if (V.cano + V.holg > V.alto - 8)
+    e.push("El caño no entra en el ancho de la chapa: subí el ancho o achicá el caño.");
+  offsets().forEach(o => { if (!ovalo(o, 24)) e.push("Los caños quedan fuera del cartel: acercalos."); });
+  if (V.canos > 1){
+    const m = offsets().map(medidaOvalo);
+    if (m.every(Boolean)){
+      const orden = m.slice().sort((a,b)=>a.sc-b.sc);
+      for (let i=0;i<orden.length-1;i++)
+        if (orden[i].s1 + 6 > orden[i+1].s0) e.push("Los agujeros se tocan entre sí: separá más los caños.");
+    }
+  }
+  if (V.pliegue > 0 && V.pliegue < 6) e.push("Una pestaña de menos de 6 mm no se pliega bien en chapa.");
+  return [...new Set(e)];
+}
+
+// ---------------- el plano del desarrollo ----------------
+function dibujarPlano(){
+  const svg = document.getElementById("plano");
+  const l = L(), h = V.alto;
+  const mx = 60, my = 46, W = 1000, esc = (W - 2*mx)/l, H = h*esc + 2*my;
+  svg.setAttribute("viewBox", "0 0 "+W+" "+Math.max(190, H));
+  const X = s => mx + sDesdeCostura(s)*esc;
+  const Y = z => my + (h - z)*esc;
+  let d = "";
+  d += '<rect x="'+mx+'" y="'+my+'" width="'+(l*esc)+'" height="'+(h*esc)+'" '+
+       'fill="rgba(255,255,255,.06)" stroke="#8fa3c0" stroke-width="1.2"/>';
+  offsets().forEach(o => {
+    const m = medidaOvalo(o);
+    if (!m) return;
+    const pts = m.p.map(q => X(q[0])+","+Y(q[1])).join(" ");
+    d += '<polygon points="'+pts+'" fill="#0e1526" stroke="#f5b638" stroke-width="1.6"/>';
+    const cx = X(m.sc), cy = Y(zc());
+    d += '<line x1="'+(cx-14)+'" y1="'+cy+'" x2="'+(cx+14)+'" y2="'+cy+'" stroke="#dc503c" stroke-width="1"/>';
+    d += '<line x1="'+cx+'" y1="'+(cy-14)+'" x2="'+cx+'" y2="'+(cy+14)+'" stroke="#dc503c" stroke-width="1"/>';
+    d += '<line x1="'+mx+'" y1="'+(my+h*esc+14)+'" x2="'+cx+'" y2="'+(my+h*esc+14)+'" '+
+         'stroke="#8fa3c0" stroke-width=".8" stroke-dasharray="4 3"/>';
+    d += '<text x="'+cx+'" y="'+(my+h*esc+30)+'" fill="#8fa3c0" font-size="13" '+
+         'font-family="IBM Plex Mono, monospace" text-anchor="end">'+fmt(sDesdeCostura(m.sc))+'</text>';
+  });
+  d += '<text x="'+(mx+l*esc/2)+'" y="'+(my-14)+'" fill="#e8eef8" font-size="14" '+
+       'font-family="IBM Plex Mono, monospace" text-anchor="middle">'+fmt(l)+' mm de desarrollo</text>';
+  d += '<text x="'+(mx-10)+'" y="'+(my+h*esc/2)+'" fill="#8fa3c0" font-size="13" '+
+       'font-family="IBM Plex Mono, monospace" text-anchor="end">'+fmt(h)+'</text>';
+  if (V.solape > 0){
+    const xs = mx + V.solape*esc;
+    d += '<rect x="'+mx+'" y="'+my+'" width="'+(V.solape*esc)+'" height="'+(h*esc)+'" '+
+         'fill="rgba(63,191,149,.15)" stroke="#3fbf95" stroke-width="1" stroke-dasharray="5 3"/>';
+    remachesZ().forEach(z => {
+      [mx + V.solape/2*esc, mx + (l + V.solape/2)*esc].forEach(cx => {
+        d += '<circle cx="'+cx+'" cy="'+Y(z)+'" r="3.4" fill="none" stroke="#3fbf95" stroke-width="1.4"/>';
+      });
+    });
+  }
+  d += '<text x="'+mx+'" y="'+(my+h*esc+30)+'" fill="#3fbf95" font-size="12" '+
+       'font-family="IBM Plex Mono, monospace">costura</text>';
+  svg.innerHTML = d;
+}
+
+// ---------------- malla para los STL ----------------
+function tri(a,p,q,r){ a.push(p[0],p[1],p[2], q[0],q[1],q[2], r[0],r[1],r[2]); }
+function quad(a,p,q,r,s){ tri(a,p,q,r); tri(a,p,r,s); }
+function volumen(a){
+  let v = 0;
+  for (let i=0;i<a.length;i+=9)
+    v += (a[i]*(a[i+4]*a[i+8]-a[i+7]*a[i+5])
+        - a[i+3]*(a[i+1]*a[i+8]-a[i+7]*a[i+2])
+        + a[i+6]*(a[i+1]*a[i+5]-a[i+4]*a[i+2]))/6;
+  return v;
+}
+function cerrar(a){                                  // deja todas las caras mirando para afuera
+  if (volumen(a) >= 0) return a;
+  const b = [];
+  for (let i=0;i<a.length;i+=9)
+    b.push(a[i],a[i+1],a[i+2], a[i+6],a[i+7],a[i+8], a[i+3],a[i+4],a[i+5]);
+  return b;
+}
+// prisma: polígono en el plano x-y extruido en z
+function prisma(pol, z0, z1){
+  const a = [], n = pol.length;
+  let A = 0;
+  for (let i=0;i<n;i++){ const p=pol[i], q=pol[(i+1)%n]; A += p[0]*q[1]-q[0]*p[1]; }
+  const pl = A < 0 ? pol.slice().reverse() : pol;
+  for (let i=1;i<n-1;i++){
+    tri(a, [pl[0][0],pl[0][1],z0], [pl[i+1][0],pl[i+1][1],z0], [pl[i][0],pl[i][1],z0]);
+    tri(a, [pl[0][0],pl[0][1],z1], [pl[i][0],pl[i][1],z1], [pl[i+1][0],pl[i+1][1],z1]);
+  }
+  for (let i=0;i<n;i++){
+    const p = pl[i], q = pl[(i+1)%n];
+    quad(a, [p[0],p[1],z0], [q[0],q[1],z0], [q[0],q[1],z1], [p[0],p[1],z1]);
+  }
+  return cerrar(a);
+}
+function caja(x0,x1,y0,y1,z0,z1){
+  return prisma([[x0,y0],[x1,y0],[x1,y1],[x0,y1]], z0, z1);
+}
+
+// ---------------- las tres plantillas ----------------
+// 1. horma: anillo hembra partido, la chapa se abre contra él
+function hormaParte(i){
+  const n = V.horma, Ri = V.diam/2 + 0.4, Re = Ri + 14;
+  const a0 = 2*Math.PI*i/n, a1 = 2*Math.PI*(i+1)/n;
+  const paso = Math.PI/90, a = [];
+  const arco = (r0, r1, z0, z1, b0, b1) => {
+    const m = Math.max(2, Math.ceil((b1-b0)/paso)), pol = [];
+    for (let k=0;k<=m;k++){ const t = b0 + (b1-b0)*k/m; pol.push([r1*Math.cos(t), r1*Math.sin(t)]); }
+    for (let k=m;k>=0;k--){ const t = b0 + (b1-b0)*k/m; pol.push([r0*Math.cos(t), r0*Math.sin(t)]); }
+    prisma(pol, z0, z1).forEach(v => a.push(v));
+  };
+  arco(Ri, Re, 0, V.hormaAlto, a0, a1);              // el aro que abraza
+  arco(Ri - 8, Re, 0, 6, a0, a1);                    // reborde donde apoya el canto de la chapa
+  return a;
+}
+// 2. plantilla de marcado: tira con los óvalos calados y tope contra el canto
+function plantilla(){
+  // se trabaja en la coordenada de la chapa ya desenrollada, medida desde la costura
+  const m = offsets().map(medidaOvalo).filter(Boolean)
+    .map(x => { const p = x.p.map(q => [sDesdeCostura(q[0]), q[1]]);
+                const s = p.map(q=>q[0]);
+                return {p, s0:Math.min(...s), s1:Math.max(...s)}; });
+  if (!m.length) return [];
+  const s0 = Math.min(...m.map(x=>x.s0)) - 30, s1 = Math.max(...m.map(x=>x.s1)) + 30;
+  const a = [], esp = 3, tope = 12;
+  // la tira, con los óvalos como huecos: se arma en franjas verticales
+  const n = 90;
+  for (let i=0;i<n;i++){
+    const xa = s0 + (s1-s0)*i/n, xb = s0 + (s1-s0)*(i+1)/n;
+    // límites verticales de los huecos en esta franja
+    const cortes = [];
+    m.forEach(o => {
+      let z0 = Infinity, z1 = -Infinity, hay = false;
+      o.p.forEach(q => { if (q[0] >= xa - 1e-9 && q[0] <= xb + 1e-9){ hay = true;
+        z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); } });
+      if (hay) cortes.push([z0, z1]);
+    });
+    cortes.sort((p,q)=>p[0]-q[0]);
+    let z = 0;
+    cortes.forEach(([a0,b0]) => {
+      if (a0 > z) caja(xa, xb, z, a0, 0, esp).forEach(v=>a.push(v));
+      z = Math.max(z, b0);
+    });
+    if (z < V.alto) caja(xa, xb, z, V.alto, 0, esp).forEach(v=>a.push(v));
+  }
+  caja(s0, s1, -tope, 0, 0, esp + 6).forEach(v=>a.push(v));   // tope contra el canto
+  for (let i=0;i<a.length;i+=3) a[i] -= s0;                   // la llevo al origen
+  return a;
+}
+// 3. cuna: sostiene el caño a la altura y a la distancia correctas
+function cuna(){
+  // bloque en V: el caño se apoya y queda a la altura y en el ángulo correctos
+  const r = (V.cano + 0.4)/2, largo = Math.max(40, V.cano*1.6);
+  const base = 6, an = V.cano*1.8 + 16;
+  // el caño apoya en dos rectas a 45°, tangentes al círculo; su centro queda a r*raiz2 del vértice
+  const hV = r*Math.SQRT2, tope = hV + r*0.9;
+  const pol = [[-an/2, 0],[an/2, 0],[an/2, base+tope],[r*0.55, base+tope],
+               [0, base],[-r*0.55, base+tope],[-an/2, base+tope]];
+  // perfil en el plano x(ancho)-y(alto), extruido a lo largo del caño
+  const a = [];
+  prisma(pol, 0, largo).forEach(v => a.push(v));
+  return a;
+}
+
+// ---------------- exportar ----------------
+function stlBuf(tris){
+  const n = tris.length/9, b = new ArrayBuffer(84 + n*50), d = new DataView(b);
+  d.setUint32(80, n, true);
+  let o = 84;
+  for (let i=0;i<tris.length;i+=9){
+    const ux=tris[i+3]-tris[i], uy=tris[i+4]-tris[i+1], uz=tris[i+5]-tris[i+2];
+    const vx=tris[i+6]-tris[i], vy=tris[i+7]-tris[i+1], vz=tris[i+8]-tris[i+2];
+    let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    const m=Math.hypot(nx,ny,nz)||1; nx/=m; ny/=m; nz/=m;
+    d.setFloat32(o,nx,true); d.setFloat32(o+4,ny,true); d.setFloat32(o+8,nz,true); o+=12;
+    for (let k=0;k<9;k++){ d.setFloat32(o, tris[i+k], true); o+=4; }
+    d.setUint16(o,0,true); o+=2;
+  }
+  return b;
+}
+function dxfDesarrollo(){
+  const l = L(), L2 = ["0","SECTION","2","ENTITIES"];
+  const linea = (x0,y0,x1,y1,capa) => L2.push("0","LINE","8",capa,
+    "10",x0.toFixed(3),"20",y0.toFixed(3),"11",x1.toFixed(3),"21",y1.toFixed(3));
+  const total = l + V.solape;
+  linea(0,0,total,0,"CHAPA"); linea(total,0,total,V.alto,"CHAPA");
+  linea(total,V.alto,0,V.alto,"CHAPA"); linea(0,V.alto,0,0,"CHAPA");
+  if (V.solape > 0){
+    linea(l,0,l,V.alto,"COSTURA");
+    const r = (V.remache + 0.1)/2;           // el agujero, un pelo más grande
+    remachesZ().forEach(z => {               // van dos veces: una en cada punta, para que coincidan
+      [V.solape/2, l + V.solape/2].forEach(x =>
+        L2.push("0","CIRCLE","8","REMACHE","10",x.toFixed(3),"20",z.toFixed(3),"30","0.0","40",r.toFixed(3)));
+    });
+  }
+  if (V.pliegue > 0){
+    linea(0,V.pliegue,total,V.pliegue,"PLIEGUE");
+    linea(0,V.alto-V.pliegue,total,V.alto-V.pliegue,"PLIEGUE");
+  }
+  offsets().forEach(o => {
+    const m = medidaOvalo(o);
+    if (!m) return;
+    L2.push("0","LWPOLYLINE","8","AGUJERO","90",String(m.p.length),"70","1");
+    m.p.forEach(q => L2.push("10", sDesdeCostura(q[0]).toFixed(3), "20", q[1].toFixed(3)));
+  });
+  L2.push("0","ENDSEC","0","EOF");
+  return L2.join("\n");
+}
+function leeme(){
+  const m = offsets().map(medidaOvalo).filter(Boolean);
+  const T = [];
+  T.push("CANTO DE CHAPA ROLADA - cartel D"+V.diam+" x "+V.alto+" mm");
+  T.push("");
+  T.push("LA TIRA DE CHAPA");
+  T.push("  espesor "+V.esp+" mm");
+  T.push("  largo a cortar: "+fmt(L()+V.solape)+" mm  (desarrollo "+fmt(L())+" + solape "+V.solape+")");
+  T.push("  ancho a cortar: "+fmt(V.alto + 2*V.pliegue)+" mm  (cartel "+V.alto+
+         (V.pliegue?" + dos pestañas de "+V.pliegue:"")+")");
+  T.push("");
+  T.push("AGUJEROS DE LOS CANOS (medidos desde la costura, sobre la chapa plana)");
+  m.forEach((o,i) => T.push("  cano "+(i+1)+": centro a "+fmt(sDesdeCostura(o.sc))+
+    " mm | ovalo de "+fmt(o.largo)+" x "+fmt(o.alto)+" mm | centro a "+fmt(zc())+" del canto"));
+  T.push("  NO son circulos: el cano entra en cuerda y la chapa es curva.");
+  T.push("");
+  if (V.solape > 0){
+    T.push("COSTURA CON REMACHES POP");
+    T.push("  solape "+V.solape+" mm, "+V.remaches+" remaches de "+fmt(V.remache)+
+           " (agujero "+fmt(V.remache+0.1)+")");
+    T.push("  los agujeros vienen por duplicado en el DXF, en las dos puntas, para que coincidan:");
+    T.push("  a "+fmt(V.solape/2)+" mm del borde y a "+remachesZ().map(z=>fmt(z)).join(" / ")+" mm del canto.");
+    T.push("  Agujerear las dos puntas juntas, superpuestas, asegura que no se corran.");
+    T.push("");
+  }
+  T.push("PLANTILLAS IMPRESAS (se usan y se guardan)");
+  T.push("  horma: "+V.horma+" partes, anillo hembra de D"+V.diam+", "+V.hormaAlto+" mm de alto.");
+  T.push("         Rolar la chapa un poco de mas y soltarla adentro: se abre sola y queda redonda.");
+  T.push("  plantilla: apoya el tope contra el canto de la chapa y marcas los ovalos.");
+  T.push("  cuna: sostiene el cano a la altura correcta mientras lo fijas.");
+  T.push("");
+  T.push("ORDEN");
+  T.push("  1. cortar la tira y marcar los agujeros en plano");
+  T.push("  2. hacer los agujeros");
+  T.push("  3. plegar las pestanas");
+  T.push("  4. rolar y cerrar la costura dentro de la horma");
+  T.push("  5. sacar la horma, poner los canos con la cuna y los acrilicos");
+  return T.join("\n");
+}
+function crc32(b){
+  let c, t = crc32.t;
+  if (!t){ t = crc32.t = [];
+    for (let n=0;n<256;n++){ c=n; for (let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } }
+  let r = 0xFFFFFFFF;
+  for (let i=0;i<b.length;i++) r = (r>>>8) ^ t[(r ^ b[i]) & 255];
+  return (r ^ 0xFFFFFFFF)>>>0;
+}
+function zip(archivos){
+  const pe = [], ce = []; let off = 0;
+  const enc = new TextEncoder();
+  archivos.forEach(f => {
+    const nm = enc.encode(f.name), c = crc32(f.bytes);
+    const h = new Uint8Array(30 + nm.length), d = new DataView(h.buffer);
+    d.setUint32(0, 0x04034b50, true); d.setUint16(4, 20, true);
+    d.setUint32(14, c, true); d.setUint32(18, f.bytes.length, true);
+    d.setUint32(22, f.bytes.length, true); d.setUint16(26, nm.length, true);
+    h.set(nm, 30);
+    pe.push(h, f.bytes);
+    const e = new Uint8Array(46 + nm.length), q = new DataView(e.buffer);
+    q.setUint32(0, 0x02014b50, true); q.setUint16(4, 20, true); q.setUint16(6, 20, true);
+    q.setUint32(16, c, true); q.setUint32(20, f.bytes.length, true);
+    q.setUint32(24, f.bytes.length, true); q.setUint16(28, nm.length, true);
+    q.setUint32(42, off, true); e.set(nm, 46);
+    ce.push(e);
+    off += h.length + f.bytes.length;
+  });
+  let cl = 0; ce.forEach(e => cl += e.length);
+  const fin = new Uint8Array(22), fv = new DataView(fin.buffer);
+  fv.setUint32(0, 0x06054b50, true); fv.setUint16(8, archivos.length, true);
+  fv.setUint16(10, archivos.length, true); fv.setUint32(12, cl, true); fv.setUint32(16, off, true);
+  const todo = [].concat(pe, ce, [fin]);
+  let n = 0; todo.forEach(x => n += x.length);
+  const out = new Uint8Array(n); let p = 0;
+  todo.forEach(x => { out.set(x, p); p += x.length; });
+  return out;
+}
+function bajar(datos, nombre){
+  const b = new Blob([datos], {type:"application/octet-stream"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = nombre; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+
+// ---------------- interfaz ----------------
+function fmt(n){
+  const r = Math.round(n*10)/10;
+  return (Math.abs(r - Math.round(r)) < .05 ? Math.round(r) : r).toString().replace(".", ",");
+}
+const cont = document.getElementById("controles");
+P.forEach(p => {
+  const d = document.createElement("div");
+  d.className = "campo"; d.id = "c_"+p.id;
+  d.innerHTML = '<div class="fila"><span style="display:flex;align-items:center;min-width:0">'+
+      '<label for="i_'+p.id+'">'+p.label+'</label>'+
+      '<button class="ayudabtn" id="q_'+p.id+'">?</button></span>'+
+    '<span class="val" id="v_'+p.id+'"></span></div>'+
+    '<div class="ayuda">'+p.ayuda+'</div>'+
+    '<input type="range" id="i_'+p.id+'" min="'+p.min+'" max="'+p.max+'" step="'+p.step+'" value="'+p.val+'">';
+  cont.appendChild(d);
+  d.querySelector("input").addEventListener("input", e => { V[p.id] = parseFloat(e.target.value); refrescar(); });
+  const abrir = () => d.classList.toggle("abierta");
+  d.querySelector("#q_"+p.id).addEventListener("click", abrir);
+  d.querySelector("label").addEventListener("click", e => { e.preventDefault(); abrir(); });
+});
+
+function pintarValores(){
+  P.forEach(p => {
+    const t = p.id === "canos" ? (V.canos === 1 ? "uno" : V.canos + " caños")
+            : p.id === "horma" ? V.horma + " partes"
+            : fmt(V[p.id]) + (p.u ? '<span>'+p.u+'</span>' : "");
+    document.getElementById("v_"+p.id).innerHTML = t;
+  });
+}
+function pintarDatos(){
+  const m = offsets().map(medidaOvalo).filter(Boolean);
+  const f = [];
+  f.push(["Tira a cortar", fmt(L()+V.solape)+" × "+fmt(V.alto + 2*V.pliegue)+" mm", true]);
+  f.push(["Desarrollo del círculo", fmt(L())+" mm", false]);
+  m.forEach((o,i) => {
+    f.push(["Agujero "+(i+1)+" · desde la costura", fmt(sDesdeCostura(o.sc))+" mm", false]);
+    f.push(["Agujero "+(i+1)+" · óvalo", fmt(o.largo)+" × "+fmt(o.alto)+" mm", true]);
+  });
+  if (m.length) f.push(["Diferencia contra un círculo", fmt(m[0].largo - (V.cano+V.holg))+" mm de más", false]);
+  if (V.solape > 0)
+    f.push(["Costura", V.remaches+" remaches de "+fmt(V.remache)+" a "+fmt(V.solape/2)+" mm de cada punta", false]);
+  f.push(["Horma", V.horma+" partes de "+fmt(Math.PI*(V.diam+14)/V.horma)+" mm de arco", false]);
+  document.getElementById("datos").innerHTML = f.map(x =>
+    '<div class="dato'+(x[2]?' fuerte':'')+'"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
+}
+function refrescar(){
+  const e = problemas();
+  document.getElementById("error").textContent = e.join(" ");
+  ["dlDesa","dlPlant","dlHorma","dlCuna","dlTodo"].forEach(id =>
+    document.getElementById(id).disabled = e.length > 0);
+  pintarValores(); pintarDatos();
+  try { dibujarPlano(); } catch(err){}
+}
+
+document.getElementById("dlDesa").addEventListener("click", () =>
+  bajar(new TextEncoder().encode(dxfDesarrollo()), "desarrollo_D"+V.diam+".dxf"));
+document.getElementById("dlPlant").addEventListener("click", () =>
+  bajar(stlBuf(plantilla()), "plantilla_agujeros.stl"));
+document.getElementById("dlHorma").addEventListener("click", () => {
+  const a = [];
+  for (let i=0;i<V.horma;i++) hormaParte(i).forEach(v => a.push(v));
+  bajar(stlBuf(a), "horma_D"+V.diam+"_"+V.horma+"partes.stl");
+});
+document.getElementById("dlCuna").addEventListener("click", () =>
+  bajar(stlBuf(cuna()), "cuna_cano"+fmt(V.cano)+".stl"));
+document.getElementById("dlTodo").addEventListener("click", () => {
+  const enc = new TextEncoder(), base = "chapa_D"+V.diam+"x"+V.alto;
+  const fs = [
+    {name: base+"/desarrollo.dxf", bytes: enc.encode(dxfDesarrollo())},
+    {name: base+"/plantilla_agujeros.stl", bytes: new Uint8Array(stlBuf(plantilla()))},
+    {name: base+"/cuna_cano.stl", bytes: new Uint8Array(stlBuf(cuna()))},
+    {name: base+"/LEEME.txt", bytes: enc.encode(leeme())}
+  ];
+  for (let i=0;i<V.horma;i++)
+    fs.splice(2+i, 0, {name: base+"/horma_parte"+(i+1)+".stl", bytes: new Uint8Array(stlBuf(hormaParte(i)))});
+  bajar(zip(fs), base+".zip");
+});
+
+refrescar();
+})();
+</script>
+</body>
+</html>
