@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v195</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v196</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -5193,6 +5193,10 @@ async function copiarItem(it){
 }
 function subtotalItem(i){
   if(i.titulo) return 0;              // los títulos de sección no suman
+  /* Mano de obra "ya incluida en el precio": el trabajo se cerró por un monto
+     y las horas no se cobran aparte. No suma a la venta, pero su costo sigue
+     descontando de la ganancia, que es justamente lo que hay que ver. */
+  if(i.mo && i.moIncluida) return 0;
   if(i.ventaManual > 0) return i.ventaManual;
   return subtotalFormula(i);
 }
@@ -6165,7 +6169,7 @@ function gastosDetalle(p){
       if(l.asignado !== p.id) continue;
       out.push({concepto: l.nombre || 'Compra', monto: l.total||0,
                 quien: c.esStock ? 'stock propio' : nombreClienteId(c.prov),
-                fecha: c.fecha, origen:'compra'});
+                fecha: c.fecha, origen:'compra', compraId: c.id, ln: l});
     }
   }
   return out.sort((a,b)=> (b.monto||0)-(a.monto||0));
@@ -6196,12 +6200,19 @@ function actualizarTotal(p){
     caja.style.cssText = 'margin-top:6px;background:var(--panel2);border:1px dashed #ff7a7a;' +
       'border-radius:10px;padding:8px 10px;font-size:.7rem;font-weight:400;color:var(--texto2);text-align:left';
     let h2 = '<div style="font-weight:800;color:#ff7a7a;margin-bottom:4px">Gastos asignados a este trabajo</div>';
-    for(const d of det)
-      h2 += '<div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0">' +
-        '<span>' + (d.origen==='compra' ? '🛒 ' : '💸 ') + d.concepto +
+    det.forEach((d, idx)=>{
+      h2 += '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;align-items:center">' +
+        '<span style="flex:1;min-width:0">' + (d.origen==='compra' ? '🛒 ' : '💸 ') + d.concepto +
         '<span style="color:var(--texto2);font-size:.62rem"> · ' + d.quien +
         (d.fecha ? ' · ' + d.fecha.slice(8,10) + '/' + d.fecha.slice(5,7) : '') + '</span></span>' +
-        '<b style="white-space:nowrap">' + plata(d.monto) + '</b></div>';
+        (d.origen==='compra'
+          ? '<input class="gMonto" data-i="' + idx + '" type="text" inputmode="decimal" value="' + d.monto +
+            '" style="width:86px;margin:0;padding:4px 6px;font-size:12px;text-align:right;background:var(--fondo);' +
+            'border:1px solid var(--borde);border-radius:6px;color:var(--texto)">' +
+            '<button class="gSoltar" data-i="' + idx + '" title="Sacarlo de este trabajo (la compra sigue existiendo)" ' +
+            'style="background:none;border:none;color:var(--texto2);padding:0 4px;font-size:.8rem">⨯</button>'
+          : '<b style="white-space:nowrap">' + plata(d.monto) + '</b>') + '</div>';
+    });
     h2 += '<div style="border-top:1px dashed var(--borde);margin-top:4px;padding-top:4px;' +
       'display:flex;justify-content:space-between"><b>Total</b><b>' +
       plata(det.reduce((s2,d)=> s2 + d.monto, 0)) + '</b></div>';
@@ -6210,6 +6221,30 @@ function actualizarTotal(p){
     if(previo){ previo.remove(); return; }      // segundo toque: se cierra
     caja.className = 'gastosDet';
     elTot.appendChild(caja);
+    caja.querySelectorAll('.gMonto').forEach(inp=>{
+      inp.onclick = e=> e.stopPropagation();
+      inp.addEventListener('change', ()=>{
+        const d = det[parseInt(inp.dataset.i)];
+        if(!d || !d.ln) return;
+        const v = numAR(inp.value);
+        d.ln.total = v;
+        if(d.ln.cant > 0) d.ln.unit = v / d.ln.cant;
+        guardarDatos(); actualizarTotal(p);
+        toast('Gasto corregido');
+      });
+    });
+    caja.querySelectorAll('.gSoltar').forEach(b=>{
+      b.onclick = (e)=>{
+        e.stopPropagation();
+        const d = det[parseInt(b.dataset.i)];
+        if(!d || !d.ln) return;
+        dosToques(b, '¿Sacar?', ()=>{
+          d.ln.asignado = null;              // la compra queda, pero sin asignar
+          guardarDatos(); actualizarTotal(p);
+          toast('Sacado de este trabajo');
+        });
+      };
+    });
   };
 }
 let timerPedido = null;
@@ -14990,17 +15025,35 @@ function renderPedidoMO(p){
       '<input class="moPrecio" type="number" inputmode="numeric" ' +
         'style="width:84px;margin:0;padding:8px 6px;font-size:15px;text-align:right;background:var(--fondo);border:1px solid var(--borde);border-radius:8px;color:var(--texto)">' +
       '<span>/h</span>' +
+      '<button class="moInc" style="border-radius:9px;padding:7px 10px;font-size:.68rem;font-weight:700"></button>' +
       '<span class="moSub" style="margin-left:auto;font-weight:800;color:var(--ambar);font-size:.85rem"></span>';
     const inH = horas.querySelector('.moHoras');
     const inP = horas.querySelector('.moPrecio');
     const sub = horas.querySelector('.moSub');
+    const bInc = horas.querySelector('.moInc');
+    const pintarInc = ()=>{
+      const on = !!it.moIncluida;
+      bInc.textContent = on ? '🔒 ya incluida en el precio' : '＋ se cobra aparte';
+      bInc.title = on
+        ? 'El trabajo se cerró por un monto: las horas NO suman al total, pero su costo descuenta de la ganancia. Tocá para cobrarlas aparte.'
+        : 'Las horas se suman al total del pedido. Tocá si el precio ya estaba cerrado y no se cobran aparte.';
+      bInc.style.cssText = 'border-radius:9px;padding:7px 10px;font-size:.68rem;font-weight:700;background:var(--panel2);border:1px dashed ' +
+        (on ? '#ff7a7a;color:#ff7a7a' : 'var(--borde);color:var(--texto2)');
+    };
+    bInc.onclick = ()=>{
+      it.moIncluida = !it.moIncluida;
+      pintarInc();
+      sub.textContent = (it.moIncluida ? 'costo ' : '= ') + plata(it.moIncluida ? costoItem(it) : subtotalItem(it));
+      actualizarTotal(p); renderPedidoItems(p); sincronizarPedido();
+    };
+    pintarInc();
     inH.value = it.cant;
     inP.value = it.precio;
-    sub.textContent = '= ' + plata(subtotalItem(it));
+    sub.textContent = (it.moIncluida ? 'costo ' : '= ') + plata(it.moIncluida ? costoItem(it) : subtotalItem(it));
     const refrescar = ()=>{
       it.cant = parseFloat(String(inH.value).replace(',', '.')) || 1;
       it.precio = parseFloat(inP.value) || mo.venta;
-      sub.textContent = '= ' + plata(subtotalItem(it));
+      sub.textContent = (it.moIncluida ? 'costo ' : '= ') + plata(it.moIncluida ? costoItem(it) : subtotalItem(it));
       actualizarTotal(p);
       sincronizarPedido();
     };
