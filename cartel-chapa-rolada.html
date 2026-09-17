@@ -77,6 +77,7 @@
     <button id="dlPlant">STL · plantilla</button>
     <button id="dlHorma">STL · horma</button>
     <button id="dlCuna">STL · cuna del caño</button>
+    <button id="dlGuia">STL · guía del caño</button>
     <button id="dlTodo">Bajar todo · zip</button>
   </div>
 
@@ -112,10 +113,12 @@ const P = [
    ayuda:"Distancia entre los ejes de los caños, medida sobre el diámetro del cartel."},
   {id:"solape",label:"Solape de la costura", min:0, max:60, step:5, val:25, u:"mm",
    ayuda:"Cuánto se monta una punta sobre la otra para remachar o soldar por puntos. Se suma al largo de la tira. En 0 la unís a tope."},
-  {id:"remache", label:"Diámetro del remache pop", min:2.4, max:6.4, step:.2, val:4, u:"mm",
-   ayuda:"El agujero se hace 0,1 mm más grande que el remache. Los pop más usados en chapa son de 4 y de 4,8 mm. Para chapa de 0,7 alcanza con el de 4."},
-  {id:"remaches", label:"Cantidad de remaches", min:2, max:8, step:1, val:3, u:"",
-   ayuda:"Se reparten a lo alto de la costura, con los de las puntas separados dos diámetros del canto. Para 100 mm de chapa, tres alcanzan."},
+  {id:"ala", label:"Ala de la guía del caño", min:8, max:60, step:2, val:24, u:"mm",
+   ayuda:"Cuánto sobresale la guía alrededor del caño para apoyar contra la chapa por dentro. Es lo que reparte el empuje del viento: con 24 mm el apoyo pasa de ser el filo del agujero a unos 30 cm² de chapa."},
+  {id:"guiaLargo", label:"Largo de la guía", min:15, max:120, step:5, val:45, u:"mm",
+   ayuda:"Cuánto abraza al caño hacia adentro del cartel. Más largo agarra mejor el cabeceo, pero no tiene sentido pasarse de dos diámetros."},
+  {id:"guiaPared", label:"Pared de la guía", min:2, max:10, step:.5, val:4, u:"mm",
+   ayuda:"Espesor del tubo impreso que abraza el caño y de la pestaña que apoya en la chapa."},
   {id:"horma", label:"Partes de la horma", min:2, max:8, step:1, val:4, u:"",
    ayuda:"La horma es un anillo hembra partido: la chapa rolada de más se abre contra él y te queda el círculo redondo. Elegí las partes según lo que entre en tu cama."},
   {id:"hormaAlto", label:"Alto de la horma", min:15, max:80, step:5, val:40, u:"mm",
@@ -162,20 +165,8 @@ function medidaOvalo(o){
 // s medido desde la costura, que va abajo de todo: lejos de los caños y a la vista de nadie
 function sDesdeCostura(s){ const l = L(), c = R()*Math.PI/2; return ((s + c) % l + l) % l; }
 
-function remachesZ(){                       // alturas de los remaches sobre la costura
-  const d = V.remache, m = Math.max(2*d, 8), out = [];
-  const n = Math.max(2, V.remaches|0);
-  for (let i=0;i<n;i++) out.push(m + (V.alto - 2*m)*i/(n-1));
-  return out;
-}
 function problemas(){
   const e = [];
-  if (V.solape > 0 && V.solape < 3*V.remache)
-    e.push("El solape es corto para remaches de "+fmt(V.remache)+": poné al menos "+Math.ceil(3*V.remache)+" mm.");
-  if (V.solape === 0)
-    e.push("Con remaches pop necesitás solape: subilo a 20 mm o más.");
-  if (V.alto < 4*V.remache + 10)
-    e.push("La chapa es muy angosta para esos remaches.");
   if (V.cano + V.holg > V.alto - 8)
     e.push("El caño no entra en el ancho de la chapa: subí el ancho o achicá el caño.");
   offsets().forEach(o => { if (!ovalo(o, 24)) e.push("Los caños quedan fuera del cartel: acercalos."); });
@@ -219,16 +210,6 @@ function dibujarPlano(){
        'font-family="IBM Plex Mono, monospace" text-anchor="middle">'+fmt(l)+' mm de desarrollo</text>';
   d += '<text x="'+(mx-10)+'" y="'+(my+h*esc/2)+'" fill="#8fa3c0" font-size="13" '+
        'font-family="IBM Plex Mono, monospace" text-anchor="end">'+fmt(h)+'</text>';
-  if (V.solape > 0){
-    const xs = mx + V.solape*esc;
-    d += '<rect x="'+mx+'" y="'+my+'" width="'+(V.solape*esc)+'" height="'+(h*esc)+'" '+
-         'fill="rgba(63,191,149,.15)" stroke="#3fbf95" stroke-width="1" stroke-dasharray="5 3"/>';
-    remachesZ().forEach(z => {
-      [mx + V.solape/2*esc, mx + (l + V.solape/2)*esc].forEach(cx => {
-        d += '<circle cx="'+cx+'" cy="'+Y(z)+'" r="3.4" fill="none" stroke="#3fbf95" stroke-width="1.4"/>';
-      });
-    });
-  }
   d += '<text x="'+mx+'" y="'+(my+h*esc+30)+'" fill="#3fbf95" font-size="12" '+
        'font-family="IBM Plex Mono, monospace">costura</text>';
   svg.innerHTML = d;
@@ -337,6 +318,51 @@ function cuna(){
   return a;
 }
 
+// 4. guía del caño: media pieza, dos iguales se pegan alrededor del caño ya puesto
+function guiaChapa(){
+  const o = offsets()[0];
+  const r  = (V.cano + V.holg)/2;                  // radio del agujero
+  const Rs = r + V.guiaPared;                      // radio exterior del tubo impreso
+  const Rf = r + V.ala;                            // radio de la pestaña
+  const t  = V.guiaPared, largo = V.guiaLargo;
+  // el caño entra en cuerda: la cara que apoya en la chapa va inclinada ese mismo ángulo
+  const alfa = Math.asin(Math.min(.9, Math.abs(o)/R()));
+  const tg = Math.tan(alfa);
+  const a = [], n = 28;
+  for (let i=0;i<n;i++){
+    const ya = Rf*i/n, yb = Rf*(i+1)/n, ym = Math.max(ya, yb);
+    const xf = -ym*tg;                             // plano inclinado de apoyo
+    const Zf = Math.sqrt(Math.max(0, Rf*Rf - ym*ym));
+    const Zs = Math.sqrt(Math.max(0, Rs*Rs - ym*ym));
+    const Zi = Math.sqrt(Math.max(0, r*r  - ym*ym));
+    if (Zf > 0.05){                                // la pestaña
+      if (Zi > 0.05){
+        caja(xf, xf+t, ya, yb,  Zi, Zf).forEach(v=>a.push(v));
+        caja(xf, xf+t, ya, yb, -Zf, -Zi).forEach(v=>a.push(v));
+      } else caja(xf, xf+t, ya, yb, -Zf, Zf).forEach(v=>a.push(v));
+    }
+    if (Zs > 0.05){                                // el tubo que abraza el caño
+      const x0 = xf + t, x1 = xf + t + largo;
+      if (Zi > 0.05){
+        caja(x0, x1, ya, yb,  Zi, Zs).forEach(v=>a.push(v));
+        caja(x0, x1, ya, yb, -Zs, -Zi).forEach(v=>a.push(v));
+      } else caja(x0, x1, ya, yb, -Zs, Zs).forEach(v=>a.push(v));
+    }
+  }
+  // acostada sobre la cara de pegado, que es como se imprime
+  const b = [];
+  for (let i=0;i<a.length;i+=3) b.push(a[i+2], a[i+1], a[i]);
+  for (let i=0;i<b.length;i+=9){                   // se invierte el sentido al espejar
+    const t1=[b[i+3],b[i+4],b[i+5]];
+    b[i+3]=b[i+6]; b[i+4]=b[i+7]; b[i+5]=b[i+8];
+    b[i+6]=t1[0]; b[i+7]=t1[1]; b[i+8]=t1[2];
+  }
+  let mnx = Infinity;
+  for (let i=0;i<b.length;i+=3) mnx = Math.min(mnx, b[i]);
+  for (let i=0;i<b.length;i+=3) b[i] -= mnx;
+  return cerrar(b);
+}
+
 // ---------------- exportar ----------------
 function stlBuf(tris){
   const n = tris.length/9, b = new ArrayBuffer(84 + n*50), d = new DataView(b);
@@ -360,14 +386,7 @@ function dxfDesarrollo(){
   const total = l + V.solape;
   linea(0,0,total,0,"CHAPA"); linea(total,0,total,V.alto,"CHAPA");
   linea(total,V.alto,0,V.alto,"CHAPA"); linea(0,V.alto,0,0,"CHAPA");
-  if (V.solape > 0){
-    linea(l,0,l,V.alto,"COSTURA");
-    const r = (V.remache + 0.1)/2;           // el agujero, un pelo más grande
-    remachesZ().forEach(z => {               // van dos veces: una en cada punta, para que coincidan
-      [V.solape/2, l + V.solape/2].forEach(x =>
-        L2.push("0","CIRCLE","8","REMACHE","10",x.toFixed(3),"20",z.toFixed(3),"30","0.0","40",r.toFixed(3)));
-    });
-  }
+  if (V.solape > 0){ linea(l,0,l,V.alto,"COSTURA"); }
   if (V.pliegue > 0){
     linea(0,V.pliegue,total,V.pliegue,"PLIEGUE");
     linea(0,V.alto-V.pliegue,total,V.alto-V.pliegue,"PLIEGUE");
@@ -397,20 +416,19 @@ function leeme(){
     " mm | ovalo de "+fmt(o.largo)+" x "+fmt(o.alto)+" mm | centro a "+fmt(zc())+" del canto"));
   T.push("  NO son circulos: el cano entra en cuerda y la chapa es curva.");
   T.push("");
-  if (V.solape > 0){
-    T.push("COSTURA CON REMACHES POP");
-    T.push("  solape "+V.solape+" mm, "+V.remaches+" remaches de "+fmt(V.remache)+
-           " (agujero "+fmt(V.remache+0.1)+")");
-    T.push("  los agujeros vienen por duplicado en el DXF, en las dos puntas, para que coincidan:");
-    T.push("  a "+fmt(V.solape/2)+" mm del borde y a "+remachesZ().map(z=>fmt(z)).join(" / ")+" mm del canto.");
-    T.push("  Agujerear las dos puntas juntas, superpuestas, asegura que no se corran.");
-    T.push("");
-  }
   T.push("PLANTILLAS IMPRESAS (se usan y se guardan)");
   T.push("  horma: "+V.horma+" partes, anillo hembra de D"+V.diam+", "+V.hormaAlto+" mm de alto.");
   T.push("         Rolar la chapa un poco de mas y soltarla adentro: se abre sola y queda redonda.");
   T.push("  plantilla: apoya el tope contra el canto de la chapa y marcas los ovalos.");
   T.push("  cuna: sostiene el cano a la altura correcta mientras lo fijas.");
+  T.push("");
+  T.push("GUIA DEL CANO (esta si queda puesta)");
+  T.push("  2 mitades iguales por cano, se imprimen acostadas sobre la cara de pegado, sin soporte.");
+  T.push("  Se cierran alrededor del cano ya puesto y se pegan entre si.");
+  T.push("  La pestaña apoya contra la chapa POR DENTRO y reparte el empuje del viento:");
+  T.push("  sin ella, esa carga la toma el filo del agujero y con el tiempo lo ovala.");
+  T.push("  La cara de apoyo va inclinada porque el cano entra en cuerda, no radial.");
+  T.push("  OJO: si soldas el cano a la chapa, soldar primero y poner la guia despues.");
   T.push("");
   T.push("ORDEN");
   T.push("  1. cortar la tira y marcar los agujeros en plano");
@@ -504,8 +522,8 @@ function pintarDatos(){
     f.push(["Agujero "+(i+1)+" · óvalo", fmt(o.largo)+" × "+fmt(o.alto)+" mm", true]);
   });
   if (m.length) f.push(["Diferencia contra un círculo", fmt(m[0].largo - (V.cano+V.holg))+" mm de más", false]);
-  if (V.solape > 0)
-    f.push(["Costura", V.remaches+" remaches de "+fmt(V.remache)+" a "+fmt(V.solape/2)+" mm de cada punta", false]);
+  f.push(["Guía del caño", "2 mitades · apoyo de "+
+    fmt(Math.PI*(Math.pow((V.cano+V.holg)/2+V.ala,2)-Math.pow((V.cano+V.holg)/2,2))/100)+" cm² contra la chapa", true]);
   f.push(["Horma", V.horma+" partes de "+fmt(Math.PI*(V.diam+14)/V.horma)+" mm de arco", false]);
   document.getElementById("datos").innerHTML = f.map(x =>
     '<div class="dato'+(x[2]?' fuerte':'')+'"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
@@ -513,7 +531,7 @@ function pintarDatos(){
 function refrescar(){
   const e = problemas();
   document.getElementById("error").textContent = e.join(" ");
-  ["dlDesa","dlPlant","dlHorma","dlCuna","dlTodo"].forEach(id =>
+  ["dlDesa","dlPlant","dlHorma","dlCuna","dlGuia","dlTodo"].forEach(id =>
     document.getElementById(id).disabled = e.length > 0);
   pintarValores(); pintarDatos();
   try { dibujarPlano(); } catch(err){}
@@ -530,12 +548,15 @@ document.getElementById("dlHorma").addEventListener("click", () => {
 });
 document.getElementById("dlCuna").addEventListener("click", () =>
   bajar(stlBuf(cuna()), "cuna_cano"+fmt(V.cano)+".stl"));
+document.getElementById("dlGuia").addEventListener("click", () =>
+  bajar(stlBuf(guiaChapa()), "guia_cano"+fmt(V.cano)+"_mitad.stl"));
 document.getElementById("dlTodo").addEventListener("click", () => {
   const enc = new TextEncoder(), base = "chapa_D"+V.diam+"x"+V.alto;
   const fs = [
     {name: base+"/desarrollo.dxf", bytes: enc.encode(dxfDesarrollo())},
     {name: base+"/plantilla_agujeros.stl", bytes: new Uint8Array(stlBuf(plantilla()))},
     {name: base+"/cuna_cano.stl", bytes: new Uint8Array(stlBuf(cuna()))},
+    {name: base+"/guia_cano_mitad.stl", bytes: new Uint8Array(stlBuf(guiaChapa()))},
     {name: base+"/LEEME.txt", bytes: enc.encode(leeme())}
   ];
   for (let i=0;i<V.horma;i++)
