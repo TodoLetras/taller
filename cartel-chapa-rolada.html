@@ -77,7 +77,7 @@
 
   <header>
     <h1>CANTO DE CHAPA ROLADA</h1>
-    <span class="sub" id="modoTxt">plantillas de armado</span><span class="ver">v8</span>
+    <span class="sub" id="modoTxt">plantillas de armado</span><span class="ver">v9</span>
   </header>
 
   <div class="caja"><svg class="plano" id="plano" viewBox="0 0 1000 260"></svg></div>
@@ -105,7 +105,8 @@
     <button id="dlPlant">STL · plantilla</button>
     <button id="dlHorma">STL · horma</button>
     <button id="dlCuna">STL · cuna del caño</button>
-    <button id="dlGuia">STL · guía del caño</button>
+    <button id="dlGuia">STL · guía de entrada</button>
+    <button id="dlFondo">STL · guía del fondo</button>
     <button id="dlTodo">Bajar todo · zip</button>
   </div>
 
@@ -123,14 +124,16 @@
 "use strict";
 
 const P = [
-  {id:"diam", label:"Diámetro exterior del cartel", min:200, max:1200, step:10, val:600, u:"mm",
-   ayuda:"El diámetro terminado, o sea la cara de afuera de la chapa. El desarrollo se calcula sobre la fibra neutra, a mitad del espesor."},
-  {id:"alto", label:"Ancho de la chapa", min:40, max:300, step:5, val:100, u:"mm",
-   ayuda:"La profundidad del cartel. Si vas a plegar pestañas para los acrílicos, acordate de sumarle el pliegue a la tira que cortás."},
+  {id:"acr",  label:"Diámetro del acrílico", min:200, max:1200, step:10, val:600, u:"mm",
+   ayuda:"Esta es la medida que mandás. De acá sale todo lo demás: la chapa se rola para que el acrílico entre justo adentro, y el diámetro exterior del cartel te queda un poco más grande según el espesor."},
+  {id:"holgAcr", label:"Holgura del acrílico", min:0, max:4, step:.5, val:1, u:"mm",
+   ayuda:"Cuánto más grande que el acrílico queda el diámetro interno de la chapa. Con 1 entra sin forzar y sin bailar."},
+  {id:"alto", label:"Profundidad del cartel", min:40, max:300, step:5, val:100, u:"mm",
+   ayuda:"Lo que se ve de costado, ya plegado. La tira que cortás es más ancha: se le suman los dos pliegues."},
   {id:"esp",  label:"Espesor de la chapa", min:0.4, max:2, step:.05, val:.7, u:"mm",
    ayuda:"Cambia el desarrollo: la chapa se estira por afuera y se comprime por adentro, y la medida real sale de la mitad del espesor."},
-  {id:"pliegue", label:"Pestaña plegada para el acrílico", min:0, max:40, step:1, val:10, u:"mm",
-   ayuda:"Lo que plegás hacia adentro en cada canto para que apoye el acrílico. Se suma al ancho de la tira a cortar. En 0 no se pliega."},
+  {id:"pliegue", label:"Pestaña plegada", min:0, max:40, step:1, val:10, u:"mm",
+   ayuda:"Lo que plegás hacia adentro en cada canto: es lo que pisa el acrílico y lo retiene. Se suma al ancho de la tira. En 0 no se pliega y los acrílicos los sostienen las grapas impresas."},
   {id:"cano", label:"Diámetro del caño", min:12, max:80, step:.05, val:25.4, u:"mm",
    ayuda:"Medidas comerciales de caño estructural redondo: 19,05 · 25,4 · 31,75 · 38,1 · 50,8 mm, o sea de 3/4 a 2 pulgadas."},
   {id:"holg", label:"Holgura del agujero", min:0, max:4, step:.1, val:1, u:"mm",
@@ -157,9 +160,12 @@ const V = {};
 P.forEach(p => V[p.id] = p.val);
 
 // ---------------- geometría ----------------
-const R  = () => (V.diam - V.esp)/2;              // radio de la fibra neutra
+const Dint = () => V.acr + V.holgAcr;             // diámetro interno de la chapa
+const Dext = () => Dint() + 2*V.esp;              // diámetro exterior del cartel
+const R  = () => (Dint() + V.esp)/2;              // radio de la fibra neutra
+const anchoTira = () => V.alto + 2*V.pliegue;     // lo que se corta
+const zc = () => V.pliegue + V.alto/2;            // centro del agujero, desde el canto cortado
 const L  = () => 2*Math.PI*R();                   // desarrollo
-const zc = () => V.alto/2;
 
 function offsets(){
   const o = [];
@@ -214,7 +220,7 @@ function problemas(){
 // ---------------- el plano del desarrollo ----------------
 function dibujarPlano(){
   const svg = document.getElementById("plano");
-  const l = L(), h = V.alto;
+  const l = L(), h = anchoTira();
   const mx = 60, my = 46, W = 1000, esc = (W - 2*mx)/l, H = h*esc + 2*my;
   svg.setAttribute("viewBox", "0 0 "+W+" "+Math.max(190, H));
   const X = s => mx + sDesdeCostura(s)*esc;
@@ -234,6 +240,10 @@ function dibujarPlano(){
          'stroke="#8fa3c0" stroke-width=".8" stroke-dasharray="4 3"/>';
     d += '<text x="'+cx+'" y="'+(my+h*esc+30)+'" fill="#8fa3c0" font-size="13" '+
          'font-family="IBM Plex Mono, monospace" text-anchor="end">'+fmt(sDesdeCostura(m.sc))+'</text>';
+  });
+  if (V.pliegue > 0) [V.pliegue, h - V.pliegue].forEach(zz => {
+    d += '<line x1="'+mx+'" y1="'+Y(zz)+'" x2="'+(mx+l*esc)+'" y2="'+Y(zz)+'" '+
+         'stroke="#3fbf95" stroke-width="1" stroke-dasharray="7 4"/>';
   });
   d += '<text x="'+(mx+l*esc/2)+'" y="'+(my-14)+'" fill="#e8eef8" font-size="14" '+
        'font-family="IBM Plex Mono, monospace" text-anchor="middle">'+fmt(l)+' mm de desarrollo</text>';
@@ -317,7 +327,7 @@ function caja(x0,x1,y0,y1,z0,z1){
 // ---------------- las tres plantillas ----------------
 // 1. horma: anillo hembra partido, la chapa se abre contra él
 function hormaParte(i){
-  const n = V.horma, Ri = V.diam/2 + 0.4, Re = Ri + 14;
+  const n = V.horma, Ri = Dext()/2 + 0.4, Re = Ri + 14;
   if (n === 1){                                    // anillo entero: se arma con ocho tramos pegados
     const todo = [], m = 8;
     for (let k=0;k<m;k++){
@@ -376,8 +386,8 @@ function plantilla(){
     const zc2 = zc();
     if (hueco){
       caja(xa, xb, 0, zc2 - hueco, 0, esp).forEach(v=>a.push(v));
-      caja(xa, xb, zc2 + hueco, V.alto, 0, esp).forEach(v=>a.push(v));
-    } else caja(xa, xb, 0, V.alto, 0, esp).forEach(v=>a.push(v));
+      caja(xa, xb, zc2 + hueco, anchoTira(), 0, esp).forEach(v=>a.push(v));
+    } else caja(xa, xb, 0, anchoTira(), 0, esp).forEach(v=>a.push(v));
     // el buje que sube alrededor del piloto, para que la mecha entre derecha
     centros.forEach(c => { const dx = Math.abs(xm - c);
       if (dx < dBuje/2 && !hueco){
@@ -452,6 +462,41 @@ function guiaChapa(){
   for (let i=0;i<b.length;i+=3) mnx = Math.min(mnx, b[i]);
   for (let i=0;i<b.length;i+=3) b[i] -= mnx;
   return cerrar(b);
+}
+
+// 5. guía del fondo: recibe la punta del caño contra la chapa, del lado de adentro
+function guiaFondo(){
+  const o = offsets()[0];
+  const r = (V.cano + V.holg)/2, t = V.guiaPared;
+  const Ri = Dint()/2;                            // cara interna de la chapa
+  const anc = r + t, ancho = r + V.ala;           // cuna y placa
+  const h2 = r + t, zb = zc() - r - t;            // alto de la pieza
+  const xw = y => Math.sqrt(Math.max(1, Ri*Ri - y*y));
+  const a = [], n = 26;
+  // placa curva pegada a la chapa, del ancho del ala
+  const ang = Math.atan2(o, Math.sqrt(Math.max(1, Ri*Ri - o*o)));
+  const dA = ancho/Ri;
+  const pol = [], m = Math.max(4, Math.ceil(2*dA/(Math.PI/90)));
+  for (let k=0;k<=m;k++){ const th = ang - dA + 2*dA*k/m; pol.push([Ri*Math.cos(th), Ri*Math.sin(th)]); }
+  for (let k=m;k>=0;k--){ const th = ang - dA + 2*dA*k/m; pol.push([(Ri-t)*Math.cos(th), (Ri-t)*Math.sin(th)]); }
+  prisma(pol, zb, zc() + h2).forEach(v => a.push(v));
+  // cuna: desde la chapa hacia adentro, con el asiento redondo del caño
+  const x1 = xw(Math.abs(o) + anc) - V.guiaLargo;
+  for (let i=0;i<n;i++){
+    const ya = o - anc + 2*anc*i/n, yb = ya + 2*anc/n;
+    const dy = Math.max(Math.abs(ya-o), Math.abs(yb-o));
+    const x0 = xw(Math.max(Math.abs(ya), Math.abs(yb)));
+    const zTope = dy < r ? zc() - Math.sqrt(Math.max(0, r*r - dy*dy)) : zc() + r*0.8;
+    if (zTope > zb + 0.05) caja(x1, x0, ya, yb, zb, zTope).forEach(v => a.push(v));
+  }
+  // acostada como se imprime: la cara plana de abajo contra la cama
+  let mn = Infinity;
+  for (let i=2;i<a.length;i+=3) mn = Math.min(mn, a[i]);
+  for (let i=2;i<a.length;i+=3) a[i] -= mn;
+  let mnx = Infinity, mny = Infinity;
+  for (let i=0;i<a.length;i+=3){ mnx = Math.min(mnx, a[i]); mny = Math.min(mny, a[i+1]); }
+  for (let i=0;i<a.length;i+=3){ a[i] -= mnx; a[i+1] -= mny; }
+  return a;
 }
 
 // ---------------- costo ----------------
@@ -529,18 +574,18 @@ function costos(){
   }
   const corteCh = PR.corte_ch * (2*(tiraL + tiraA)/1000);
   // acrílicos: dos tapas del diámetro del cartel
-  const Rm = V.diam/2/1000, area = Math.PI*Rm*Rm, per = 2*Math.PI*Rm;
+  const Rm = Dext()/2/1000, area = Math.PI*Rm*Rm, per = 2*Math.PI*Rm;
   const acr = 2*area*PR.acr_m2, corteAcr = 2*per*PR.acr_ml;
   // leds
   const mlTira = (area/(Math.max(20,PR.led_paso)/1000))*2;
   const led = mlTira*PR.led_ml, amp = mlTira*1.1, f = fuentesPara(amp);
   // herrería
-  const largoCano = (V.diam/2 + V.diam/2 + PR.vuelo)/1000;
+  const largoCano = (Dext()/2 + Dext()/2 + PR.vuelo)/1000;
   const mlCano = largoCano*V.canos;
   const mlPlanch = PR.planchL/1000;
   const hierro = mlCano*PR.cano_ml + mlPlanch*PR.planch_ml;
   const herr = hierro*(1 + PR.herrero/100 + PR.pintura/100);
-  const recorridos = Math.max(1, Math.floor(V.diam/Math.max(20,PR.led_paso)));
+  const recorridos = Math.max(1, Math.floor(Dext()/Math.max(20,PR.led_paso)));
   const soldadura = PR.sold_n*PR.sold_u;
   // guías impresas: dos mitades por caño
   const gr = Math.abs(volumen(guiaChapa()))/1000*1.24*0.62*2*V.canos;
@@ -601,13 +646,13 @@ function dxfDesarrollo(){
   const l = L(), L2 = ["0","SECTION","2","ENTITIES"];
   const linea = (x0,y0,x1,y1,capa) => L2.push("0","LINE","8",capa,
     "10",x0.toFixed(3),"20",y0.toFixed(3),"11",x1.toFixed(3),"21",y1.toFixed(3));
-  const total = l + V.solape;
-  linea(0,0,total,0,"CHAPA"); linea(total,0,total,V.alto,"CHAPA");
-  linea(total,V.alto,0,V.alto,"CHAPA"); linea(0,V.alto,0,0,"CHAPA");
-  if (V.solape > 0){ linea(l,0,l,V.alto,"COSTURA"); }
+  const total = l + V.solape, an = anchoTira();
+  linea(0,0,total,0,"CHAPA"); linea(total,0,total,an,"CHAPA");
+  linea(total,an,0,an,"CHAPA"); linea(0,an,0,0,"CHAPA");
+  if (V.solape > 0){ linea(l,0,l,an,"COSTURA"); }
   if (V.pliegue > 0){
     linea(0,V.pliegue,total,V.pliegue,"PLIEGUE");
-    linea(0,V.alto-V.pliegue,total,V.alto-V.pliegue,"PLIEGUE");
+    linea(0,an-V.pliegue,total,an-V.pliegue,"PLIEGUE");
   }
   offsets().forEach(o => {
     const m = medidaOvalo(o);
@@ -621,13 +666,15 @@ function dxfDesarrollo(){
 function leeme(){
   const m = offsets().map(medidaOvalo).filter(Boolean);
   const T = [];
-  T.push("CANTO DE CHAPA ROLADA - cartel D"+V.diam+" x "+V.alto+" mm");
+  T.push("CANTO DE CHAPA ROLADA");
+  T.push("  acrilico D"+fmt(V.acr)+"  ->  cartel terminado D"+fmt(Dext())+" x "+fmt(V.alto)+" mm");
   T.push("");
   T.push("LA TIRA DE CHAPA");
   T.push("  espesor "+V.esp+" mm");
   T.push("  largo a cortar: "+fmt(L()+V.solape)+" mm  (desarrollo "+fmt(L())+" + solape "+V.solape+")");
-  T.push("  ancho a cortar: "+fmt(V.alto + 2*V.pliegue)+" mm  (cartel "+V.alto+
-         (V.pliegue?" + dos pestañas de "+V.pliegue:"")+")");
+  T.push("  ancho a cortar: "+fmt(anchoTira())+" mm  (cartel "+fmt(V.alto)+
+         (V.pliegue?" + dos pestanas de "+fmt(V.pliegue):"")+")");
+  T.push("  los agujeros van a "+fmt(zc())+" mm del canto cortado, o sea al medio del ancho.");
   T.push("");
   T.push("AGUJEROS: mecha copa de "+copaRecomendada()+" mm, agujereando en plano antes de rolar.");
   T.push("  El agujero redondo de "+copaRecomendada()+" contiene al ovalo teorico, asi que el cano pasa");
@@ -639,7 +686,7 @@ function leeme(){
   T.push("  NO son circulos: el cano entra en cuerda y la chapa es curva.");
   T.push("");
   T.push("PLANTILLAS IMPRESAS (se usan y se guardan)");
-  T.push("  horma: "+(V.horma===1 ? "entera" : V.horma+" partes")+", anillo hembra de D"+V.diam+
+  T.push("  horma: "+(V.horma===1 ? "entera" : V.horma+" partes")+", anillo hembra de D"+fmt(Dext())+
          ", "+V.hormaAlto+" mm de alto.");
   T.push("         Rolar la chapa un poco de mas y soltarla adentro: se abre sola y queda redonda.");
   T.push("  plantilla: apoya el tope contra el canto, marca el centro y taladra el piloto de 6 mm");
@@ -739,8 +786,10 @@ function pintarValores(){
 function pintarDatos(){
   const m = offsets().map(medidaOvalo).filter(Boolean);
   const f = [];
-  f.push(["Tira a cortar", fmt(L()+V.solape)+" × "+fmt(V.alto + 2*V.pliegue)+" mm", true]);
+  f.push(["Cartel terminado", "Ø"+fmt(Dext())+" × "+fmt(V.alto)+" mm", true]);
+  f.push(["Tira a cortar", fmt(L()+V.solape)+" × "+fmt(anchoTira())+" mm", true]);
   f.push(["Desarrollo del círculo", fmt(L())+" mm", false]);
+  f.push(["Agujeros, desde el canto cortado", fmt(zc())+" mm", false]);
   m.forEach((o,i) => {
     f.push(["Agujero "+(i+1)+" · desde la costura", fmt(sDesdeCostura(o.sc))+" mm", false]);
     f.push(["Agujero "+(i+1)+" · óvalo", fmt(o.largo)+" × "+fmt(o.alto)+" mm", true]);
@@ -751,8 +800,8 @@ function pintarDatos(){
   f.push(["Guía del caño", "2 mitades · apoyo de "+
     fmt(Math.PI*(Math.pow((V.cano+V.holg)/2+V.ala,2)-Math.pow((V.cano+V.holg)/2,2))/100)+" cm² contra la chapa", true]);
   f.push(["Horma", V.horma === 1
-    ? "entera · "+fmt(V.diam+28.8)+" × "+fmt(V.diam+28.8)+" mm en la cama"
-    : V.horma+" partes de "+fmt(Math.PI*(V.diam+14)/V.horma)+" mm de arco", false]);
+    ? "entera · "+fmt(Dext()+28.8)+" × "+fmt(Dext()+28.8)+" mm en la cama"
+    : V.horma+" partes de "+fmt(Math.PI*(Dext()+14)/V.horma)+" mm de arco", false]);
   document.getElementById("datos").innerHTML = f.map(x =>
     '<div class="dato'+(x[2]?' fuerte':'')+'"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
 }
@@ -773,32 +822,35 @@ function refrescar(){
   const err = document.getElementById("error");
   err.innerHTML = e.map(x => '<div>'+x+'</div>').join("") +
     av.map(x => '<div style="color:var(--ambar)">'+x+'</div>').join("");
-  ["dlDesa","dlPlant","dlHorma","dlCuna","dlGuia","dlTodo"].forEach(id =>
+  ["dlDesa","dlPlant","dlHorma","dlCuna","dlGuia","dlFondo","dlTodo"].forEach(id =>
     document.getElementById(id).disabled = e.length > 0);
   pintarValores(); pintarDatos(); pintarCostos();
   try { dibujarPlano(); } catch(err){}
 }
 
 document.getElementById("dlDesa").addEventListener("click", () =>
-  bajar(new TextEncoder().encode(dxfDesarrollo()), "desarrollo_D"+V.diam+".dxf"));
+  bajar(new TextEncoder().encode(dxfDesarrollo()), "desarrollo_D"+fmt(Dext())+".dxf"));
 document.getElementById("dlPlant").addEventListener("click", () =>
   bajar(stlBuf(plantilla()), "plantilla_agujeros.stl"));
 document.getElementById("dlHorma").addEventListener("click", () => {
   const a = [];
   for (let i=0;i<V.horma;i++) hormaParte(i).forEach(v => a.push(v));
-  bajar(stlBuf(a), "horma_D"+V.diam+"_"+V.horma+"partes.stl");
+  bajar(stlBuf(a), "horma_D"+fmt(Dext())+"_"+V.horma+"partes.stl");
 });
 document.getElementById("dlCuna").addEventListener("click", () =>
   bajar(stlBuf(cuna()), "cuna_cano"+fmt(V.cano)+".stl"));
 document.getElementById("dlGuia").addEventListener("click", () =>
-  bajar(stlBuf(guiaChapa()), "guia_cano"+fmt(V.cano)+"_mitad.stl"));
+  bajar(stlBuf(guiaChapa()), "guia_entrada_cano"+fmt(V.cano)+"_mitad.stl"));
+document.getElementById("dlFondo").addEventListener("click", () =>
+  bajar(stlBuf(guiaFondo()), "guia_fondo_cano"+fmt(V.cano)+".stl"));
 document.getElementById("dlTodo").addEventListener("click", () => {
-  const enc = new TextEncoder(), base = "chapa_D"+V.diam+"x"+V.alto;
+  const enc = new TextEncoder(), base = "chapa_D"+fmt(Dext())+"x"+V.alto;
   const fs = [
     {name: base+"/desarrollo.dxf", bytes: enc.encode(dxfDesarrollo())},
     {name: base+"/plantilla_agujeros.stl", bytes: new Uint8Array(stlBuf(plantilla()))},
     {name: base+"/cuna_cano.stl", bytes: new Uint8Array(stlBuf(cuna()))},
-    {name: base+"/guia_cano_mitad.stl", bytes: new Uint8Array(stlBuf(guiaChapa()))},
+    {name: base+"/guia_entrada_mitad.stl", bytes: new Uint8Array(stlBuf(guiaChapa()))},
+    {name: base+"/guia_fondo.stl", bytes: new Uint8Array(stlBuf(guiaFondo()))},
     {name: base+"/LEEME.txt", bytes: enc.encode(leeme())}
   ];
   for (let i=0;i<V.horma;i++)
