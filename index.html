@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v196</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v197</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -409,6 +409,7 @@
     <div id="pedCierre"></div>
     <div class="acciones">
       <button id="pedBorrar" class="btn-peligro">🗑</button>
+      <button id="pedDup" title="Duplicar el pedido entero, para armar otra opción para el mismo cliente" style="background:var(--panel2);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:13px 10px;font-weight:700;font-size:.85rem">⧉</button>
       <button id="pedPDF" style="background:var(--panel2);border:1px solid var(--borde);color:var(--texto);border-radius:12px;padding:13px 10px;font-weight:700;font-size:.85rem">🖼 PDF</button>
     <button id="pedPresu" class="btn-secundario">📋 Presupuesto</button>
       <button id="pedCerrar" class="btn-primario">Listo</button>
@@ -5503,6 +5504,35 @@ async function editarCorporeas(p, it){
   location.href = 'cotizador.html?pedido=' + p.id + '&item=' + it.corpId;
 }
 
+/* Duplicar el pedido entero: sirve para armar una opción B sin rehacer todo.
+   Se copian los ítems con sus datos de cálculo (para que sigan editables), la
+   mano de obra, el brief y los datos del cliente. NO se copian los gastos
+   asignados ni los pagos: esos ya pasaron y pertenecen al original. */
+function duplicarPedido(p){
+  const nuevo = JSON.parse(JSON.stringify(p));
+  nuevo.id = uid();
+  nuevo.creado = Date.now();
+  nuevo.nombre = (p.nombre || 'Pedido') + ' · opción B';
+  nuevo.estadoVenta = 'presupuesto';
+  nuevo.cobro = 'pendiente';
+  nuevo.fact = 'no';
+  nuevo.etapa = null;
+  nuevo.fijado = false;
+  nuevo.versiones = [];                  // las versiones guardadas son del original
+  nuevo.pendientes = [];                 // los pasos se rearman si hace falta
+  nuevo.pagos = [];
+  delete nuevo.cerrado; delete nuevo.moNC;
+  /* ids nuevos donde hagan falta, para que editar uno no toque al otro */
+  for(const it of (nuevo.items||[])){
+    if(it.corpId) it.corpId = uid();
+    it.conf = it.conf === false ? false : true;
+  }
+  pedidos.unshift(nuevo);
+  guardarDatos();
+  registrar('duplicó el pedido de ' + nombreClienteId(p.cliente));
+  return nuevo;
+}
+
 document.getElementById('btnCotizador').onclick = async ()=>{
   try{ await guardarDatos(); }catch(_){}
   try{ if(dbxTokens && dbxBajoOk){ clearTimeout(dbxTimerSubida); await dbxSubir(); } }catch(_){}
@@ -9635,6 +9665,16 @@ function elegirEmpresaParte(p, parte){
   cancelar.onclick = ()=> renderPedidoFact(p);
   cont.appendChild(cancelar);
 }
+document.getElementById('pedDup').onclick = ()=>{
+  const p = pedidos.find(x=> x.id === pedidoAbierto);
+  if(!p) return;
+  dosToques(document.getElementById('pedDup'), '¿Duplicar?', ()=>{
+    const n = duplicarPedido(p);
+    renderPedidos();
+    abrirPedido(n.id);
+    toast('Duplicado · se abrió la copia');
+  });
+};
 document.getElementById('pedPresu').onclick = ()=>{
   const p = pedidos.find(x=>x.id===pedidoAbierto);
   if(!p) return;
