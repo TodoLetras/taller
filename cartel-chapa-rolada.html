@@ -77,7 +77,7 @@
 
   <header>
     <h1>CANTO DE CHAPA ROLADA</h1>
-    <span class="sub" id="modoTxt">plantillas de armado</span><span class="ver">v1</span>
+    <span class="sub" id="modoTxt">plantillas de armado</span><span class="ver">v8</span>
   </header>
 
   <div class="caja"><svg class="plano" id="plano" viewBox="0 0 1000 260"></svg></div>
@@ -147,8 +147,8 @@ const P = [
    ayuda:"Cuánto abraza al caño hacia adentro del cartel. Más largo agarra mejor el cabeceo, pero no tiene sentido pasarse de dos diámetros."},
   {id:"guiaPared", label:"Pared de la guía", min:2, max:10, step:.5, val:4, u:"mm",
    ayuda:"Espesor del tubo impreso que abraza el caño y de la pestaña que apoya en la chapa."},
-  {id:"horma", label:"Partes de la horma", min:2, max:8, step:1, val:4, u:"",
-   ayuda:"La horma es un anillo hembra partido: la chapa rolada de más se abre contra él y te queda el círculo redondo. Elegí las partes según lo que entre en tu cama."},
+  {id:"horma", label:"Partes de la horma", min:1, max:8, step:1, val:1, u:"",
+   ayuda:"La horma es un anillo hembra: rolás la chapa de más, la soltás adentro y se abre contra él, así te queda redonda. En 1 sale de una pieza, que es lo más rígido y lo mejor si te entra en la cama. Si no, partila y pegá las partes."},
   {id:"hormaAlto", label:"Alto de la horma", min:15, max:80, step:5, val:40, u:"mm",
    ayuda:"Cuánto abraza la horma a la chapa. Con 40 alcanza para que no se tuerza mientras remachás."}
 ];
@@ -262,16 +262,48 @@ function cerrar(a){                                  // deja todas las caras mir
     b.push(a[i],a[i+1],a[i+2], a[i+6],a[i+7],a[i+8], a[i+3],a[i+4],a[i+5]);
   return b;
 }
+// triangulación por recorte de orejas: sirve también para polígonos con entrantes,
+// que es el caso del arco de la horma y de la V de la cuna
+function triangular(pol){
+  const n = pol.length, idx = [], out = [];
+  for (let i=0;i<n;i++) idx.push(i);
+  const area2 = (a,b,c) => (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]);
+  const dentro = (a,b,c,p) => {
+    const d1 = area2(p,a,b), d2 = area2(p,b,c), d3 = area2(p,c,a);
+    const neg = (d1<0)||(d2<0)||(d3<0), pos = (d1>0)||(d2>0)||(d3>0);
+    return !(neg && pos);
+  };
+  let guarda = 0;
+  while (idx.length > 3 && guarda++ < 5000){
+    let cortada = false;
+    for (let k=0;k<idx.length;k++){
+      const i0 = idx[(k-1+idx.length)%idx.length], i1 = idx[k], i2 = idx[(k+1)%idx.length];
+      const a = pol[i0], b = pol[i1], c = pol[i2];
+      if (area2(a,b,c) <= 1e-9) continue;                 // no es convexo ahí
+      let libre = true;
+      for (let j=0;j<idx.length && libre;j++){
+        const m = idx[j];
+        if (m===i0||m===i1||m===i2) continue;
+        if (dentro(a,b,c,pol[m])) libre = false;
+      }
+      if (!libre) continue;
+      out.push([i0,i1,i2]); idx.splice(k,1); cortada = true; break;
+    }
+    if (!cortada) break;                                  // polígono raro: corto acá
+  }
+  if (idx.length >= 3) for (let i=1;i<idx.length-1;i++) out.push([idx[0], idx[i], idx[i+1]]);
+  return out;
+}
 // prisma: polígono en el plano x-y extruido en z
 function prisma(pol, z0, z1){
   const a = [], n = pol.length;
   let A = 0;
   for (let i=0;i<n;i++){ const p=pol[i], q=pol[(i+1)%n]; A += p[0]*q[1]-q[0]*p[1]; }
   const pl = A < 0 ? pol.slice().reverse() : pol;
-  for (let i=1;i<n-1;i++){
-    tri(a, [pl[0][0],pl[0][1],z0], [pl[i+1][0],pl[i+1][1],z0], [pl[i][0],pl[i][1],z0]);
-    tri(a, [pl[0][0],pl[0][1],z1], [pl[i][0],pl[i][1],z1], [pl[i+1][0],pl[i+1][1],z1]);
-  }
+  triangular(pl).forEach(([i,j,k]) => {
+    tri(a, [pl[i][0],pl[i][1],z0], [pl[k][0],pl[k][1],z0], [pl[j][0],pl[j][1],z0]);
+    tri(a, [pl[i][0],pl[i][1],z1], [pl[j][0],pl[j][1],z1], [pl[k][0],pl[k][1],z1]);
+  });
   for (let i=0;i<n;i++){
     const p = pl[i], q = pl[(i+1)%n];
     quad(a, [p[0],p[1],z0], [q[0],q[1],z0], [q[0],q[1],z1], [p[0],p[1],z1]);
@@ -286,6 +318,14 @@ function caja(x0,x1,y0,y1,z0,z1){
 // 1. horma: anillo hembra partido, la chapa se abre contra él
 function hormaParte(i){
   const n = V.horma, Ri = V.diam/2 + 0.4, Re = Ri + 14;
+  if (n === 1){                                    // anillo entero: se arma con ocho tramos pegados
+    const todo = [], m = 8;
+    for (let k=0;k<m;k++){
+      const b0 = 2*Math.PI*k/m, b1 = 2*Math.PI*(k+1)/m;
+      hormaTramo(Ri, Re, b0, b1).forEach(v => todo.push(v));
+    }
+    return todo;
+  }
   const a0 = 2*Math.PI*i/n, a1 = 2*Math.PI*(i+1)/n;
   const paso = Math.PI/90, a = [];
   const arco = (r0, r1, z0, z1, b0, b1) => {
@@ -298,38 +338,60 @@ function hormaParte(i){
   arco(Ri - 8, Re, 0, 6, a0, a1);                    // reborde donde apoya el canto de la chapa
   return a;
 }
-// 2. plantilla de marcado: tira con los óvalos calados y tope contra el canto
+function hormaTramo(Ri, Re, b0, b1){
+  const paso = Math.PI/90, a = [];
+  const arco = (r0, r1, z0, z1) => {
+    const m = Math.max(2, Math.ceil((b1-b0)/paso)), pol = [];
+    for (let k=0;k<=m;k++){ const t = b0 + (b1-b0)*k/m; pol.push([r1*Math.cos(t), r1*Math.sin(t)]); }
+    for (let k=m;k>=0;k--){ const t = b0 + (b1-b0)*k/m; pol.push([r0*Math.cos(t), r0*Math.sin(t)]); }
+    prisma(pol, z0, z1).forEach(v => a.push(v));
+  };
+  arco(Ri, Re, 0, V.hormaAlto);
+  arco(Ri - 8, Re, 0, 6);
+  return a;
+}
+const COPAS = [14,16,17,19,20,21,22,25,29,32,35,38,40,44,51,57,64,68,73,76,83,89,95,102,108,114,121,127];
+function copaRecomendada(){
+  const m = offsets().map(medidaOvalo).filter(Boolean);
+  if (!m.length) return 0;
+  const largo = Math.max(...m.map(x => x.largo));
+  return COPAS.find(c => c >= largo + 0.5) || Math.ceil(largo);
+}
+// 2. guía para la mecha copa: tope contra el canto y buje para la mecha piloto
 function plantilla(){
-  // se trabaja en la coordenada de la chapa ya desenrollada, medida desde la costura
   const m = offsets().map(medidaOvalo).filter(Boolean)
-    .map(x => { const p = x.p.map(q => [sDesdeCostura(q[0]), q[1]]);
-                const s = p.map(q=>q[0]);
-                return {p, s0:Math.min(...s), s1:Math.max(...s)}; });
+    .map(x => ({ sc: sDesdeCostura(x.sc), largo: x.largo }));
   if (!m.length) return [];
-  const s0 = Math.min(...m.map(x=>x.s0)) - 30, s1 = Math.max(...m.map(x=>x.s1)) + 30;
-  const a = [], esp = 3, tope = 12;
-  // la tira, con los óvalos como huecos: se arma en franjas verticales
-  const n = 90;
+  const centros = m.map(x=>x.sc).sort((p,q)=>p-q);
+  const s0 = centros[0] - 45, s1 = centros[centros.length-1] + 45;
+  const a = [], esp = 4, tope = 14, alt = 12;
+  const dPiloto = 6.6, dBuje = 20;            // la mecha piloto de una copa es de 6 mm
+  // la placa, con el agujero del piloto calado en cada centro
+  const n = 140;
   for (let i=0;i<n;i++){
-    const xa = s0 + (s1-s0)*i/n, xb = s0 + (s1-s0)*(i+1)/n;
-    // límites verticales de los huecos en esta franja
-    const cortes = [];
-    m.forEach(o => {
-      let z0 = Infinity, z1 = -Infinity, hay = false;
-      o.p.forEach(q => { if (q[0] >= xa - 1e-9 && q[0] <= xb + 1e-9){ hay = true;
-        z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); } });
-      if (hay) cortes.push([z0, z1]);
+    const xa = s0 + (s1-s0)*i/n, xb = s0 + (s1-s0)*(i+1)/n, xm = (xa+xb)/2;
+    let hueco = null;
+    centros.forEach(c => { const dx = Math.abs(xm - c);
+      if (dx < dPiloto/2) hueco = Math.sqrt(dPiloto*dPiloto/4 - dx*dx); });
+    const zc2 = zc();
+    if (hueco){
+      caja(xa, xb, 0, zc2 - hueco, 0, esp).forEach(v=>a.push(v));
+      caja(xa, xb, zc2 + hueco, V.alto, 0, esp).forEach(v=>a.push(v));
+    } else caja(xa, xb, 0, V.alto, 0, esp).forEach(v=>a.push(v));
+    // el buje que sube alrededor del piloto, para que la mecha entre derecha
+    centros.forEach(c => { const dx = Math.abs(xm - c);
+      if (dx < dBuje/2 && !hueco){
+        const zz = Math.sqrt(dBuje*dBuje/4 - dx*dx);
+        caja(xa, xb, zc2 - zz, zc2 + zz, esp, esp + alt).forEach(v=>a.push(v));
+      } else if (dx < dBuje/2 && hueco){
+        const zz = Math.sqrt(dBuje*dBuje/4 - dx*dx);
+        caja(xa, xb, zc2 - zz, zc2 - hueco, esp, esp + alt).forEach(v=>a.push(v));
+        caja(xa, xb, zc2 + hueco, zc2 + zz, esp, esp + alt).forEach(v=>a.push(v));
+      }
     });
-    cortes.sort((p,q)=>p[0]-q[0]);
-    let z = 0;
-    cortes.forEach(([a0,b0]) => {
-      if (a0 > z) caja(xa, xb, z, a0, 0, esp).forEach(v=>a.push(v));
-      z = Math.max(z, b0);
-    });
-    if (z < V.alto) caja(xa, xb, z, V.alto, 0, esp).forEach(v=>a.push(v));
   }
-  caja(s0, s1, -tope, 0, 0, esp + 6).forEach(v=>a.push(v));   // tope contra el canto
-  for (let i=0;i<a.length;i+=3) a[i] -= s0;                   // la llevo al origen
+  caja(s0, s1, -tope, 0, 0, esp + 8).forEach(v=>a.push(v));   // tope contra el canto de la chapa
+  for (let i=0;i<a.length;i+=3) a[i] -= s0;
   return a;
 }
 // 3. cuna: sostiene el caño a la altura y a la distancia correctas
@@ -407,14 +469,16 @@ const PRECIOS = [
   {k:"planchL", l:"Largo de la planchuela",      v:300,   u:"mm",  a:"El alto de la base contra la pared. Cuanto más larga, menos fuerza hace cada tarugo."},
   {k:"planch_ml",l:"Planchuela, el metro",       v:17650, u:"$",   a:"La de 101,6 × 6,4 de 6 m a 105.900 da 17.650 el metro."},
   {k:"pintura", l:"Pintura de la herrería",      v:50,    u:"%",   a:"Antióxido y esmalte, como porcentaje sobre el hierro."},
-  {k:"sold_u",  l:"Soldadura, cada una",         v:1200,  u:"$",   a:"Se cuentan dos por caño."},
+  {k:"herrero", l:"Recargo del herrero",          v:100,   u:"%",   a:"Lo que cobra de mano de obra, en porcentaje sobre el material. Con 100 cobra el doble de lo que sale el hierro."},
+  {k:"sold_u",  l:"Soldadura de LED, cada una",   v:1200,  u:"$",   a:"Cada punto donde soldás la tira: entrada, salida y empalmes entre recorridos."},
+  {k:"sold_n",  l:"Puntos de soldadura",          v:12,    u:"u",   a:"Cuántos puntos te lleva el cableado de las tiras. Abajo te muestro cuántos recorridos entran, para que ajustes el número."},
   {k:"fil_kg",  l:"Filamento, el kilo",          v:28000, u:"$",   a:"Para las guías del caño, que son lo único impreso que queda en el cartel."},
   {k:"gxh",     l:"Lo que imprime tu máquina",   v:125,   u:"g/h", a:"Un kilo en 8 horas son 125 g/h."},
   {k:"maq_h",   l:"Hora de máquina",             v:1958,  u:"$/h", a:"Amortización más mantenimiento. En la Giga, 1,35 dólares la hora."},
   {k:"kwh",     l:"Precio del kWh",              v:120,   u:"$",   a:"Con impuestos."},
   {k:"watt",    l:"Consumo de la impresora",     v:320,   u:"W",   a:"Cabezal más una zona de cama, que es lo que se enciende para una pieza chica."},
   {k:"mo_h",    l:"Mano de obra",                v:6000,  u:"$/h", a:"Tu hora de taller."},
-  {k:"mo_hs",   l:"Horas de armado",             v:5,     u:"h",   a:"Cortar, agujerear, plegar, rolar, remachar y armar. Con chapa lleva más que con el aro impreso."},
+  {k:"mo_hs",   l:"Horas de armado",             v:1,     u:"h",   a:"Las horas del taller: armar el cartel, pegar los LED, poner los caños y las tapas. No incluye lo que hace el herrero."},
   {k:"margen",  l:"Margen sobre el costo",       v:100,   u:"%",   a:"En 100 vendés al doble."}
 ];
 const FUENTES = [[5,12600],[10,18400],[15,25000],[20,28000],[25,31000],[30,36000],[40,45000]];
@@ -474,14 +538,17 @@ function costos(){
   const largoCano = (V.diam/2 + V.diam/2 + PR.vuelo)/1000;
   const mlCano = largoCano*V.canos;
   const mlPlanch = PR.planchL/1000;
-  const herr = (mlCano*PR.cano_ml + mlPlanch*PR.planch_ml)*(1 + PR.pintura/100) + V.canos*2*PR.sold_u;
+  const hierro = mlCano*PR.cano_ml + mlPlanch*PR.planch_ml;
+  const herr = hierro*(1 + PR.herrero/100 + PR.pintura/100);
+  const recorridos = Math.max(1, Math.floor(V.diam/Math.max(20,PR.led_paso)));
+  const soldadura = PR.sold_n*PR.sold_u;
   // guías impresas: dos mitades por caño
   const gr = Math.abs(volumen(guiaChapa()))/1000*1.24*0.62*2*V.canos;
   const horas = PR.gxh > 0 ? gr/PR.gxh : 0;
   const impreso = gr/1000*PR.fil_kg + horas*PR.maq_h + horas*PR.watt/1000*PR.kwh;
   const mano = PR.mo_hs*PR.mo_h;
-  const costo = chapa + corteCh + acr + corteAcr + led + f.costo + herr + impreso + mano;
-  return {tiras, porTira, porHoja, empalmes, chapa, corteCh, acr, corteAcr, led, mlTira, amp, fuentes:f,
+  const costo = chapa + corteCh + acr + corteAcr + led + f.costo + soldadura + herr + impreso + mano;
+  return {tiras, porTira, porHoja, empalmes, chapa, corteCh, hierro, recorridos, soldadura, acr, corteAcr, led, mlTira, amp, fuentes:f,
           herr, mlCano, gr, horas, impreso, mano, costo, venta: costo*(1+PR.margen/100)};
 }
 const PESOS = n => "$ " + Math.round(n).toLocaleString("es-AR");
@@ -496,7 +563,10 @@ function pintarCostos(){
   f.push(["Corte del acrílico", PESOS(c.corteAcr)]);
   f.push(["Tira LED · "+fmt(c.mlTira)+" m, doble", PESOS(c.led)]);
   f.push(["Fuentes · "+(c.fuentes.lista.join("A + ")+"A")+" para "+fmt(c.amp)+" A", PESOS(c.fuentes.costo)]);
-  f.push(["Herrería · "+fmt(c.mlCano*1000)+" mm de caño, pintada", PESOS(c.herr)]);
+  f.push(["Soldaduras de LED · "+fmt(PR.sold_n)+" puntos ("+c.recorridos+" recorridos por cara)",
+          PESOS(c.soldadura)]);
+  f.push(["Herrería · "+fmt(c.mlCano*1000)+" mm de caño + planchuela",
+          PESOS(c.hierro)+"  +"+fmt(PR.herrero)+"% herrero +"+fmt(PR.pintura)+"% pintura = "+PESOS(c.herr)]);
   f.push(["Guías impresas · "+fmt(c.gr)+" g en "+fmt(c.horas)+" h", PESOS(c.impreso)]);
   f.push(["Mano de obra", PESOS(c.mano)]);
   let html = f.map(x => '<div class="cost"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
@@ -559,15 +629,21 @@ function leeme(){
   T.push("  ancho a cortar: "+fmt(V.alto + 2*V.pliegue)+" mm  (cartel "+V.alto+
          (V.pliegue?" + dos pestañas de "+V.pliegue:"")+")");
   T.push("");
-  T.push("AGUJEROS DE LOS CANOS (medidos desde la costura, sobre la chapa plana)");
+  T.push("AGUJEROS: mecha copa de "+copaRecomendada()+" mm, agujereando en plano antes de rolar.");
+  T.push("  El agujero redondo de "+copaRecomendada()+" contiene al ovalo teorico, asi que el cano pasa");
+  T.push("  y el juego que sobra queda tapado por la guia impresa.");
+  T.push("");
+  T.push("CENTROS (medidos desde la costura, sobre la chapa plana)");
   m.forEach((o,i) => T.push("  cano "+(i+1)+": centro a "+fmt(sDesdeCostura(o.sc))+
     " mm | ovalo de "+fmt(o.largo)+" x "+fmt(o.alto)+" mm | centro a "+fmt(zc())+" del canto"));
   T.push("  NO son circulos: el cano entra en cuerda y la chapa es curva.");
   T.push("");
   T.push("PLANTILLAS IMPRESAS (se usan y se guardan)");
-  T.push("  horma: "+V.horma+" partes, anillo hembra de D"+V.diam+", "+V.hormaAlto+" mm de alto.");
+  T.push("  horma: "+(V.horma===1 ? "entera" : V.horma+" partes")+", anillo hembra de D"+V.diam+
+         ", "+V.hormaAlto+" mm de alto.");
   T.push("         Rolar la chapa un poco de mas y soltarla adentro: se abre sola y queda redonda.");
-  T.push("  plantilla: apoya el tope contra el canto de la chapa y marcas los ovalos.");
+  T.push("  plantilla: apoya el tope contra el canto, marca el centro y taladra el piloto de 6 mm");
+  T.push("             por los dos bujes. Despues la mecha copa de "+copaRecomendada()+" mm se centra sola.");
   T.push("  cuna: sostiene el cano a la altura correcta mientras lo fijas.");
   T.push("");
   T.push("GUIA DEL CANO (esta si queda puesta)");
@@ -670,9 +746,13 @@ function pintarDatos(){
     f.push(["Agujero "+(i+1)+" · óvalo", fmt(o.largo)+" × "+fmt(o.alto)+" mm", true]);
   });
   if (m.length) f.push(["Diferencia contra un círculo", fmt(m[0].largo - (V.cano+V.holg))+" mm de más", false]);
+  f.push(["Mecha copa", copaRecomendada()+" mm · deja "+
+    fmt((copaRecomendada()-V.cano)/2)+" mm de juego por lado, que tapa la guía", true]);
   f.push(["Guía del caño", "2 mitades · apoyo de "+
     fmt(Math.PI*(Math.pow((V.cano+V.holg)/2+V.ala,2)-Math.pow((V.cano+V.holg)/2,2))/100)+" cm² contra la chapa", true]);
-  f.push(["Horma", V.horma+" partes de "+fmt(Math.PI*(V.diam+14)/V.horma)+" mm de arco", false]);
+  f.push(["Horma", V.horma === 1
+    ? "entera · "+fmt(V.diam+28.8)+" × "+fmt(V.diam+28.8)+" mm en la cama"
+    : V.horma+" partes de "+fmt(Math.PI*(V.diam+14)/V.horma)+" mm de arco", false]);
   document.getElementById("datos").innerHTML = f.map(x =>
     '<div class="dato'+(x[2]?' fuerte':'')+'"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>').join("");
 }
