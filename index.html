@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v200</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v201</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -5264,6 +5264,11 @@ function costoItem(i){
     return (anchoTotal/100)*(altoTotal/100)*(i.cant||0)*(i.costoM2 + lamCostoM2(i));
   }
   if(i.costoU) return (i.cant||0)*i.costoU;
+  /* `costoReal` es el costo TOTAL del ítem, no el unitario: lo guardan así
+     cartelería (cara, bastidor, vinilo, corpóreas, perchas), backlight y la
+     calculadora de corte. Antes sólo se leía `costoU`, así que todos esos
+     figuraban "sin costo" y su venta contaba entera como ganancia. */
+  if(i.costoReal) return i.costoReal;
   return null; // costo desconocido (ítems del catálogo o cargados antes)
 }
 function gananciaPedido(p){
