@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v199</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v200</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -6205,6 +6205,12 @@ function gastosDetalle(p){
   return out.sort((a,b)=> (b.monto||0)-(a.monto||0));
 }
 
+/* Qué ítems no tienen costo cargado. El número solo no sirve: hay que poder
+   ver cuáles son para ir a arreglarlos. */
+function itemsSinCosto(p){
+  return (p.items||[]).filter(i=> i.conf!==false && !i.titulo && costoItem(i)===null);
+}
+
 function actualizarTotal(p){
   const g = gananciaPedido(p);
   let extra = '';
@@ -6213,7 +6219,7 @@ function actualizarTotal(p){
     const pct = total ? Math.round(g.ganancia/total*100) : 0;
     extra = '<div style="font-size:.74rem;color:#4cd27d;font-weight:700">Ganancia: ' + plata(g.ganancia) + ' (' + pct + '%)' +
       (g.gastos ? ' <span class="verGastos" style="color:#ff7a7a;text-decoration:underline dotted;cursor:pointer" title="Tocá para ver de dónde salen">· gastos asignados −' + plata(g.gastos) + ' ▾</span>' : '') +
-      (g.sinCosto ? ' <span style="color:var(--texto2)">· ' + g.sinCosto + ' ítem(s) sin costo</span>' : '') + '</div>';
+      (g.sinCosto ? ' <span class="verSinCosto" style="color:var(--texto2);text-decoration:underline dotted;cursor:pointer" title="Tocá para ver cuáles">· ' + g.sinCosto + ' ítem(s) sin costo ▾</span>' : '') + '</div>';
   }
   const totConf = totalPedido(p), totPres = totalPresupuestado(p);
   let lineaTotal = 'Total: ' + plata(totConf);
@@ -6222,6 +6228,27 @@ function actualizarTotal(p){
   }
   const elTot = document.getElementById('pedTotal');
   elTot.innerHTML = extra + lineaTotal;
+  const vsc = elTot.querySelector('.verSinCosto');
+  if(vsc) vsc.onclick = (ev)=>{
+    ev.stopPropagation();
+    const previo = elTot.querySelector('.sinCostoDet');
+    if(previo){ previo.remove(); return; }
+    const lista = itemsSinCosto(p);
+    const caja = document.createElement('div');
+    caja.className = 'sinCostoDet';
+    caja.style.cssText = 'margin-top:6px;background:var(--panel2);border:1px dashed var(--borde);' +
+      'border-radius:10px;padding:8px 10px;font-size:.7rem;font-weight:400;color:var(--texto2);text-align:left';
+    let h3 = '<div style="font-weight:800;margin-bottom:4px">Ítems sin costo cargado</div>';
+    for(const it of lista)
+      h3 += '<div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0">' +
+        '<span style="flex:1;min-width:0">' + (nombreItem(it)||'(sin nombre)') + '</span>' +
+        '<b style="white-space:nowrap">' + plata(subtotalItem(it)) + '</b></div>';
+    h3 += '<div style="font-size:.62rem;margin-top:5px;line-height:1.4">' +
+      'Su venta cuenta entera como ganancia. Si el costo entró por una compra asignada al trabajo, está bien; ' +
+      'si no, cargalo con el 🧾 de la fila.</div>';
+    caja.innerHTML = h3;
+    elTot.appendChild(caja);
+  };
   const vg = elTot.querySelector('.verGastos');
   if(vg) vg.onclick = (ev)=>{
     ev.stopPropagation();
