@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v201</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v202</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1836,12 +1836,12 @@ const AD_SEMILLA = {
   recargoParcial: 15,     // % sobre el papel utilizado si el paquete queda abierto
   escala: [[1,100],[2,95],[3,90],[4,85],[5,80],[6,75]],  // paquetes → % de margen
   maquinas: {
-    gto:    {nombre:'GTO',    W:50, H:34, ctp:7800,
+    gto:    {nombre:'GTO',    W:50, H:34, ctp:8750,
       tarifas:{ hasta170:{post:{1:12400,2:29000,4:50900}, millar:{1:11000,2:14000,4:20300}},
                 mas180:  {post:{1:12400,2:29000,4:50900}, millar:{1:15900,2:20300,4:28900}},
                 opp:     {post:{1:27800,2:39100,4:60200}, millar:{1:20300,2:27800,4:39100}},
                 sobreOf: {post:{1:20300,2:31700,4:54800}, millar:{1:18400,2:19300,4:31700}},
-                sobreBo: {post:{1:22600,2:34100,4:54800}, millar:{1:22600,2:24700,4:34100}},
+                sobreBo: {post:{1:22600,2:25000,4:54800}, millar:{1:22600,2:25000,4:34100}},
                 pant170: {post:{1:20600,2:31700,4:0},     millar:{1:14000,2:17300,4:0}},
                 pant200: {post:{1:22600,2:31700,4:0},     millar:{1:20200,2:20200,4:0}} }},
     komori: {nombre:'Komori', W:64, H:46, ctp:11800,
@@ -2435,6 +2435,20 @@ function migrarSoldadoRuis(){
   /* Somos monotributistas: el IVA que nos cobra el proveedor NO se recupera,
      así que es costo. Los papeles marcados `sinIva` se cargan con este % arriba. */
   if(typeof adCfg === 'object' && adCfg && adCfg.ivaCosto === undefined) adCfg.ivaCosto = 21;
+  /* Actualización de AD: las chapas aumentaron y el sobre BOLSA a 2 colores
+     tiene precio nuevo. El resto de las tarifas queda como estaba. */
+  if(typeof adCfg === 'object' && adCfg && adCfg.maquinas && !adCfg.chapasSobres1226){
+    const g = adCfg.maquinas.gto;
+    if(g){
+      g.ctpAnterior = g.ctp;
+      g.ctp = 8750;                     // $17.500 las 2 chapas
+      if(g.tarifas && g.tarifas.sobreBo){
+        g.tarifas.sobreBo.post[2] = 25000;
+        g.tarifas.sobreBo.millar[2] = 25000;
+      }
+    }
+    adCfg.chapasSobres1226 = true;
+  }
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
   if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
     adCfg.plastificados = [
