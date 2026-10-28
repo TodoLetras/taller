@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v204</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v207</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -11261,7 +11261,11 @@ function odNombre(meta, calc){
   const modo = (OD_MODOS.find(m=>m[0]===meta.modo)||['',''])[1];
   let n = (meta.desc ? meta.desc + ' · ' : '') + 'Offset digital · ' + modo + ' · ' + papel;
   if(meta.porPieza) n += ' · ' + meta.pzCant + ' piezas de ' + meta.pzAncho + '×' + meta.pzAlto + 'cm';
-  n += ' · ' + calc.hojas + ' hojas';
+  /* Al cliente se le dice lo que se le ENTREGA, no lo que se imprime.
+     calc.hojas incluye la hoja de merma: cobrarla está bien, pero poner
+     "101 hojas" en el presupuesto queda raro cuando entregás 100. */
+  const entregadas = meta.porPieza ? calc.hojas : (meta.hojas || calc.hojas);
+  n += ' · ' + entregadas + ' hojas';
   const t = [];
   if(meta.plastF) t.push('plastificado frente');
   if(meta.plastD) t.push('plastificado dorso');
@@ -12581,9 +12585,9 @@ const COMPARTIDO = {
   gramaje: 115,
   colores: ['4/0', '4/4'],
   tiradas: [
-    {n: 1000, precio: {'4/0': 21000, '4/4': 24000}},
-    {n: 2000, precio: {'4/0': 34000, '4/4': 37000}},
-    {n: 5000, precio: {'4/0': 63000, '4/4': 67000}},
+    {n: 1000, precio: {'4/0': 23000, '4/4': 26000}},
+    {n: 2000, precio: {'4/0': 36000, '4/4': 39000}},
+    {n: 5000, precio: {'4/0': 64000, '4/4': 68000}},
   ]
 };
 
@@ -12615,40 +12619,43 @@ function compModulos(w, h, max){
   return null;
 }
 
-/* Combinación de tiradas más barata que cubra `unidades` módulos.
-   Se pueden repetir y sumar, así que se busca de verdad el mínimo:
-   4.000 sale más barato como una de 5.000 que como dos de 2.000.
-   OJO: el camino se guarda como "de qué tirada vine", NO como la lista
-   entera. Copiando la lista en cada paso el costo crece al cuadrado y
-   con cantidades grandes (un cero de más al tipear) cuelga la app. */
-function compMejorCombo(unidades, col){
-  if(!(unidades > 0)) return null;
+/* Combinación de tiradas más barata que entregue al menos `cant` piezas.
+   OJO con el modelo: NO se compran módulos sueltos. Se compra una POSICIÓN en
+   el pliego y esa posición, tirada mil veces, da mil piezas. Entonces:
+     · pieza chica, entran n por módulo → una tirada de N da N×n piezas,
+       y cuesta el precio de lista;
+     · pieza grande, ocupa k módulos → hay que pagar k veces la tirada,
+       y se reciben N piezas enteras.
+   Por eso una pieza de 9 módulos sale 9 × $26.000 y te llevás 1.000, no 111. */
+function compCombos(cant, col, porModulo, porPieza){
   const ts = COMPARTIDO.tiradas.filter(t=> t.precio[col] > 0);
-  if(!ts.length) return null;
-  const paso = 1000;
-  const tope = Math.ceil(unidades / paso);
-  if(tope > 200000) return null;              // fuera de escala: no es un trabajo real
-  const costo = new Float64Array(tope + 1).fill(Infinity);
-  const vino  = new Int8Array(tope + 1).fill(-1);
-  costo[0] = 0;
-  for(let i = 1; i <= tope; i++){
-    for(let k = 0; k < ts.length; k++){
-      const desde = Math.max(0, i - ts[k].n/paso);
-      if(costo[desde] === Infinity) continue;
-      const c = costo[desde] + ts[k].precio[col];
-      if(c < costo[i]){ costo[i] = c; vino[i] = k; }
-    }
+  if(!ts.length || !(cant > 0)) return null;
+  const opciones = ts.map(t=>{
+    const salen = porModulo >= 1 ? t.n * porModulo : t.n;
+    const costo = porModulo >= 1 ? t.precio[col] : porPieza * t.precio[col];
+    return {tirada: t.n, salen, costo, combo: [t.n]};
+  });
+  /* sumar dos tiradas, por si una sola se queda corta o sale cara */
+  for(const a of ts) for(const b of ts){
+    if(b.n < a.n) continue;
+    const salen = porModulo >= 1 ? (a.n + b.n) * porModulo : (a.n + b.n);
+    const costo = porModulo >= 1 ? (a.precio[col] + b.precio[col])
+                                 : porPieza * (a.precio[col] + b.precio[col]);
+    opciones.push({tirada: a.n + b.n, salen, costo, combo: [a.n, b.n]});
   }
-  if(costo[tope] === Infinity) return null;
-  const combo = [];
-  let i = tope;
-  while(i > 0 && vino[i] >= 0 && combo.length < 5000){
-    const t = ts[vino[i]];
-    combo.push(t.n);
-    i = Math.max(0, i - t.n/paso);
+  const cubren = opciones.filter(o=> o.salen >= cant);
+  if(!cubren.length) return null;
+  cubren.sort((x,y)=> x.costo - y.costo || x.salen - y.salen);
+  /* la mejor, más las otras que sirvan, para poder comparar */
+  const vistas = new Set();
+  const lista = [];
+  for(const o of cubren){
+    const k = o.combo.join('+');
+    if(vistas.has(k)) continue;
+    vistas.add(k); lista.push(o);
+    if(lista.length >= 4) break;
   }
-  combo.sort((a,b)=> b - a);
-  return {costo: costo[tope], combo, unidades: combo.reduce((s,n)=> s + n, 0)};
+  return {mejor: cubren[0], alternativas: lista};
 }
 
 /* ¿Este trabajo se puede hacer en pliego compartido? Devuelve el cálculo
@@ -12660,24 +12667,20 @@ function compartidoPara(pzW, pzH, cant, col, papel){
   if(gr && gr !== COMPARTIDO.gramaje)
     return {no: 'sólo papel de ' + COMPARTIDO.gramaje + ' g'};
   const porMod = compPorModulo(pzW, pzH);
-  let unidades, porPieza = 0, salen = cant;
-  if(porMod >= 1){
-    unidades = Math.ceil(cant / porMod);
-    salen = unidades * porMod;
-  }else{
+  let porPieza = 0;
+  if(porMod < 1){
     const m = compModulos(pzW, pzH);
     if(!m) return {no: 'la pieza es muy grande para la grilla'};
     porPieza = m.k;
-    unidades = cant * m.k;
   }
-  const combo = compMejorCombo(unidades, col);
-  if(!combo) return {no: 'no hay tirada que lo cubra'};
-  // si la combinación da más módulos de los pedidos, salen piezas de más
-  if(porMod >= 1) salen = combo.unidades * porMod;
+  const c = compCombos(cant, col, porMod, porPieza);
+  if(!c) return {no: 'no hay tirada que lo cubra'};
+  const m = c.mejor;
   return {
-    costo: combo.costo, combo: combo.combo, unidades: combo.unidades,
-    porModulo: porMod, porPieza, salen,
-    unitario: salen > 0 ? combo.costo / salen : 0
+    costo: m.costo, combo: m.combo, tirada: m.tirada,
+    porModulo: porMod, porPieza, salen: m.salen,
+    alternativas: c.alternativas,
+    unitario: m.salen > 0 ? m.costo / m.salen : 0
   };
 }
 
@@ -12699,22 +12702,33 @@ function compartidoComoOpcion(pzW, pzH, q, col, papel, margenBase){
   const venta = c.costo * (1 + margen/100);
   const det = [];
   det.push('📚 Pliego compartido · módulo de ' + COMPARTIDO.base.w + '×' + COMPARTIDO.base.h + ' cm, papel ' + COMPARTIDO.gramaje + ' g');
-  if(c.porModulo > 1) det.push('Entran ' + c.porModulo + ' piezas por módulo → ' + c.unidades.toLocaleString('es-AR') + ' módulos');
-  else if(c.porPieza > 1) det.push('Cada pieza ocupa ' + c.porPieza + ' módulos → ' + c.unidades.toLocaleString('es-AR') + ' módulos');
-  else det.push(c.unidades.toLocaleString('es-AR') + ' módulos');
-  det.push('Tiradas: ' + comboTexto(c.combo) + ' = ' + plata(c.costo));
+  if(c.porModulo > 1)
+    det.push('Entran ' + c.porModulo + ' piezas por módulo: una tirada de ' + c.tirada.toLocaleString('es-AR') +
+             ' da ' + c.salen.toLocaleString('es-AR') + ' piezas');
+  else if(c.porPieza > 1)
+    det.push('Cada pieza ocupa ' + c.porPieza + ' módulos: se paga ' + c.porPieza +
+             ' veces la tirada y se reciben ' + c.salen.toLocaleString('es-AR') + ' piezas enteras');
+  det.push('Tiradas: ' + comboTexto(c.combo) +
+           (c.porPieza > 1 ? ' × ' + c.porPieza + ' módulos' : '') + ' = ' + plata(c.costo));
+  if(c.alternativas && c.alternativas.length > 1){
+    det.push('Otras opciones:');
+    for(const a of c.alternativas.slice(1))
+      det.push('   ' + comboTexto(a.combo) + ' → ' + a.salen.toLocaleString('es-AR') +
+               ' piezas · ' + plata(a.costo) + ' (' + plataUnit(a.costo/a.salen) + ' c/u)');
+  }
   det.push('Lo cortan ellos y las piezas salen pegadas. Sin merma: entregan la cantidad justa.');
   if(c.salen > q) det.push('Salen ' + c.salen.toLocaleString('es-AR') + ' piezas (' + (c.salen - q).toLocaleString('es-AR') + ' de más).');
   return {
-    compartido: true, combo: c.combo, modulos: c.unidades,
-    pliegos: c.unidades, pliegosNetos: c.unidades, piezas: c.salen,
+    compartido: true, combo: c.combo, tirada: c.tirada, porPieza: c.porPieza,
+    pliegos: c.tirada, pliegosNetos: c.tirada, piezas: c.salen,
     papelCosto: 0, millarCosto: 0, chapasCosto: 0, postCosto: 0, corteCosto: 0, troqCosto: 0,
     paqDec: 0, millares: 0, pasadasN: 0, chapas: 0,
     costo: c.costo, margen, venta, unitario: c.salen > 0 ? venta / c.salen : 0,
     maquina: 'pliego compartido', giro: false,
-    nota: comboTexto(c.combo) + ' módulos' +
+    nota: 'tirada ' + comboTexto(c.combo) +
+          (c.porPieza > 1 ? ' × ' + c.porPieza + ' módulos c/u' : '') +
           (c.porModulo > 1 ? ' · ' + c.porModulo + ' por módulo' : '') +
-          (c.porPieza > 1 ? ' · ' + c.porPieza + ' módulos c/u' : ''),
+          ' → ' + c.salen.toLocaleString('es-AR') + ' piezas',
     desglose: det
   };
 }
@@ -13457,7 +13471,11 @@ function calcularAd(){
     }
   }
   if(!opciones.length){ res.innerHTML = '<div class="vacio" style="padding:10px">La pieza no entra en los pliegos de máquina.</div>'; return; }
-  let h = '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:6px">' + opciones[0].op.detalle + ' · demasía ' + adCfg.demasia + ' pliegos/postura</div>' +
+  /* El encabezado describe el posado propio (giro, poses, corte del pliego),
+     así que sale de la primera opción NUESTRA: las de pliego compartido no
+     tienen ese detalle y dejaban un "undefined" arriba de la tabla. */
+  const opCab = (opciones.find(o=> !o.op.compartido) || opciones[0]).op;
+  let h = '<div style="font-size:.68rem;color:var(--texto2);margin-bottom:6px">' + (opCab.detalle || '') + ' · demasía ' + adCfg.demasia + ' pliegos/postura</div>' +
     (adOrig > 1 ? '' :
       '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:.68rem;color:var(--texto2)">' +
       '<span>📦 Paquetes a mostrar:</span>' +
