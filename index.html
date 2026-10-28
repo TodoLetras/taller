@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v203</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v204</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -1789,7 +1789,7 @@ function mlRedondeado(largoCm, minimoM, redondear){
    OJO con `cortes`: los millares NO son los de impresión. Si el pliego se
    corta en 2 antes de troquelar, 700 pliegos impresos son 1.400 a troquelar. */
 const AD_TROQUELES = {
-  1: {nombre:'Troquelado',            postura: 27300, millar: 27300},
+  1: {nombre:'Troquelado',            postura: 28000, millar: 28000},
   2: {nombre:'Puntillado',            postura: 15800, millar: 15800},
   3: {nombre:'½ corte autoadhesivo',  postura: 30500, millar: 30500},
   4: {nombre:'Doblado / plegado',     postura: 10500, millar: 10500},
@@ -1837,16 +1837,16 @@ const AD_SEMILLA = {
   escala: [[1,100],[2,95],[3,90],[4,85],[5,80],[6,75]],  // paquetes → % de margen
   maquinas: {
     gto:    {nombre:'GTO',    W:50, H:34, ctp:8750,
-      tarifas:{ hasta170:{post:{1:12400,2:29000,4:50900}, millar:{1:11000,2:14000,4:20300}},
-                mas180:  {post:{1:12400,2:29000,4:50900}, millar:{1:15900,2:20300,4:28900}},
+      tarifas:{ hasta170:{post:{1:13000,2:29000,4:51000}, millar:{1:11000,2:14000,4:22000}},
+                mas180:  {post:{1:13000,2:29000,4:51000}, millar:{1:16000,2:21000,4:30000}},
                 opp:     {post:{1:27800,2:39100,4:60200}, millar:{1:20300,2:27800,4:39100}},
                 sobreOf: {post:{1:20300,2:31700,4:54800}, millar:{1:18400,2:19300,4:31700}},
                 sobreBo: {post:{1:22600,2:25000,4:54800}, millar:{1:22600,2:25000,4:34100}},
                 pant170: {post:{1:20600,2:31700,4:0},     millar:{1:14000,2:17300,4:0}},
                 pant200: {post:{1:22600,2:31700,4:0},     millar:{1:20200,2:20200,4:0}} }},
     komori: {nombre:'Komori', W:64, H:46, ctp:11800,
-      tarifas:{ hasta170:{post:{1:15900,2:36800,4:59000}, millar:{1:14200,2:17900,4:26300}},
-                mas180:  {post:{1:15900,2:36800,4:59000}, millar:{1:19000,2:24200,4:35700}},
+      tarifas:{ hasta170:{post:{1:16000,2:37000,4:60000}, millar:{1:15000,2:18000,4:27000}},
+                mas180:  {post:{1:16000,2:37000,4:60000}, millar:{1:20000,2:25000,4:36000}},
                 pant170: {post:{1:31500,2:42300,4:0},     millar:{1:16300,2:21000,4:0}},
                 pant200: {post:{1:31500,2:42300,4:0},     millar:{1:22100,2:28400,4:0}} }}
   }
@@ -2488,6 +2488,33 @@ function migrarSoldadoRuis(){
         prov: 'Papeles.net', sinIva: true, revisar: revisar || undefined});
     }
     adCfg.obraNet0127 = true;
+  }
+  /* Lista AD septiembre 2026. Actualiza SOLO lo que figura en esa lista:
+     papel de frente (≤170 y 180-300/autoadhesivo) en las dos máquinas, y el
+     troquelado. Las chapas quedan en $8.750 (el valor más alto, que es el que
+     rige) aunque la lista impresa diga $7.400.
+     OPP, sobres y Pantone YA NO están en la lista: se conservan los precios
+     que teníamos, marcados para pedir presupuesto antes de confirmar. */
+  if(typeof adCfg === 'object' && adCfg && adCfg.maquinas && !adCfg.lista0926){
+    const g = adCfg.maquinas.gto, k = adCfg.maquinas.komori;
+    if(g && g.tarifas){
+      g.tarifas.hasta170 = {post:{1:13000,2:29000,4:51000}, millar:{1:11000,2:14000,4:22000}};
+      g.tarifas.mas180   = {post:{1:13000,2:29000,4:51000}, millar:{1:16000,2:21000,4:30000}};
+      for(const t of ['opp','sobreOf','sobreBo','pant170','pant200'])
+        if(g.tarifas[t]) g.tarifas[t].consultar = true;
+    }
+    if(k && k.tarifas){
+      k.tarifas.hasta170 = {post:{1:16000,2:37000,4:60000}, millar:{1:15000,2:18000,4:27000}};
+      k.tarifas.mas180   = {post:{1:16000,2:37000,4:60000}, millar:{1:20000,2:25000,4:36000}};
+      for(const t of ['pant170','pant200'])
+        if(k.tarifas[t]) k.tarifas[t].consultar = true;
+    }
+    if(typeof AD_TROQUELES === 'object' && AD_TROQUELES[1]){
+      AD_TROQUELES[1].postura = 28000; AD_TROQUELES[1].millar = 28000;
+      for(const n of [2,3,4]) if(AD_TROQUELES[n]) AD_TROQUELES[n].consultar = true;
+    }
+    adCfg.corteHora = 20000;          // corte guillotina, por hora
+    adCfg.lista0926 = true;
   }
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
   if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
@@ -13095,7 +13122,7 @@ function adCalcular(maqKey, papel, cf, cd, pzW, pzH, modo, orig, plastOver){
     let troqCosto = 0, troqMillares = 0, troqPliegos = 0, troqNombre = '';
     if(troqTipo && AD_TROQUELES[troqTipo]){
       const t = AD_TROQUELES[troqTipo];
-      troqNombre = t.nombre;
+      troqNombre = t.nombre + (t.consultar ? ' ⚠️ confirmar' : '');
       troqPliegos = pliegosNetos * troqCortes;
       troqMillares = Math.ceil(troqPliegos / 1000);
       troqCosto = t.postura + troqMillares * t.millar;
@@ -13492,6 +13519,20 @@ function calcularAd(){
     }).join('') +
     '<span style="font-size:.62rem;color:var(--texto2)">El PDF muestra solo cantidades, unitario y total (sin costos internos).</span></div>';
   // sugerencia: mismo gramaje en otros formatos de hoja, ¿alguno da mejor unitario?
+  /* Aviso cuando la tarifa usada ya NO figura en la lista de AD: el precio es
+     el último que tuvimos y hay que confirmarlo antes de cerrar con el cliente. */
+  {
+    const maqUsada = adCfg.maquinas[(opciones[0] && opciones[0].op && opciones[0].op.maquina === 'Komori') ? 'komori' : 'gto'];
+    const tarUsada = maqUsada ? adTarifa(maqUsada, papel.gramaje, papel) : null;
+    if(tarUsada && tarUsada.consultar){
+      h += '<div style="margin-top:8px;padding:9px 11px;border-radius:10px;background:rgba(255,209,102,.12);' +
+        'border:1px dashed #ffd166;font-size:.72rem;color:var(--texto2);line-height:1.5">' +
+        '📋 <b style="color:#ffd166">Pedir presupuesto a AD para confirmar.</b> ' +
+        'Este tipo de trabajo (OPP, sobres o Pantone) dejó de figurar en la lista de septiembre: ' +
+        'el precio de acá es el último que tuvimos y puede estar desactualizado.</div>';
+    }
+  }
+
   /* ¿el mismo sobre sale más barato en otro proveedor? Se comparan por
      medida y tipo de papel, llevando todo a precio por unidad. */
   if(papel && papel.sobre && papel.precio > 0){
