@@ -289,7 +289,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v202</span></h1>
+    <h1>SEGUIMIENTO <span>· TODO LETRAS</span> <span style="font-size:.55rem;color:var(--texto2);font-weight:400">v203</span></h1>
     <div style="display:flex;gap:6px">
       <button id="btnLetra" title="Tamaño de letra" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem;font-weight:800">Aa</button>
       <button id="btnTema" title="Tema claro / oscuro" style="background:var(--panel);border:1px solid var(--borde);color:var(--texto2);border-radius:10px;padding:7px 12px;font-size:.95rem">☀️</button>
@@ -2448,6 +2448,46 @@ function migrarSoldadoRuis(){
       }
     }
     adCfg.chapasSobres1226 = true;
+  }
+  /* Papel obra de Papeles.net · precios CON el 5% de descuento ya aplicado y
+     SIN IVA (el 21% lo suma papelPrecio, porque como monotributistas no se
+     recupera y es costo real).
+     OJO: los cuatro marcados `revisar` figuran sin stock y su precio en la
+     página está fuera de escala: el resto del catálogo va parejo a $2,0 por
+     m² por gramo y estos dan 7, 8 o la mitad. Conviene confirmarlos. */
+  if(Array.isArray(adPapeles) && !adCfg.obraNet0127){
+    const OBRA = [
+      ['Obra Chambril 120g', 120, 65, 95, 250, 36645.67, false],
+      ['Obra Chambril 120g', 120, 72, 102, 250, 43583.12, false],
+      ['Obra Chambril 120g', 120, 74, 110, 250, 48307.00, false],
+      ['Obra Chambril 120g', 120, 82, 118, 250, 57422.42, false],
+      ['Obra Chambril 90g',   90, 63,  88, 500, 49351.47, false],
+      ['Obra Chambril 90g',   90, 65,  95, 500, 54968.50, false],
+      ['Obra Chambril 90g',   90, 82, 118, 250, 43066.82, false],
+      ['Obra Chambril 90g',   90, 74, 110, 250, 39500.96, false],
+      ['Obra Chambril 90g',   90, 72,  92, 250, 118745.64, true],
+      ['Obra Chambril 80g',   80, 63,  88, 500, 43867.98, false],
+      ['Obra Chambril 80g',   80, 65,  95, 500, 48860.89, false],
+      ['Obra Chambril 80g',   80, 72, 102, 250, 29055.41, false],
+      ['Obra Chambril 80g',   80, 82, 118, 250, 38281.62, false],
+      ['Obra Chambril 80g',   80, 72,  92, 500, 211103.35, true],
+      ['Obra Chambril 80g',   80, 74, 110, 250, 119306.01, true],
+      ['Obra Chambril 70g',   70, 63,  88, 500, 38384.48, false],
+      ['Obra Chambril 70g',   70, 65,  95, 500, 42753.28, false],
+      ['Obra Chambril 70g',   70, 82, 118, 250, 33496.41, false],
+      ['Obra Chambril 70g',   70, 72,  92, 500, 25423.49, true],
+      ['Obra Ledesma Visión 70g', 70, 63,  88, 500, 35407.19, false],
+      ['Obra Ledesma Visión 70g', 70, 65,  95, 500, 39437.12, false],
+      ['Obra Ledesma Visión 70g', 70, 82, 118, 250, 30898.27, false],
+    ];
+    for(const [base, gr, W, H, hojas, precio, revisar] of OBRA){
+      const nombre = base + ' · ' + W + '×' + H + (revisar ? ' ⚠️' : '');
+      if(adPapeles.find(x=> x.nombre === nombre)) continue;
+      adPapeles.push({id: uid()+Math.random().toString(36).slice(2,4),
+        nombre, gramaje: gr, W, H, hojas, precio,
+        prov: 'Papeles.net', sinIva: true, revisar: revisar || undefined});
+    }
+    adCfg.obraNet0127 = true;
   }
   // catálogo de plastificados y barnices (lista 01/02/2026, precios por m² SIN IVA)
   if(typeof adCfg === 'object' && adCfg && !adCfg.plastificados){
